@@ -4,7 +4,7 @@
     <img alt="sutrallm" src="logo.png" height="200px">
   </picture>
 </div>
-# Agent for Debate / Discussion Modulation Project
+## Agent for Debate / Discussion Modulation Project
 
 ## Motivation
 
