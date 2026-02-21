@@ -4,8 +4,7 @@
     <img alt="sutrallm" src="logo.png" height="200px">
   </picture>
 </div>
-
-# Debate Ledger AI — README
+# Agent for Debate / Discussion Modulation Project
 
 ## Motivation
 
@@ -18,7 +17,7 @@ Online debates today are chaotic, repetitive, and hard to follow. Strong argumen
 
 Most platforms optimize for engagement, not clarity. They reward volume over substance, speed over reasoning, and confidence over evidence.
 
-**Debate Ledger AI** exists to fix that.
+This agent is an attempt to fix that.
 
 Instead of acting as a participant, it acts as a *neutral reasoning engine* that continuously organizes discussion into a structured, transparent, and evaluable argument map.
 
@@ -70,7 +69,7 @@ Traditional debates fail because:
 | No scoring   | Strength is subjective                   |
 | No synthesis | Readers must reconstruct debate manually |
 
-Debate Ledger AI introduces:
+The agent introduces:
 
 * structured claims
 * canonical points
@@ -163,7 +162,7 @@ Typical AI debate tools:
 * take sides
 * simulate discussion
 
-**Debate Ledger AI instead:**
+**This agent instead:**
 
 * tracks arguments
 * scores reasoning
@@ -203,7 +202,7 @@ Users gain:
 
 ## Vision
 
-Long term, Debate Ledger AI could enable:
+Long term, this agent could enable:
 
 * searchable global argument maps
 * structured public discourse archives
@@ -218,5 +217,5 @@ In short:
 
 ## One-Sentence Summary
 
-**Debate Ledger AI is a neutral real-time system that turns chaotic discussions into structured, scored, and traceable debates.**
+**The project aims to create a neutral real-time system that turns chaotic discussions into structured, scored, and traceable debates.**
 
