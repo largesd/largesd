@@ -1,4 +1,4 @@
-## Agent for Debate / Discussion Modulation Project
+## Large Scale Discussion - Agent for Debate / Discussion Modulation Project
 
 ## Motivation
 
