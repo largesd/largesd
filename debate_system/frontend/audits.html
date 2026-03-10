@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audits — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html">Topics</a>
+      <a href="audits.html" class="active" aria-current="page">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">Spec</a>
+      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+    </nav>
+  </div>
+</header>
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono">0.61</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" title="snap_2026-03-02T0610Z_0007">snap_2026-03-02T0610Z_0007</strong></div>
+    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono">2026-03-02 14:10 SGT</strong></div>
+  </div>
+  <!-- Mobile compact state (visible only on small screens) -->
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
+    <div class="state-compact"><strong>Confidence:</strong> 0.61</div>
+  </div>
+</section>
+
+<main>
+
+<section class="card" id="topic-geometry">
+  <div class="section-head"><div><h2>Audits</h2><p class="lede">Stress tests that explain why the current decision is or is not robust.</p></div><a class="button secondary" href="verdict.html">Jump to verdict math</a></div>
+  <p><small>Robustness outputs are distributions (not pass/fail). Instability reduces confidence naturally via replicate variance. <span class="tooltip" data-tooltip="All metrics show distributions (p10/p50/p90 or IQR) rather than binary thresholds">Learn more</span></small></p>
+
+  <hr />
+  <h3>Topic geometry audit</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across snapshots.</p>
+  
+  <h4>Lineage map</h4>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>topic_id</th><th>parent_topic_ids</th><th>operation</th><th>source/child ids</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">t1</td><td class="mono">t1_prev</td><td>unchanged</td><td class="mono">source:t1_prev</td></tr>
+      <tr><td class="mono">t2</td><td class="mono">t2_prev</td><td>renamed</td><td class="mono">source:t2_prev</td></tr>
+      <tr><td class="mono">t3</td><td class="mono">t3_prev</td><td>split</td><td class="mono">source:t3_prev_a,t3_prev_b</td></tr>
+      <tr><td class="mono">t4</td><td class="mono">t4_seed</td><td>created</td><td class="mono">source:t4_seed</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Content mass share + geometry quality</h4>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">t1</td><td class="mono">0.34</td><td class="mono">0.12</td><td class="mono">0.71 / 0.68</td></tr>
+      <tr><td class="mono">t2</td><td class="mono">0.28</td><td class="mono">0.09</td><td class="mono">0.65 / 0.73</td></tr>
+      <tr><td class="mono">t3</td><td class="mono">0.22</td><td class="mono">0.15</td><td class="mono">0.62 / 0.70</td></tr>
+      <tr><td class="mono">t4</td><td class="mono">0.16</td><td class="mono">0.07</td><td class="mono">0.69 / 0.75</td></tr>
+    </tbody>
+  </table></div>
+  <div class="row">
+    <span class="pill"><span class="tooltip" data-tooltip="Distribution of drift scores across topics">Drift p10/p50/p90</span>: <span class="mono">0.06 / 0.11 / 0.15</span></span>
+    <span class="pill"><span class="tooltip" data-tooltip="Distribution of coherence scores">Coherence p10/p50/p90</span>: <span class="mono">0.62 / 0.67 / 0.71</span></span>
+    <span class="pill"><span class="tooltip" data-tooltip="Distribution of distinctness scores">Distinctness p10/p50/p90</span>: <span class="mono">0.68 / 0.72 / 0.75</span></span>
+  </div>
+
+  <hr />
+  <h3>Side-label symmetry audit</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Tests if the verdict changes when FOR/AGAINST labels are swapped (detects evaluator bias).</p>
+  <details class="trace"><summary>Show results</summary><div class="codebox">
+Method: re-run pipeline with FOR/AGAINST labels swapped.
+Output: distribution change in D and per-topic Q.
+
+Result (mock):
+- median ΔD: -0.02
+- IQR ΔD: 0.11
+Interpretation: small asymmetry; contributes to confidence reduction.
+  </div></details>
+
+  <hr />
+  <h3>Extraction stability</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Measures consistency of FACT and ARGUMENT extraction across independent reruns.</p>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Layer</th><th>Metric</th><th>Median</th><th><span class="tooltip" data-tooltip="Interquartile Range — spread across reruns">IQR</span></th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>FACT</td><td>semantic overlap</td><td class="mono">0.81</td><td class="mono">0.12</td><td>some instability from borderline atomicity</td></tr>
+      <tr><td>ARGUMENT</td><td>structure overlap</td><td class="mono">0.74</td><td class="mono">0.15</td><td>inference paraphrase variance</td></tr>
+    </tbody>
+  </table></div>
+  <details class="trace"><summary>Mismatch report (FACT + ARGUMENT)</summary><div class="codebox">
+FACT mismatches (highest impact):
+- t1 FOR: F3 split/merge variance in rare-failure framing.
+- t3 AGAINST: F13/F14 boundary drift in legal-vs-strategic claims.
+
+ARGUMENT mismatches (highest impact):
+- t1 A2 paraphrase clusters vary between "slow deployment" and "pause deployment".
+- t3 C2/C3 overlap in enforcement feasibility vs strategic noncompliance.
+
+Net effect: replicate variance widens CI(D) and lowers confidence.
+  </div></details>
+
+  <hr />
+  <h3>Evaluator disagreement (judge dispersion)</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Shows how much independent judges disagree on reasoning and coverage scores.</p>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Quantity</th><th>Median</th><th><span class="tooltip" data-tooltip="Interquartile Range — spread of judge scores">IQR</span></th><th>Interpretation</th></tr></thead>
+    <tbody>
+      <tr><td>Reason<sub>t,s,a,j</sub> (Reasoning)</td><td class="mono">0.63</td><td class="mono">0.20</td><td>moderate spread on argument quality judgments</td></tr>
+      <tr><td>Cov<sub>t,s,j</sub> (Coverage)</td><td class="mono">0.56</td><td class="mono">0.17</td><td>coverage disagreement concentrated on t1/t3</td></tr>
+      <tr><td>Overall<sub>s</sub> (Side scores)</td><td class="mono">0.61 / 0.60</td><td class="mono">0.06</td><td>overall side scores remain tightly clustered near tie</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+  <h3>Topic drift (across snapshots)</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks how topic scopes change between snapshots.</p>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Topic</th><th>Closest ancestor</th><th><span class="tooltip" data-tooltip="Semantic change from ancestor">drift_score</span></th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">t1</td><td class="mono">t1_prev</td><td class="mono">0.12</td><td>stable scope; no merge/split event</td></tr>
+      <tr><td class="mono">t2</td><td class="mono">t2_prev</td><td class="mono">0.09</td><td>mostly lexical neutralization changes</td></tr>
+      <tr><td class="mono">t3</td><td class="mono">t3_prev_a</td><td class="mono">0.15</td><td>largest drift due to split and scope tightening</td></tr>
+      <tr><td class="mono">t4</td><td class="mono">t4_seed</td><td class="mono">0.07</td><td>new topic from previously mixed residual spans</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+  <h3>Relevance sensitivity</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Tests how perturbing topic relevance weights affects the verdict.</p>
+  <details class="trace"><summary>Show results</summary><div class="codebox">
+Method: bootstrap resampling of claim-producing spans to perturb Rel_t.
+Output: D distribution + verdict stability.
+
+Result (mock):
+- D median: 0.01
+- CI(D): [-0.07, 0.08]
+- verdict stability: 56% NO VERDICT / 44% (directional)
+  </div></details>
+
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">Spec</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<!-- Back to top button -->
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<!-- Help panel -->
+<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    
+    <div class="glossary-term">Side-Label Symmetry</div>
+    <div class="glossary-def">Audit that swaps FOR/AGAINST labels to detect evaluator bias. Small ΔD indicates fair evaluation.</div>
+    
+    <div class="glossary-term">Extraction Stability</div>
+    <div class="glossary-def">Consistency of FACT/ARGUMENT extraction across pipeline reruns. Measured via Jaccard overlap.</div>
+    
+    <div class="glossary-term">Topic Drift</div>
+    <div class="glossary-def">Semantic change in topic scope from previous snapshots. High drift may indicate topic instability.</div>
+    
+    <div class="glossary-term">Relevance Sensitivity</div>
+    <div class="glossary-def">How much the verdict changes when topic relevance weights are perturbed. Tests robustness to content mass variations.</div>
+    
+    <div class="glossary-term">IQR</div>
+    <div class="glossary-def">Interquartile Range — spread of scores across judges or replicates.</div>
+    
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">Spec</a> page.</p>
+  </div>
+</div>
+
+<script>
+  // Back to top button visibility
+  const backToTop = document.querySelector('.back-to-top');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 300) backToTop.classList.add('visible');
+    else backToTop.classList.remove('visible');
+  });
+  
+  // Help panel toggle
+  function toggleHelp() {
+    document.getElementById('helpPanel').classList.toggle('open');
+    document.querySelector('.help-overlay').classList.toggle('visible');
+  }
+  
+  // Table scroll fade indicator
+  document.querySelectorAll('.table-wrap').forEach(wrap => {
+    wrap.classList.add('scrollable');
+    wrap.addEventListener('scroll', () => {
+      const isScrollable = wrap.scrollWidth > wrap.clientWidth;
+      const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
+      wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
+    });
+    wrap.dispatchEvent(new Event('scroll'));
+  });
+  
+  // Mobile state strip toggle
+  if (window.innerWidth <= 640) {
+    document.querySelector('.state-wrap').style.display = 'none';
+    document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
+  }
+  
+  // Tooltip system
+  const tooltipPopup = document.createElement('div');
+  tooltipPopup.className = 'tooltip-popup';
+  document.body.appendChild(tooltipPopup);
+  
+  document.querySelectorAll('.tooltip').forEach(el => {
+    el.addEventListener('mouseenter', (e) => {
+      const text = el.getAttribute('data-tooltip');
+      tooltipPopup.textContent = text;
+      tooltipPopup.classList.add('visible');
+      const rect = el.getBoundingClientRect();
+      const popupRect = tooltipPopup.getBoundingClientRect();
+      let top = rect.top - popupRect.height - 8;
+      let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+      left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
+      if (top < 10) top = rect.bottom + 8;
+      tooltipPopup.style.top = top + 'px';
+      tooltipPopup.style.left = left + 'px';
+    });
+    el.addEventListener('mouseleave', () => {
+      tooltipPopup.classList.remove('visible');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>What Evidence Would Change This — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html">Topics</a>
+      <a href="audits.html">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">Spec</a>
+      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+    </nav>
+  </div>
+</header>
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono">0.61</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" title="snap_2026-03-02T0610Z_0007">snap_2026-03-02T0610Z_0007</strong></div>
+    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono">2026-03-02 14:10 SGT</strong></div>
+  </div>
+  <!-- Mobile compact state (visible only on small screens) -->
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
+    <div class="state-compact"><strong>Confidence:</strong> 0.61</div>
+  </div>
+</section>
+
+<main>
+
+<section class="card">
+  <h2>What evidence would change this</h2>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Focus on high-leverage arguments and decisive facts (high <span class="tooltip" data-tooltip="|P(true) − 0.5| — how much a fact could swing the outcome">|p−0.5|</span>). Facts with <span class="tooltip" data-tooltip="P(true) near 0.5 indicates high uncertainty — best targets for new evidence">p ≈ 0.5</span> are the best targets for new evidence.</p>
+
+  <hr />
+  <h3>High-leverage targets</h3>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Target</th><th>Fact text</th><th>Why it matters</th><th>Evidence that would shift p</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><a href="facts_t1.html" class="pill mono">t1 • fact:F3</a></td>
+        <td class="fact-context">"Current safety evaluation methods do not fully predict rare high-impact failures." <br><span class="mono">P(true) = 0.58</span></td>
+        <td>F3 is used by <a href="arguments_t1.html" class="pill mono">arg:A2</a>; if safety evals are more reliable than claimed, the "buy time via ban" argument weakens.</td>
+        <td>Transparent benchmarking showing predictive validity on rare failure modes; independent replication across labs.</td>
+      </tr>
+      <tr>
+        <td><span class="pill mono">t3 • fact:F11</span></td>
+        <td class="fact-context">"Partial enforcement of technology bans can still significantly reduce harms." <br><span class="mono">P(true) = 0.65</span></td>
+        <td>Supports <span class="pill mono">arg:C1</span> about partial enforcement benefits; drives topic-level advantage for FOR in t3.</td>
+        <td>Historical case studies quantifying harm reduction from partial tech controls; credible counterexamples.</td>
+      </tr>
+      <tr>
+        <td><span class="pill mono">t2 • fact:F9</span></td>
+        <td class="fact-context">"AI deployment creates net job growth through productivity effects." <br><span class="mono">P(true) = 0.55</span></td>
+        <td>Used by <span class="pill mono">arg:B3</span>; if net job creation is weak, AGAINST loses ground on economic optimism.</td>
+        <td>Longitudinal labor market studies isolating AI effects by sector; natural experiments.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <hr />
+  <h3>Update triggers</h3>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Specific thresholds that would change topic or verdict outcomes:</p>
+  
+  <div class="callout soft">
+    <ul class="compact-list">
+      <li><strong>If <a href="facts_t1.html" class="pill mono">fact:F3</a> moves from ~0.58 to &gt;0.75</strong> (evals reliable), then <span class="pill mono">arg:A2</span> leverage drops and Topic t1 may shift AGAINST.</li>
+      <li><strong>If <span class="pill mono">fact:F12</span> drops below 0.50</strong> (compute chokepoints ineffective), then <span class="pill mono">arg:C2</span> weakens and Topic t3 may flip AGAINST.</li>
+      <li><strong>If <span class="pill mono">fact:F10</span> increases further</strong> and is paired with strong coverage by AGAINST, Topic t2 may tilt AGAINST more decisively.</li>
+    </ul>
+  </div>
+  
+  <hr />
+  <div class="row">
+    <a class="pill" href="verdict.html">← Back to Verdict</a>
+    <a class="pill" href="audits.html">View all Audits →</a>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">Spec</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<!-- Back to top button -->
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<!-- Help panel -->
+<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    
+    <div class="glossary-term">|p−0.5| (Decisiveness)</div>
+    <div class="glossary-def">Distance of P(true) from uncertainty (0.5). Higher values = more decisive facts. Facts near 0.5 are best targets for new evidence.</div>
+    
+    <div class="glossary-term">Leverage</div>
+    <div class="glossary-def">How much an argument influences the overall outcome, based on the decisiveness of its supporting facts.</div>
+    
+    <div class="glossary-term">Update Trigger</div>
+    <div class="glossary-def">Specific threshold where new evidence would change the verdict or topic-level outcome.</div>
+    
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">Spec</a> page.</p>
+  </div>
+</div>
+
+<script>
+  // Back to top button visibility
+  const backToTop = document.querySelector('.back-to-top');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 300) backToTop.classList.add('visible');
+    else backToTop.classList.remove('visible');
+  });
+  
+  // Help panel toggle
+  function toggleHelp() {
+    document.getElementById('helpPanel').classList.toggle('open');
+    document.querySelector('.help-overlay').classList.toggle('visible');
+  }
+  
+  // Table scroll fade indicator
+  document.querySelectorAll('.table-wrap').forEach(wrap => {
+    wrap.classList.add('scrollable');
+    wrap.addEventListener('scroll', () => {
+      const isScrollable = wrap.scrollWidth > wrap.clientWidth;
+      const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
+      wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
+    });
+    wrap.dispatchEvent(new Event('scroll'));
+  });
+  
+  // Mobile state strip toggle
+  if (window.innerWidth <= 640) {
+    document.querySelector('.state-wrap').style.display = 'none';
+    document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
+  }
+  
+  // Tooltip system
+  const tooltipPopup = document.createElement('div');
+  tooltipPopup.className = 'tooltip-popup';
+  document.body.appendChild(tooltipPopup);
+  
+  document.querySelectorAll('.tooltip').forEach(el => {
+    el.addEventListener('mouseenter', (e) => {
+      const text = el.getAttribute('data-tooltip');
+      tooltipPopup.textContent = text;
+      tooltipPopup.classList.add('visible');
+      const rect = el.getBoundingClientRect();
+      const popupRect = tooltipPopup.getBoundingClientRect();
+      let top = rect.top - popupRect.height - 8;
+      let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+      left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
+      if (top < 10) top = rect.bottom + 8;
+      tooltipPopup.style.top = top + 'px';
+      tooltipPopup.style.left = left + 'px';
+    });
+    el.addEventListener('mouseleave', () => {
+      tooltipPopup.classList.remove('visible');
+    });
+  });
+</script>
+</body>
+</html>
