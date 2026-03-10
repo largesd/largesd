@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arguments — Topic t3</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html" class="active" aria-current="page">Topics</a>
+      <a href="audits.html">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">About</a>
+      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+    </nav>
+  </div>
+</header>
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono">0.61</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" title="snap_2026-03-02T0610Z_0007">snap_2026-03-02T0610Z_0007</strong></div>
+    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono">2026-03-02 14:10 SGT</strong></div>
+  </div>
+  <!-- Mobile compact state (visible only on small screens) -->
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
+    <div class="state-compact"><strong>Confidence:</strong> 0.61</div>
+  </div>
+</section>
+
+<main>
+<div class="breadcrumbs">
+  <a href="index.html">Home</a>
+  <span>/</span>
+  <a href="topics.html">Topics</a>
+  <span>/</span>
+  <a href="topic_t3.html">t3</a>
+  <span>/</span>
+  <span>Arguments</span>
+</div>
+<div class="topic-shell">
+  <aside class="subnav card">
+    <h3>Topic t3</h3>
+    <p class="lede">Enforceability & geopolitics</p>
+    <a class="subnav-link" href="topic_t3.html">Summary</a>
+    <a class="subnav-link" href="facts_t3.html">Facts</a>
+    <a class="subnav-link active" href="arguments_t3.html">Arguments</a>
+    <hr />
+    <div class="row">
+      <a class="pill" href="topic_t2.html">← Previous</a>
+      <a class="pill" href="topic_t4.html">Next →</a>
+    </div>
+  </aside>
+  <div class="topic-main">
+<section class="card">
+  <h2>ARGUMENT layer — Topic t3: Enforceability & geopolitics</h2>
+  <p style="font-size:12px;color:var(--muted);margin-top:0">Each argument has supporting canonical facts → inference. Coverage shows which opposing arguments are addressed.</p>
+  <div class="row">
+    <a class="pill" href="topic_t3.html">Back to topic summary</a>
+    <a class="pill" href="facts_t3.html">Go to FACT layer →</a>
+  </div>
+
+  <hr />
+  <div class="layer-stack">
+    <section class="card layer-panel side-for">
+      <div class="layer-panel-head">
+        <h2 class="for-head">FOR — canonical ARGUMENT nodes</h2>
+        <small>Each argument is (supporting canonical facts) → (inference). Reasoning is judge-median.</small>
+      </div>
+      <div class="layer-panel-body">
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>arg_id</th><th>inference + supporting facts + provenance</th><th><span class="tooltip" data-tooltip="Median reasoning strength">Reason</span></th><th><span class="tooltip" data-tooltip="Coverage of opposing arguments">Coverage</span></th></tr></thead>
+        <tbody>
+<tr>
+  <td class="mono">C1</td>
+  <td>Even partial compliance with a ban reduces harmful AI development; coordinated controls on compute and exports are enforceable.
+    <div class='row' style='margin-top:8px'><span class='pill mono'>fact:F13</span> <span class='pill mono'>fact:F14</span></div>
+    <details class="trace"><summary>Show provenance</summary><ul class="provenance-list"><li><span class="provenance-meta">inference</span><div><span class="provenance-link">span_t3_C1_I01</span> → <span class="provenance-link">post_0xF1</span> • offsets 35–128</div></li><li><span class="provenance-meta">facts</span><div><span class="provenance-link">span_t3_F13_01</span>, <span class="provenance-link">span_t3_F14_01</span></div></li></ul></details>
+  </td>
+  <td class="mono">0.66<br><small>IQR 0.19</small></td>
+  <td><span class="pill good">Addresses: C3</span> <span class="pill warn">Ignores: C4</span><br><small>Rebuttal: via hardware chokepoint control</small></td>
+</tr>
+<tr>
+  <td class="mono">C2</td>
+  <td>Chokepoints in compute supply chains make enforcement feasible; historical precedents show tech controls can work.
+    <div class='row' style='margin-top:8px'><span class='pill mono'>fact:F15</span></div>
+    <details class="trace"><summary>Show provenance</summary><ul class="provenance-list"><li><span class="provenance-meta">inference</span><div><span class="provenance-link">span_t3_C2_I01</span> → <span class="provenance-link">post_0xF2</span> • offsets 42–135</div></li><li><span class="provenance-meta">facts</span><div><span class="provenance-link">span_t3_F15_01</span></div></li></ul></details>
+  </td>
+  <td class="mono">0.62<br><small>IQR 0.23</small></td>
+  <td><span class="pill good">Addresses: C4</span> <span class="pill warn">Ignores: C3</span><br><small>Rebuttal: via historical enforcement success</small></td>
+</tr>
+</tbody>
+      </table></div>
+      <div class="row layer-meta">
+        <span class="pill"><span class="tooltip" data-tooltip="How stable argument structures are across reruns">Structure overlap</span>:</span>
+        <span class="pill mono">p10/p50/p90: 0.75 / 0.85 / 0.93</span>
+        <span class="pill mono">IQR: 0.09</span>
+      </div>
+      </div>
+    </section>
+
+    <section class="card layer-panel side-against">
+      <div class="layer-panel-head">
+        <h2 class="against-head">AGAINST — canonical ARGUMENT nodes</h2>
+        <small>Coverage is computed against opposing canonical arguments, weighted by decisiveness.</small>
+      </div>
+      <div class="layer-panel-body">
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>arg_id</th><th>inference + supporting facts + provenance</th><th><span class="tooltip" data-tooltip="Median reasoning strength">Reason</span></th><th><span class="tooltip" data-tooltip="Coverage of opposing arguments">Coverage</span></th></tr></thead>
+        <tbody>
+<tr>
+  <td class="mono">C3</td>
+  <td>Non-compliant actors gain strategic advantages; bans fragment AI safety efforts and coordination.
+    <div class='row' style='margin-top:8px'><span class='pill mono'>fact:F16</span></div>
+    <details class="trace"><summary>Show provenance</summary><ul class="provenance-list"><li><span class="provenance-meta">inference</span><div><span class="provenance-link">span_t3_C3_I01</span> → <span class="provenance-link">post_0xG1</span> • offsets 48–138</div></li><li><span class="provenance-meta">facts</span><div><span class="provenance-link">span_t3_F16_01</span></div></li></ul></details>
+  </td>
+  <td class="mono">0.60<br><small>IQR 0.21</small></td>
+  <td><span class="pill good">Addresses: C1</span> <span class="pill warn">Ignores: C2</span><br><small>Rebuttal: via coordination fragmentation risk</small></td>
+</tr>
+<tr>
+  <td class="mono">C4</td>
+  <td>Export controls and compute restrictions are circumventable; verification of large models is difficult.
+    <div class='row' style='margin-top:8px'><span class='pill mono'>fact:F17</span> <span class='pill mono'>fact:F18</span></div>
+    <details class="trace"><summary>Show provenance</summary><ul class="provenance-list"><li><span class="provenance-meta">inference</span><div><span class="provenance-link">span_t3_C4_I01</span> → <span class="provenance-link">post_0xG2</span> • offsets 52–148</div></li><li><span class="provenance-meta">facts</span><div><span class="provenance-link">span_t3_F17_01</span>, <span class="provenance-link">span_t3_F18_01</span></div></li></ul></details>
+  </td>
+  <td class="mono">0.63<br><small>IQR 0.18</small></td>
+  <td><span class="pill good">Addresses: C1, C2</span><br><small>Rebuttal: C1 via circumvention; C2 via verification difficulty</small></td>
+</tr>
+</tbody>
+      </table></div>
+      <div class="row layer-meta">
+        <span class="pill"><span class="tooltip" data-tooltip="How stable argument structures are across reruns">Structure overlap</span>:</span>
+        <span class="pill mono">p10/p50/p90: 0.73 / 0.83 / 0.91</span>
+        <span class="pill mono">IQR: 0.10</span>
+      </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <div class="glossary-term">Reason</div>
+    <div class="glossary-def">Median reasoning strength of the argument inference.</div>
+    <div class="glossary-term">Coverage</div>
+    <div class="glossary-def">Proportion of opposing arguments addressed.</div>
+    <div class="glossary-term">IQR</div>
+    <div class="glossary-def">Interquartile Range — spread of judge scores.</div>
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>
+
+<script>
+  // Back to top button visibility
+  const backToTop = document.querySelector('.back-to-top');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 300) backToTop.classList.add('visible');
+    else backToTop.classList.remove('visible');
+  });
+  
+  // Help panel toggle
+  function toggleHelp() {
+    document.getElementById('helpPanel').classList.toggle('open');
+    document.querySelector('.help-overlay').classList.toggle('visible');
+  }
+  
+  // Table scroll fade indicator
+  document.querySelectorAll('.table-wrap').forEach(wrap => {
+    wrap.classList.add('scrollable');
+    wrap.addEventListener('scroll', () => {
+      const isScrollable = wrap.scrollWidth > wrap.clientWidth;
+      const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
+      wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
+    });
+    wrap.dispatchEvent(new Event('scroll'));
+  });
+  
+  // Mobile state strip toggle
+  if (window.innerWidth <= 640) {
+    document.querySelector('.state-wrap').style.display = 'none';
+    document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
+  }
+  
+  // Tooltip system
+  const tooltipPopup = document.createElement('div');
+  tooltipPopup.className = 'tooltip-popup';
+  document.body.appendChild(tooltipPopup);
+  
+  document.querySelectorAll('.tooltip').forEach(el => {
+    el.addEventListener('mouseenter', (e) => {
+      const text = el.getAttribute('data-tooltip');
+      tooltipPopup.textContent = text;
+      tooltipPopup.classList.add('visible');
+      const rect = el.getBoundingClientRect();
+      const popupRect = tooltipPopup.getBoundingClientRect();
+      let top = rect.top - popupRect.height - 8;
+      let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+      left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
+      if (top < 10) top = rect.bottom + 8;
+      tooltipPopup.style.top = top + 'px';
+      tooltipPopup.style.left = left + 'px';
+    });
+    el.addEventListener('mouseleave', () => {
+      tooltipPopup.classList.remove('visible');
+    });
+  });
+</script>
+</body>
+</html>
