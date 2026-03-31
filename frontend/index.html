@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blind Debate Adjudicator — Home</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <style>
+    .loading { opacity: 0.6; pointer-events: none; }
+    .api-status { font-size: 11px; padding: 4px 8px; border-radius: 4px; }
+    .api-status.connected { background: rgba(142,240,180,.2); color: var(--good); }
+    .api-status.error { background: rgba(255,107,107,.2); color: var(--bad); }
+    .refresh-btn { cursor: pointer; padding: 4px 10px; border-radius: 4px; background: rgba(109,214,255,.1); border: 1px solid rgba(109,214,255,.3); }
+    .refresh-btn:hover { background: rgba(109,214,255,.2); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html" class="active" aria-current="page">Home</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html">Topics</a>
+      <a href="audits.html">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">About</a>
+      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="confidence-display">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title="">Loading...</strong></div>
+    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="updated-display">-</strong></div>
+  </div>
+  <!-- Mobile compact state (visible only on small screens) -->
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main>
+
+<div class="grid cols2">
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <h2>Debate prompt</h2>
+        <p class="lede">Fully blind adjudication: the system judges arguments — not people.</p>
+      </div>
+      <span class="api-status" id="api-status">Connecting...</span>
+    </div>
+    
+    <div class="callout" id="debate-prompt-content">
+      <div style="font-size:18px;font-weight:750;color:var(--muted)" id="resolution-display">No debate started yet.</div>
+      <small id="scope-display" style="display:none">Create a new debate to get started.</small>
+    </div>
+
+    <hr />
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Current verdict</div>
+        <div class="value" id="kpi-verdict">NO VERDICT</div>
+        <div class="hint"><span class="tooltip" data-tooltip="Confidence interval of D (FOR − AGAINST) crosses zero">CI(D) crosses 0</span> across replicates</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Confidence</div>
+        <div class="value" id="kpi-confidence">-</div>
+        <div class="hint">share of replicates supporting a direction</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Snapshot trigger</div>
+        <div class="value" id="kpi-trigger">Activity</div>
+        <div class="hint">immutable scoring run</div>
+      </div>
+    </div>
+
+    <hr />
+    <h3>What changed in the latest snapshot</h3>
+    <div class="callout soft">
+      <ul class="compact-list" id="changes-list">
+        <li><strong>t3</strong> now contributes the largest positive movement toward FOR.</li>
+        <li><strong>t1</strong> remains the strongest source of uncertainty because the top counterarguments are closely matched.</li>
+        <li>The overall decision remains <strong>NO VERDICT</strong> because CI(D) still crosses 0.</li>
+      </ul>
+    </div>
+
+    <h3>What you can do next</h3>
+    <div class="cta-row">
+      <a class="button" href="snapshot.html">Open latest snapshot</a>
+      <a class="pill" href="verdict.html">See what is driving the verdict →</a>
+    </div>
+    <ul class="compact-list">
+      <li><a href="topics.html">Review Topics</a> (neutral scopes + steelman summaries)</li>
+      <li><a href="audits.html">Audit robustness</a> (label-flip, extraction stability, relevance sensitivity)</li>
+      <li><a href="verdict.html">Inspect verdict math</a> (D distribution + CI(D))</li>
+      <li><a href="evidence.html">See "what evidence would change this"</a></li>
+    </ul>
+    
+    <div id="login-notice" class="callout soft" style="margin-top: 16px; display: none;">
+      <strong>💡 Want to participate?</strong> <a href="login.html">Log in</a> or <a href="register.html">create an account</a> to start debates and post arguments.
+    </div>
+  </section>
+
+  <aside class="card">
+    <div class="section-head">
+      <h2>Snapshot essentials</h2>
+      <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    </div>
+    <p class="lede">This panel stays consistent across pages so users can orient themselves immediately.</p>
+    <div class="row">
+      <span class="badge">snapshot_id: <span class="mono" id="badge-snapshot-id">-</span></span>
+      <span class="badge">timestamp: <span class="mono" id="badge-timestamp">-</span></span>
+      <span class="badge">trigger: <span class="mono" id="badge-trigger">-</span></span>
+    </div>
+    <hr />
+    <h3>Moderation template</h3>
+    <div class="row">
+      <span class="pill">Template: <span class="mono" id="template-name">Standard Civility + PII Guard v3</span></span>
+      <span class="pill">Version: <span class="mono" id="template-version">3.2.1</span></span>
+      <a class="pill" href="snapshot.html">Open snapshot →</a>
+    </div>
+    <hr />
+    <h3>Allowed vs blocked</h3>
+    <div class="table-wrap"><table class="table">
+      <tr><th>Allowed</th><td class="mono" id="allowed-count">84</td></tr>
+      <tr><th>Blocked</th><td class="mono" id="blocked-count">11</td></tr>
+      <tr><th>Top block reasons</th><td id="block-reasons"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
+    </table></div>
+    <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
+  </aside>
+</div>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<!-- Back to top button -->
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<!-- Help panel -->
+<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    
+    <div class="glossary-term">CI(D)</div>
+    <div class="glossary-def">Confidence Interval of D (the difference score). If this interval crosses zero, the verdict is "NO VERDICT" because FOR and AGAINST are statistically indistinguishable.</div>
+    
+    <div class="glossary-term">D = FOR − AGAINST</div>
+    <div class="glossary-def">The margin between overall FOR and AGAINST scores. Positive = FOR leading; Negative = AGAINST leading.</div>
+    
+    <div class="glossary-term">F<sub>t,s</sub> (Factuality)</div>
+    <div class="glossary-def">Mean truth probability across canonical FACT nodes for topic t, side s. Calculated as average of P(fact true).</div>
+    
+    <div class="glossary-term">Reason<sub>t,s</sub> (Reasoning)</div>
+    <div class="glossary-def">Median reasoning strength across canonical ARGUMENT nodes for topic t, side s. Scored by independent judges.</div>
+    
+    <div class="glossary-term">Cov<sub>t,s</sub> (Coverage)</div>
+    <div class="glossary-def">How well side s addresses the opposing side's arguments, weighted by argument leverage. Higher = better rebuttal coverage.</div>
+    
+    <div class="glossary-term">Q<sub>t,s</sub> (Quality)</div>
+    <div class="glossary-def">Geometric mean of Factuality, Reasoning, and Coverage. Balances all three components without tuned weights.</div>
+    
+    <div class="glossary-term">Rel<sub>t</sub> (Relevance)</div>
+    <div class="glossary-def">Topic relevance weight based on claim-producing content mass. Determines how much each topic contributes to the overall score.</div>
+    
+    <div class="glossary-term">Steelman</div>
+    <div class="glossary-def">A summary that presents the strongest version of each side's arguments, not a strawman. Generated from canonical arguments.</div>
+    
+    <div class="glossary-term">IQR</div>
+    <div class="glossary-def">Interquartile Range — shows spread of judge scores. Wider IQR = more disagreement among evaluators.</div>
+    
+    <div class="glossary-term">Drift Score</div>
+    <div class="glossary-def">Measures how much a topic has changed from its previous snapshot. Higher = more change.</div>
+    
+    <div class="glossary-term">Canonical FACT/ARGUMENT</div>
+    <div class="glossary-def">Deduplicated, normalized representations of claims and arguments extracted from posts. Used for consistent scoring.</div>
+    
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>
+
+<script>
+// API Configuration
+const API_BASE = window.location.origin;
+
+// Load data from API
+async function loadData() {
+  const statusEl = document.getElementById('api-status');
+  statusEl.textContent = 'Loading...';
+  statusEl.className = 'api-status';
+  
+  try {
+    // Load debate info
+    const debateRes = await fetch(`${API_BASE}/api/debate`);
+    const debateData = await debateRes.json();
+    
+    if (debateData.error) {
+      throw new Error(debateData.error);
+    }
+    
+    // Update debate info based on whether a debate exists
+    if (debateData.has_debate && debateData.resolution) {
+      document.getElementById('resolution-display').textContent = debateData.resolution;
+      document.getElementById('resolution-display').style.color = '';
+      document.getElementById('scope-display').textContent = debateData.scope || '';
+      document.getElementById('scope-display').style.display = '';
+    } else {
+      // No debate started yet - show empty state
+      document.getElementById('resolution-display').textContent = 'No debate started yet.';
+      document.getElementById('resolution-display').style.color = 'var(--muted)';
+      document.getElementById('scope-display').style.display = 'none';
+    }
+    
+    // Load snapshot data
+    const snapshotRes = await fetch(`${API_BASE}/api/debate/snapshot`);
+    const snapshotData = await snapshotRes.json();
+    
+    if (!snapshotData.error) {
+      updateSnapshotDisplay(snapshotData);
+    } else if (snapshotData.has_debate === false) {
+      // No debate exists - reset display to empty state
+      resetToEmptyState();
+    }
+    
+    statusEl.textContent = 'Connected';
+    statusEl.className = 'api-status connected';
+    
+  } catch (error) {
+    console.error('Error loading data:', error);
+    statusEl.textContent = 'Offline';
+    statusEl.className = 'api-status error';
+  }
+}
+
+function updateSnapshotDisplay(data) {
+  // Update state strip
+  document.getElementById('verdict-display').textContent = data.verdict || 'NO VERDICT';
+  document.getElementById('verdict-display').className = 'state-value verdict-neutral' + (data.verdict === 'FOR' ? ' good' : data.verdict === 'AGAINST' ? ' bad' : '');
+  document.getElementById('confidence-display').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
+  document.getElementById('snapshot-display').textContent = data.snapshot_id || '-';
+  document.getElementById('snapshot-display').title = data.snapshot_id || '';
+  document.getElementById('updated-display').textContent = data.timestamp ? new Date(data.timestamp).toLocaleString() : '-';
+  
+  // Mobile
+  document.getElementById('verdict-mobile').textContent = data.verdict || 'NO VERDICT';
+  document.getElementById('confidence-mobile').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
+  
+  // Update KPIs
+  document.getElementById('kpi-verdict').textContent = data.verdict || 'NO VERDICT';
+  document.getElementById('kpi-confidence').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
+  document.getElementById('kpi-trigger').textContent = data.trigger_type || '-';
+  
+  // Update badges
+  document.getElementById('badge-snapshot-id').textContent = data.snapshot_id || '-';
+  document.getElementById('badge-timestamp').textContent = data.timestamp ? new Date(data.timestamp).toLocaleString() : '-';
+  document.getElementById('badge-trigger').textContent = data.trigger_type || '-';
+  
+  document.getElementById('template-name').textContent = data.template_name || '-';
+  document.getElementById('template-version').textContent = data.template_version || '-';
+  
+  document.getElementById('allowed-count').textContent = data.allowed_count !== undefined ? data.allowed_count : '-';
+  document.getElementById('blocked-count').textContent = data.blocked_count !== undefined ? data.blocked_count : '-';
+  
+  // Block reasons
+  const blockReasonsEl = document.getElementById('block-reasons');
+  if (data.block_reasons && Object.keys(data.block_reasons).length > 0) {
+    blockReasonsEl.innerHTML = Object.entries(data.block_reasons)
+      .map(([reason, count]) => `<span class="pill warn">${reason}: ${count}</span>`)
+      .join(' ');
+  } else {
+    blockReasonsEl.innerHTML = '<span class="pill">-</span>';
+  }
+}
+
+function resetToEmptyState() {
+  // Reset all displays to empty state when no debate exists
+  document.getElementById('verdict-display').textContent = 'NO VERDICT';
+  document.getElementById('verdict-display').className = 'state-value verdict-neutral';
+  document.getElementById('confidence-display').textContent = '-';
+  document.getElementById('snapshot-display').textContent = '-';
+  document.getElementById('snapshot-display').title = '';
+  document.getElementById('updated-display').textContent = '-';
+  
+  // Mobile
+  document.getElementById('verdict-mobile').textContent = 'NO VERDICT';
+  document.getElementById('confidence-mobile').textContent = '-';
+  
+  // KPIs
+  document.getElementById('kpi-verdict').textContent = 'NO VERDICT';
+  document.getElementById('kpi-confidence').textContent = '-';
+  document.getElementById('kpi-trigger').textContent = '-';
+  
+  // Badges
+  document.getElementById('badge-snapshot-id').textContent = '-';
+  document.getElementById('badge-timestamp').textContent = '-';
+  document.getElementById('badge-trigger').textContent = '-';
+  
+  document.getElementById('template-name').textContent = '-';
+  document.getElementById('template-version').textContent = '-';
+  
+  document.getElementById('allowed-count').textContent = '-';
+  document.getElementById('blocked-count').textContent = '-';
+  document.getElementById('block-reasons').innerHTML = '<span class="pill">-</span>';
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  
+  // Show login notice if not logged in
+  if (!Auth.isLoggedIn()) {
+    const notice = document.getElementById('login-notice');
+    if (notice) notice.style.display = 'block';
+  }
+});
+
+// Back to top button visibility
+const backToTop = document.querySelector('.back-to-top');
+window.addEventListener('scroll', () => {
+  if (window.scrollY > 300) backToTop.classList.add('visible');
+  else backToTop.classList.remove('visible');
+});
+
+// Help panel toggle
+function toggleHelp() {
+  document.getElementById('helpPanel').classList.toggle('open');
+  document.querySelector('.help-overlay').classList.toggle('visible');
+}
+
+// Table scroll fade indicator
+document.querySelectorAll('.table-wrap').forEach(wrap => {
+  wrap.classList.add('scrollable');
+  wrap.addEventListener('scroll', () => {
+    const isScrollable = wrap.scrollWidth > wrap.clientWidth;
+    const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
+    wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
+  });
+  wrap.dispatchEvent(new Event('scroll'));
+});
+
+// Mobile state strip toggle
+if (window.innerWidth <= 640) {
+  document.querySelector('.state-wrap').style.display = 'none';
+  document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
+}
+
+// Tooltip system
+const tooltipPopup = document.createElement('div');
+tooltipPopup.className = 'tooltip-popup';
+document.body.appendChild(tooltipPopup);
+
+document.querySelectorAll('.tooltip').forEach(el => {
+  el.addEventListener('mouseenter', (e) => {
+    const text = el.getAttribute('data-tooltip');
+    tooltipPopup.textContent = text;
+    tooltipPopup.classList.add('visible');
+    const rect = el.getBoundingClientRect();
+    const popupRect = tooltipPopup.getBoundingClientRect();
+    let top = rect.top - popupRect.height - 8;
+    let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+    left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
+    if (top < 10) top = rect.bottom + 8;
+    tooltipPopup.style.top = top + 'px';
+    tooltipPopup.style.left = left + 'px';
+  });
+  el.addEventListener('mouseleave', () => {
+    tooltipPopup.classList.remove('visible');
+  });
+});
+</script>
+</body>
+</html>

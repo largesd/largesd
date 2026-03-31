@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Register — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    .auth-container{max-width:420px;margin:40px auto;padding:0 18px}
+    .auth-card{background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+    .auth-header{text-align:center;margin-bottom:24px}
+    .auth-header h1{margin:0 0 8px 0;font-size:22px}
+    .auth-header p{margin:0;color:var(--muted);font-size:14px}
+    .form-group{margin-bottom:18px}
+    .form-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+    .form-group input{font-family:var(--sans);font-size:15px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--text);width:100%;transition:border-color .2s}
+    .form-group input:focus{outline:none;border-color:var(--accent)}
+    .form-group input.error{border-color:var(--bad)}
+    .error-message{color:var(--bad);font-size:13px;margin-top:6px;display:none}
+    .error-message.visible{display:block}
+    .submit-btn{width:100%;padding:14px;font-size:15px;font-weight:600;background:rgba(109,214,255,.14);border:1px solid rgba(109,214,255,.24);border-radius:10px;color:var(--text);cursor:pointer;transition:all .2s}
+    .submit-btn:hover:not(:disabled){background:rgba(109,214,255,.22)}
+    .submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .auth-footer{text-align:center;margin-top:20px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+    .auth-footer a{color:var(--accent)}
+    .password-requirements{font-size:12px;color:var(--muted);margin-top:12px;padding:14px;background:rgba(0,0,0,.15);border-radius:10px}
+    .password-requirements ul{margin:0;padding-left:18px}
+    .password-requirements li{margin:6px 0;transition:color .2s}
+    .password-requirements li.met{color:var(--good);list-style-type:"✓ "}
+    .password-requirements li.unmet{color:var(--muted);list-style-type:"○ "}
+    .loading-spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-right:8px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .alert{padding:12px 16px;border-radius:10px;margin-bottom:20px;font-size:14px;display:none}
+    .alert.visible{display:block}
+    .alert-error{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.3);color:var(--bad)}
+    .alert-success{background:rgba(142,240,180,.12);border:1px solid rgba(142,240,180,.3);color:var(--good)}
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html">Topics</a>
+      <a href="audits.html">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">About</a>
+      <a href="login.html">Login</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>Create your account</h1>
+        <p>Join the debate community</p>
+      </div>
+      
+      <div class="alert alert-error" id="error-alert"></div>
+      <div class="alert alert-success" id="success-alert"></div>
+      
+      <form id="register-form">
+        <div class="form-group">
+          <label for="display_name">Display Name</label>
+          <input type="text" id="display_name" name="display_name" placeholder="How you'll appear in debates" required autocomplete="name">
+        </div>
+        
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Create a strong password" required autocomplete="new-password">
+          <div class="password-requirements">
+            <ul>
+              <li id="req-length" class="unmet">At least 8 characters</li>
+              <li id="req-upper" class="unmet">One uppercase letter</li>
+              <li id="req-lower" class="unmet">One lowercase letter</li>
+              <li id="req-number" class="unmet">One number</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" placeholder="Re-enter your password" required autocomplete="new-password">
+        </div>
+        
+        <button type="submit" class="submit-btn" id="submit-btn">
+          Create Account
+        </button>
+      </form>
+      
+      <div class="auth-footer">
+        Already have an account? <a href="login.html">Sign in</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<script>
+const API_BASE = window.location.origin;
+
+// Check if already logged in
+document.addEventListener('DOMContentLoaded', () => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    // Verify token is still valid
+    fetch(`${API_BASE}/api/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(res => {
+      if (res.ok) {
+        // Already logged in, redirect to home
+        window.location.href = 'index.html';
+      }
+    })
+    .catch(() => {});
+  }
+});
+
+// Password validation
+const passwordInput = document.getElementById('password');
+const confirmInput = document.getElementById('confirm_password');
+
+passwordInput.addEventListener('input', validatePassword);
+confirmInput.addEventListener('input', validatePassword);
+
+function validatePassword() {
+  const password = passwordInput.value;
+  const confirm = confirmInput.value;
+  
+  // Check requirements
+  document.getElementById('req-length').className = password.length >= 8 ? 'met' : 'unmet';
+  document.getElementById('req-upper').className = /[A-Z]/.test(password) ? 'met' : 'unmet';
+  document.getElementById('req-lower').className = /[a-z]/.test(password) ? 'met' : 'unmet';
+  document.getElementById('req-number').className = /\d/.test(password) ? 'met' : 'unmet';
+  
+  // Check match
+  if (confirm && password !== confirm) {
+    confirmInput.classList.add('error');
+  } else {
+    confirmInput.classList.remove('error');
+  }
+}
+
+// Handle form submission
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const submitBtn = document.getElementById('submit-btn');
+  const errorAlert = document.getElementById('error-alert');
+  const successAlert = document.getElementById('success-alert');
+  
+  // Clear previous alerts
+  errorAlert.classList.remove('visible');
+  successAlert.classList.remove('visible');
+  
+  // Get values
+  const display_name = document.getElementById('display_name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = passwordInput.value;
+  const confirm_password = confirmInput.value;
+  
+  // Client-side validation
+  if (password !== confirm_password) {
+    errorAlert.textContent = 'Passwords do not match.';
+    errorAlert.classList.add('visible');
+    confirmInput.classList.add('error');
+    return;
+  }
+  
+  if (password.length < 8) {
+    errorAlert.textContent = 'Password must be at least 8 characters long.';
+    errorAlert.classList.add('visible');
+    return;
+  }
+  
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+    errorAlert.textContent = 'Password does not meet all requirements.';
+    errorAlert.classList.add('visible');
+    return;
+  }
+  
+  // Show loading state
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="loading-spinner"></span>Creating account...';
+  
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ display_name, email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Save token and user info
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Show success message
+      successAlert.textContent = 'Account created successfully! Redirecting...';
+      successAlert.classList.add('visible');
+      
+      // Redirect to home page
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 1500);
+    } else {
+      // Show error
+      errorAlert.textContent = data.error || 'Registration failed. Please try again.';
+      errorAlert.classList.add('visible');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    errorAlert.textContent = 'Network error. Please try again.';
+    errorAlert.classList.add('visible');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Account';
+  }
+});
+</script>
+</body>
+</html>
