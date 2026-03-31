@@ -134,6 +134,14 @@ Artifacts are written to `artifacts/acceptance/` with:
 - `ui_acceptance_report.md` for a human-readable summary
 - `screenshots/` with one browser screenshot per acceptance criterion
 
+### Agent While You Sleep
+
+If you want to work from a queue of small, acceptance-checked LSD slices:
+
+- use the GitHub `LSD Acceptance Slice` issue template
+- use [SLEEP_AGENT_WORKFLOW.md](SLEEP_AGENT_WORKFLOW.md) as the builder/verifier/judge runbook
+- use `.github/workflows/nightly-acceptance.yml` for nightly verification on the default branch
+
 ## API Endpoints
 
 | Endpoint | Method | Description |

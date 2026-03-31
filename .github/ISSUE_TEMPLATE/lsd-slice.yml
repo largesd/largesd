@@ -1,0 +1,91 @@
+name: LSD Acceptance Slice
+description: Create one agent-ready implementation slice from the LSD v1.2 requirements.
+title: "[LSD Slice] "
+labels:
+  - agent-ready
+body:
+  - type: input
+    id: lsd_section
+    attributes:
+      label: LSD Section
+      description: Reference the source section from LSD req.txt.
+      placeholder: "Example: 17 - Overall aggregation + decision dossier outputs"
+    validations:
+      required: true
+
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: Describe the exact vertical slice to implement.
+      placeholder: |
+        Add a verdict-side evidence-gap panel that shows insufficiency_rate by topic-side and links to the existing evidence page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: user_visible_change
+    attributes:
+      label: User-visible change
+      description: Describe what the user should be able to see or do after this slice lands.
+      placeholder: |
+        On verdict.html, users can see an evidence-gap summary with insufficiency rates for FOR and AGAINST per topic.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Write specific, pass/fail checks in plain English.
+      placeholder: |
+        AC-1:
+        - Verdict page shows an "Evidence gaps" section after a snapshot exists.
+        - Each topic row includes FOR and AGAINST insufficiency rates.
+
+        AC-2:
+        - Clicking through to evidence.html preserves the active snapshot context.
+
+        AC-3:
+        - If no snapshot exists, the page shows an empty state instead of broken metrics.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: List the commands or checks the verifier must run.
+      placeholder: |
+        python3 test_debate_system.py
+        python3 scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+    validations:
+      required: true
+
+  - type: textarea
+    id: relevant_files
+    attributes:
+      label: Likely files
+      description: Optional guidance for the builder.
+      placeholder: |
+        frontend/verdict.html
+        frontend/evidence.html
+        backend/app_v2.py
+        acceptance/ui_debate_flow.json
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: Prevent the overnight run from drifting into unrelated work.
+      placeholder: |
+        Do not redesign the whole verdict page.
+        Do not add multi-frame support in this slice.
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks or assumptions
+      description: Optional notes for human review.
+      placeholder: |
+        Assumes evidence-gap metrics can be derived from existing snapshot data without schema changes.
