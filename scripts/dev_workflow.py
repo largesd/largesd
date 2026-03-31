@@ -16,6 +16,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
@@ -29,6 +30,7 @@ DOTENV_PATH = REPO_ROOT / ".env"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5000
 DEFAULT_SMOKE_PORT = 5055
+DEFAULT_ACCEPTANCE_PORT = 5080
 MANUAL_COMMANDS = (
     "server-check",
     "scenario-ai",
@@ -267,6 +269,51 @@ def run_smoke(args: argparse.Namespace) -> None:
         stop_process(process)
 
 
+def run_acceptance(args: argparse.Namespace) -> None:
+    """Start a temporary v2 server and run the browser-driven acceptance suite."""
+    base_url = f"http://{DEFAULT_HOST}:{args.port}"
+    env = project_env({"PYTHONUNBUFFERED": "1"})
+    temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_acceptance_{args.port}.db"
+
+    if temp_db_path.exists():
+        temp_db_path.unlink()
+
+    command = [
+        active_python(),
+        "start_server_v2.py",
+        "--host",
+        DEFAULT_HOST,
+        "--port",
+        str(args.port),
+        "--fact-mode",
+        "OFFLINE",
+        "--llm-provider",
+        "mock",
+        "--num-judges",
+        "3",
+        "--db-path",
+        str(temp_db_path),
+    ]
+
+    print(f"$ {' '.join(command)}")
+    process = subprocess.Popen(command, cwd=REPO_ROOT, env=env)
+
+    try:
+        wait_for_health(base_url, args.timeout, process)
+        acceptance_command = [
+            active_python(),
+            "acceptance/run_ui_acceptance.py",
+            "--base-url",
+            base_url,
+        ]
+        if args.headed:
+            acceptance_command.append("--headed")
+
+        run_command(acceptance_command, env=project_env())
+    finally:
+        stop_process(process)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser."""
     parser = argparse.ArgumentParser(
@@ -328,6 +375,15 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_parser.add_argument("--port", type=int, default=DEFAULT_SMOKE_PORT)
     smoke_parser.add_argument("--timeout", type=int, default=30)
     smoke_parser.set_defaults(func=run_smoke)
+
+    acceptance_parser = subparsers.add_parser(
+        "acceptance",
+        help="Start a temporary v2 server and run browser-based acceptance checks.",
+    )
+    acceptance_parser.add_argument("--port", type=int, default=DEFAULT_ACCEPTANCE_PORT)
+    acceptance_parser.add_argument("--timeout", type=int, default=45)
+    acceptance_parser.add_argument("--headed", action="store_true")
+    acceptance_parser.set_defaults(func=run_acceptance)
 
     return parser
 

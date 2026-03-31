@@ -47,6 +47,26 @@ def test_modulation_system():
     outcome, reason, rules = engine.apply_modulation(allowed_post)
     assert outcome == ModOutcome.ALLOWED, f"Valid post should be allowed, got {outcome}"
     print("✓ Valid post allowed through modulation")
+
+    # Test repetition logic only catches long consecutive runs, not normal prose
+    natural_post = {
+        'facts': 'Independent evidence reviews increase confidence in safety claims across multiple release cycles.',
+        'inference': 'Therefore external audits can improve trust without relying on a single evaluator.'
+    }
+    outcome, reason, rules = engine.apply_modulation(natural_post)
+    assert outcome == ModOutcome.ALLOWED, "Normal prose should not trigger repetition spam blocking"
+    print("✓ Normal prose is not misclassified as spam")
+
+    spam_post = {
+        'facts': 'aaaaaaaaaaaaaaaaaaaaaaaaa',
+        'inference': 'Therefore aaaaaaaaaaaaaaaaaaaaaaaaa should be blocked.'
+    }
+    outcome, reason, rules = engine.apply_modulation(spam_post)
+    outcome_str = outcome.value if hasattr(outcome, 'value') else str(outcome)
+    reason_str = (reason.value if hasattr(reason, 'value') else str(reason)).lower()
+    assert outcome_str == 'blocked', "Long repeated character runs should be blocked as spam"
+    assert reason_str == 'spam', f"Expected spam, got {reason}"
+    print("✓ Repetition spam detection only blocks long repeated runs")
     
     # Test blocked post (severe toxicity - matches standard_civility rules)
     blocked_post = {

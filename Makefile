@@ -18,6 +18,7 @@ help:
 		"  unit            Run test_debate_system.py" \
 		"  fact            Run test_fact_check_skill.py" \
 		"  smoke           Start a temporary server and run a health-check scenario" \
+		"  acceptance      Start a temporary server and run the browser acceptance suite" \
 		"  e2e             Start a temporary server and run the AI scenario" \
 		"  server          Start the v2 server" \
 		"  server-v1       Start the v1 server" \
@@ -53,6 +54,9 @@ fact:
 
 smoke:
 	$(PYTHON) $(WORKFLOW) smoke --scenario server-check
+
+acceptance:
+	$(PYTHON) $(WORKFLOW) acceptance
 
 e2e:
 	$(PYTHON) $(WORKFLOW) smoke --scenario scenario-ai

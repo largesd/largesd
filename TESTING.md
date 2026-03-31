@@ -15,6 +15,10 @@ python test_debate_system.py
 # In another terminal:
 python test_manual.py server-check
 python test_manual.py scenario-ai
+
+# 3. Run browser acceptance checks against a temporary v2 server
+python -m playwright install chromium
+python scripts/dev_workflow.py acceptance
 ```
 
 ## Test Coverage
@@ -78,6 +82,30 @@ Tests the fact-checking skill specifically:
 **Run:**
 ```bash
 python test_fact_check_skill.py
+```
+
+### 4. UI Acceptance Tests (`acceptance/run_ui_acceptance.py`)
+
+Tests the system end to end through the browser UI against named acceptance criteria:
+
+- `AC-1`: Create a debate from the UI
+- `AC-2`: Submit opposing posts from the UI
+- `AC-3`: Generate a snapshot from the UI
+- `AC-4`: Inspect topics and verdict pages after snapshot generation
+
+The source of truth for the criteria lives in `acceptance/ui_debate_flow.json`.
+
+**Run:**
+```bash
+python -m playwright install chromium
+python scripts/dev_workflow.py acceptance
+```
+
+**Artifacts:**
+```bash
+artifacts/acceptance/ui_acceptance_report.json
+artifacts/acceptance/ui_acceptance_report.md
+artifacts/acceptance/screenshots/
 ```
 
 ## Testing Requirements Compliance
@@ -272,7 +300,19 @@ curl http://localhost:5000/api/debate/fact-check-stats
 
 ## Continuous Testing
 
-For development, add to CI/CD:
+This repo's GitHub Actions workflow now runs:
+
+- Python checks
+- API smoke verification
+- Browser-based UI acceptance checks with Playwright
+
+For local development, the equivalent browser command is:
+
+```bash
+python scripts/dev_workflow.py acceptance
+```
+
+Example CI shape:
 
 ```yaml
 # .github/workflows/test.yml example
@@ -282,14 +322,12 @@ test:
     - uses: actions/checkout@v2
     - name: Install dependencies
       run: pip install -r requirements.txt
+    - name: Install browser
+      run: python -m playwright install --with-deps chromium
     - name: Run unit tests
       run: python test_debate_system.py
-    - name: Start server
-      run: |
-        python start_server_v2.py &
-        sleep 5
-    - name: Run API tests
-      run: python test_manual.py server-check
+    - name: Run UI acceptance tests
+      run: python scripts/dev_workflow.py acceptance
 ```
 
 ## Expected Test Outputs
@@ -345,6 +383,7 @@ Before deploying:
 - [ ] Server starts without errors: `./start.sh --v2`
 - [ ] API responds: `python test_manual.py server-check`
 - [ ] Scenario completes: `python test_manual.py scenario-ai`
+- [ ] UI acceptance passes: `python scripts/dev_workflow.py acceptance`
 - [ ] Modulation works: `python test_manual.py modulation`
 - [ ] Web interface loads at `http://localhost:5000`
 - [ ] No identity information visible in UI

@@ -84,6 +84,51 @@
   <small>Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict.</small>
 </section>
 
+<!-- Create Debate -->
+<section class="card" id="create-debate-section" data-testid="create-debate-section">
+  <div class="section-head">
+    <div>
+      <h2>Start a Debate</h2>
+      <p class="lede">The v2 app starts blank. Create a debate here before you begin posting arguments.</p>
+    </div>
+    <span class="pill" id="create-debate-state" data-testid="create-debate-state">No active debate</span>
+  </div>
+
+  <div class="grid cols2">
+    <div class="form-group">
+      <label for="debate-resolution-input">Resolution *</label>
+      <textarea
+        id="debate-resolution-input"
+        data-testid="debate-resolution-input"
+        rows="3"
+        placeholder="Resolved: AI should be banned."
+      >Resolved: AI should be banned.</textarea>
+      <small>Use a clear, contestable statement that supports both sides of the debate.</small>
+    </div>
+
+    <div class="form-group">
+      <label for="debate-scope-input">Scope *</label>
+      <textarea
+        id="debate-scope-input"
+        data-testid="debate-scope-input"
+        rows="3"
+        placeholder="Describe what the debate covers and the main areas of disagreement."
+      >Whether AI development should be banned and the implications for safety, economics, and society.</textarea>
+      <small>Scope helps the moderation system keep posts relevant and bounded.</small>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content: space-between; align-items: flex-start;">
+    <div>
+      <button class="button" data-testid="create-debate-button" onclick="createDebate()">Create Debate</button>
+    </div>
+    <div style="text-align: right;">
+      <small style="display: block; margin-bottom: 4px;">Creating a new debate updates the active resolution for this server session.</small>
+      <span class="pill">Current mode: <span class="mono" id="runtime-mode" data-testid="runtime-mode">Loading...</span></span>
+    </div>
+  </div>
+</section>
+
 
 <!-- Login Required Notice -->
 <section class="card" id="login-required" style="display: none; border-color: var(--warn);">
@@ -104,10 +149,13 @@
   <h2>Post Your Argument</h2>
   
   <div class="callout soft" style="margin-bottom: 16px;">
-    <strong>Active Debate:</strong> <span id="display-resolution">Loading...</span>
+    <strong>Active Debate:</strong> <span id="display-resolution" data-testid="active-debate-resolution">Loading...</span>
+    <div style="margin-top: 8px;">
+      <small id="post-access-hint" data-testid="post-access-hint">Checking whether posting is available...</small>
+    </div>
   </div>
   
-  <div id="status-message" class="status-message" style="display:none;"></div>
+  <div id="status-message" class="status-message" data-testid="status-message" style="display:none;"></div>
   
   <div class="grid cols2">
     <!-- Side Selection -->
@@ -165,12 +213,12 @@
 
   <div class="row" style="margin-top: 20px; justify-content: space-between; align-items: flex-start;">
     <div>
-      <button class="button" onclick="submitPost()">Submit Post</button>
+      <button class="button" data-testid="submit-post-button" onclick="submitPost()">Submit Post</button>
       <button class="button secondary" onclick="previewPost()">Preview</button>
     </div>
     <div style="text-align: right;">
       <small style="display: block; margin-bottom: 4px;">Identity-blind posting: no usernames shown</small>
-      <span class="pill">Posts pending snapshot: <span class="mono" id="pending-count">0</span></span>
+      <span class="pill">Posts pending snapshot: <span class="mono" id="pending-count" data-testid="pending-count">0</span></span>
     </div>
   </div>
 
@@ -190,7 +238,7 @@
   </div>
   <p class="lede">Your submissions since the last snapshot. All posts are anonymized in the system.</p>
   
-  <div id="posts-list">
+  <div id="posts-list" data-testid="posts-list">
     <div class="callout soft" style="text-align: center; padding: 24px;">
       <p>No posts submitted yet in this session.</p>
       <small>Posts will appear here after you submit. Click "Generate New Snapshot" to process pending posts.</small>
@@ -198,7 +246,7 @@
   </div>
   
   <div class="row" style="margin-top: 16px;">
-    <button class="button" onclick="generateSnapshot()">Generate New Snapshot</button>
+    <button class="button" data-testid="generate-snapshot-button" onclick="generateSnapshot()">Generate New Snapshot</button>
     <a class="pill" href="snapshot.html">View Current Snapshot →</a>
   </div>
 </section>
@@ -249,30 +297,57 @@
 <script>
 const API_BASE = window.location.origin;
 let pendingPosts = [];
+let authEnabled = true;
+let hasActiveDebate = false;
 
-// Check authentication status
-function checkAuth() {
-  const isLoggedIn = Auth.isLoggedIn();
+async function loadRuntimeConfig() {
+  try {
+    const res = await fetch(`${API_BASE}/api/health`);
+    const data = await res.json();
+    authEnabled = data.auth_enabled !== false;
+  } catch (error) {
+    authEnabled = true;
+  }
+
+  document.getElementById('runtime-mode').textContent = authEnabled ? 'Authenticated posting' : 'Guest posting';
+}
+
+function updatePostSectionState() {
+  const isLoggedIn = authEnabled ? Auth.isLoggedIn() : true;
   const loginRequiredSection = document.getElementById('login-required');
   const postSection = document.getElementById('post-section');
-  
-  if (!isLoggedIn) {
-    // Show login required message, hide post section
-    if (loginRequiredSection) loginRequiredSection.style.display = 'block';
-    if (postSection) {
-      postSection.style.opacity = '0.5';
-      postSection.style.pointerEvents = 'none';
-    }
-    return false;
-  } else {
-    // Hide login required, show post section
-    if (loginRequiredSection) loginRequiredSection.style.display = 'none';
-    if (postSection) {
-      postSection.style.opacity = '1';
-      postSection.style.pointerEvents = 'auto';
-    }
-    return true;
+  const postAccessHint = document.getElementById('post-access-hint');
+  const canPost = isLoggedIn && hasActiveDebate;
+
+  if (loginRequiredSection) {
+    loginRequiredSection.style.display = authEnabled && !isLoggedIn ? 'block' : 'none';
   }
+
+  if (postSection) {
+    postSection.style.opacity = canPost ? '1' : '0.5';
+    postSection.style.pointerEvents = canPost ? 'auto' : 'none';
+  }
+
+  if (postAccessHint) {
+    if (!hasActiveDebate) {
+      postAccessHint.textContent = 'Create a debate before posting arguments.';
+    } else if (authEnabled && !isLoggedIn) {
+      postAccessHint.textContent = 'Sign in to post arguments in authenticated mode.';
+    } else if (!authEnabled) {
+      postAccessHint.textContent = 'Guest posting is enabled for this server mode.';
+    } else {
+      postAccessHint.textContent = 'Posting is available for the active debate.';
+    }
+  }
+
+  return canPost;
+}
+
+function resetSnapshotHeader() {
+  document.getElementById('header-verdict').textContent = 'NO VERDICT';
+  document.getElementById('header-confidence').textContent = '-';
+  document.getElementById('header-snapshot').textContent = '-';
+  document.getElementById('header-updated').textContent = '-';
 }
 
 async function loadDebate() {
@@ -281,22 +356,32 @@ async function loadDebate() {
     const data = await res.json();
     
     if (!data.error) {
+      hasActiveDebate = !!(data.has_debate && data.resolution);
       document.getElementById('display-resolution').textContent = data.resolution || 'No active debate';
+      document.getElementById('create-debate-state').textContent = hasActiveDebate ? 'Active debate loaded' : 'No active debate';
     }
     
     // Load snapshot for header
     const snapshotRes = await fetch(`${API_BASE}/api/debate/snapshot`);
     const snapshotData = await snapshotRes.json();
     
-    if (!snapshotData.error) {
+    if (!snapshotData.error && snapshotData.has_snapshot && snapshotData.confidence !== null) {
       document.getElementById('header-verdict').textContent = snapshotData.verdict;
       document.getElementById('header-confidence').textContent = snapshotData.confidence.toFixed(2);
       document.getElementById('header-snapshot').textContent = snapshotData.snapshot_id;
       document.getElementById('header-updated').textContent = new Date(snapshotData.timestamp).toLocaleString();
+    } else {
+      resetSnapshotHeader();
     }
   } catch (error) {
     console.error('Error loading debate:', error);
+    hasActiveDebate = false;
+    document.getElementById('display-resolution').textContent = 'No active debate';
+    document.getElementById('create-debate-state').textContent = 'No active debate';
+    resetSnapshotHeader();
   }
+
+  updatePostSectionState();
 }
 
 function showStatus(message, isError = false) {
@@ -305,6 +390,55 @@ function showStatus(message, isError = false) {
   statusEl.className = 'status-message ' + (isError ? 'post-error' : 'post-success');
   statusEl.style.display = 'block';
   setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+}
+
+async function createDebate() {
+  const resolutionEl = document.getElementById('debate-resolution-input');
+  const scopeEl = document.getElementById('debate-scope-input');
+  const resolution = resolutionEl.value.trim();
+  const scope = scopeEl.value.trim();
+
+  if (!resolution || !scope) {
+    showStatus('Please provide both a resolution and a scope.', true);
+    return;
+  }
+
+  if (authEnabled && !Auth.isLoggedIn()) {
+    updatePostSectionState();
+    showStatus('Please log in to create a debate.', true);
+    return;
+  }
+
+  try {
+    const token = Auth.getToken();
+    const headers = { 'Content-Type': 'application/json' };
+
+    if (authEnabled && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/api/debate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ resolution, scope })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      showStatus(`Error: ${data.error}`, true);
+      return;
+    }
+
+    hasActiveDebate = true;
+    document.getElementById('display-resolution').textContent = data.resolution;
+    document.getElementById('create-debate-state').textContent = 'Active debate loaded';
+    showStatus(`Debate created: ${data.resolution}`);
+    updatePostSectionState();
+  } catch (error) {
+    console.error('Error creating debate:', error);
+    showStatus('Error creating debate. Please try again.', true);
+  }
 }
 
 function previewPost() {
@@ -343,9 +477,8 @@ function previewPost() {
 }
 
 async function submitPost() {
-  // Check authentication first
-  if (!checkAuth()) {
-    showStatus('Please log in to submit posts.', true);
+  if (!updatePostSectionState()) {
+    showStatus(hasActiveDebate ? 'Please log in to submit posts.' : 'Create a debate before submitting posts.', true);
     return;
   }
   
@@ -372,12 +505,17 @@ async function submitPost() {
   
   try {
     const token = Auth.getToken();
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (authEnabled && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_BASE}/api/debate/posts`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers,
       body: JSON.stringify({
         side: side.value,
         topic_id: topic.value,
@@ -394,7 +532,7 @@ async function submitPost() {
         showStatus('Your session has expired. Please log in again.', true);
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        checkAuth();
+        updatePostSectionState();
         return;
       }
     }
@@ -477,6 +615,11 @@ function updatePostsList() {
 }
 
 async function generateSnapshot() {
+  if (!hasActiveDebate) {
+    showStatus('Create a debate before generating a snapshot.', true);
+    return;
+  }
+
   try {
     showStatus('Generating new snapshot...');
     
@@ -513,9 +656,9 @@ async function generateSnapshot() {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  checkAuth();
-  loadDebate();
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadRuntimeConfig();
+  await loadDebate();
 });
 
 // Back to top

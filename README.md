@@ -64,6 +64,9 @@ cd debate_system
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install the browser used by the UI acceptance suite
+python -m playwright install chromium
 ```
 
 ### Start the Server
@@ -116,6 +119,20 @@ Open your browser and navigate to:
 - **Audits**: http://localhost:5000/audits.html
 - **Admin**: http://localhost:5000/admin.html
 - **Spec**: http://localhost:5000/about.html
+
+### Acceptance-First UI Testing
+
+This repo now includes a browser-driven acceptance suite based on explicit criteria in `acceptance/ui_debate_flow.json`.
+
+```bash
+# Start a temporary v2 server and run the UI acceptance checks
+python scripts/dev_workflow.py acceptance
+```
+
+Artifacts are written to `artifacts/acceptance/` with:
+- `ui_acceptance_report.json` for machine-readable pass/fail results
+- `ui_acceptance_report.md` for a human-readable summary
+- `screenshots/` with one browser screenshot per acceptance criterion
 
 ## API Endpoints
 
