@@ -29,9 +29,15 @@ SCAFFOLD_DIR = WORKFLOW_DIR / "scaffolding"
 PHASE_DIR = WORKFLOW_DIR / "phases"
 CURRENT_DIR = WORKFLOW_DIR / "current"
 REVIEW_DIR = WORKFLOW_DIR / "reviews"
+HUMAN_LOG_DIR = WORKFLOW_DIR / "human_logs"
 STATE_PATH = WORKFLOW_DIR / "state.json"
 PROMPT_LOG_PATH = WORKFLOW_DIR / "prompt_log.jsonl"
 WORKFLOW_DOC = REPO_ROOT / "WORKFLOW.md"
+HUMAN_PROMPTS_PATH = HUMAN_LOG_DIR / "human_prompts.md"
+APPROVALS_PATH = HUMAN_LOG_DIR / "approvals.md"
+REJECTIONS_PATH = HUMAN_LOG_DIR / "rejections.md"
+REQUIREMENT_CHANGES_PATH = HUMAN_LOG_DIR / "requirement_changes.md"
+MANUAL_OVERRIDES_PATH = HUMAN_LOG_DIR / "manual_overrides.md"
 
 PHASES: List[Dict[str, Any]] = [
     {
@@ -143,8 +149,9 @@ def now_iso() -> str:
 
 
 def ensure_dirs() -> None:
-    for path in (WORKFLOW_DIR, SCAFFOLD_DIR, PHASE_DIR, CURRENT_DIR, REVIEW_DIR):
+    for path in (WORKFLOW_DIR, SCAFFOLD_DIR, PHASE_DIR, CURRENT_DIR, REVIEW_DIR, HUMAN_LOG_DIR):
         path.mkdir(parents=True, exist_ok=True)
+    ensure_human_log_files()
 
 
 def write_text(path: Path, content: str) -> None:
@@ -194,6 +201,113 @@ def md_table(headers: Iterable[str], rows: Iterable[Iterable[str]]) -> str:
     separator = "| " + " | ".join("---" for _ in headers) + " |"
     body_lines = ["| " + " | ".join(str(cell) for cell in row) + " |" for row in rows]
     return "\n".join([header_line, separator, *body_lines]) if body_lines else "\n".join([header_line, separator])
+
+
+def ensure_human_log_files() -> None:
+    templates = {
+        HUMAN_PROMPTS_PATH: (
+            "Human Prompts",
+            "Faithful summaries of the human instructions received while the workflow is active.",
+        ),
+        APPROVALS_PATH: (
+            "Approvals",
+            "Explicit human approvals that allow the workflow to advance to the next phase.",
+        ),
+        REJECTIONS_PATH: (
+            "Rejections",
+            "Human checkpoint rejections that keep the workflow in the current phase for revision.",
+        ),
+        REQUIREMENT_CHANGES_PATH: (
+            "Requirement Changes",
+            "Requirement changes that must be analyzed and may rewind the workflow to replanning.",
+        ),
+        MANUAL_OVERRIDES_PATH: (
+            "Manual Overrides",
+            "Manual workflow overrides that do not fit the normal advance-or-rewind path.",
+        ),
+    }
+    for path, (title, description) in templates.items():
+        if path.exists():
+            continue
+        write_text(
+            path,
+            "\n".join([
+                f"# {title}",
+                "",
+                description,
+            ]),
+        )
+
+
+def active_phase_label(state: Optional[Dict[str, Any]]) -> str:
+    if not state:
+        return "no active workflow"
+    return state.get("current_phase") or "no active workflow"
+
+
+def append_markdown_log(path: Path, heading: str, lines: Iterable[str]) -> None:
+    ensure_dirs()
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("\n\n")
+        handle.write(f"## {heading}\n\n")
+        for line in lines:
+            handle.write(f"- {line}\n")
+
+
+def log_human_prompt_entry(text: str, state: Optional[Dict[str, Any]], kind: str) -> None:
+    append_markdown_log(
+        HUMAN_PROMPTS_PATH,
+        now_iso(),
+        [
+            f"Phase: `{active_phase_label(state)}`",
+            f"Kind: `{kind}`",
+            f"Prompt: {text.strip()}",
+        ],
+    )
+
+
+def log_approval_entry(note: str, phase_id: str) -> None:
+    append_markdown_log(
+        APPROVALS_PATH,
+        now_iso(),
+        [
+            f"Phase: `{phase_id}`",
+            f"Approval: {note.strip()}",
+        ],
+    )
+
+
+def log_rejection_entry(note: str, phase_id: str) -> None:
+    append_markdown_log(
+        REJECTIONS_PATH,
+        now_iso(),
+        [
+            f"Phase: `{phase_id}`",
+            f"Rejection: {note.strip()}",
+        ],
+    )
+
+
+def log_requirement_change_entry(text: str, from_phase: str) -> None:
+    append_markdown_log(
+        REQUIREMENT_CHANGES_PATH,
+        now_iso(),
+        [
+            f"Previous phase: `{from_phase}`",
+            f"Requirement change: {text.strip()}",
+        ],
+    )
+
+
+def log_manual_override_entry(text: str, state: Optional[Dict[str, Any]]) -> None:
+    append_markdown_log(
+        MANUAL_OVERRIDES_PATH,
+        now_iso(),
+        [
+            f"Phase: `{active_phase_label(state)}`",
+            f"Override: {text.strip()}",
+        ],
+    )
 
 
 def append_prompt_log(kind: str, text: str, state: Optional[Dict[str, Any]] = None, extra: Optional[Dict[str, Any]] = None) -> None:
@@ -481,11 +595,13 @@ def render_current_prompt(state: Dict[str, Any]) -> str:
         f"Read `{phase_path}` and the listed scaffold files first.",
         "Complete only the work for this phase, update the relevant phase file with results,",
         "and stop at the human checkpoint instead of continuing automatically.",
+        "Log new human instructions with `./wf log-human-prompt \"...\"` before changing course.",
         "```",
         "",
         "## Reminder",
         "",
         f"- Human checkpoint after this phase: {phase['human_checkpoint']}",
+        "- If the checkpoint is rejected, use `./wf reject --human-note \"...\"` and revise the same phase.",
     ]
     if state.get("requirement_changes"):
         latest = state["requirement_changes"][-1]
@@ -576,6 +692,7 @@ def bootstrap(args: argparse.Namespace) -> int:
     ensure_dirs()
     write_json(STATE_PATH, state)
     append_prompt_log("bootstrap-goal", goal, state=state)
+    log_human_prompt_entry(goal, state, kind="bootstrap-goal")
     refresh_scaffolding(state)
     print(f"Initialized agentic workflow in {relative_label(WORKFLOW_DIR)}")
     print(f"Goal: {goal}")
@@ -584,6 +701,7 @@ def bootstrap(args: argparse.Namespace) -> int:
 
 
 def workflow_status(_: argparse.Namespace) -> int:
+    ensure_dirs()
     state = require_state()
     phase = PHASES[state["current_phase_index"]]
     print(f"Workflow: {state['workflow_name']}")
@@ -593,8 +711,19 @@ def workflow_status(_: argparse.Namespace) -> int:
     print(f"Checkpoint: {phase['human_checkpoint']}")
     print(f"Prompt file: {relative_label(CURRENT_DIR / 'next_prompt.md')}")
     print(f"Checkpoint file: {relative_label(CURRENT_DIR / 'checkpoint.md')}")
+    print(f"Human logs: {relative_label(HUMAN_LOG_DIR)}")
     if state.get("requirement_changes"):
         print(f"Requirement changes logged: {len(state['requirement_changes'])}")
+    return 0
+
+
+def refresh(args: argparse.Namespace) -> int:
+    state = require_state()
+    refresh_scaffolding(state)
+    if args.note:
+        append_prompt_log("refresh", args.note.strip(), state=state)
+    print("Workflow scaffolding refreshed from the current state.")
+    print(f"Prompt: {relative_label(CURRENT_DIR / 'next_prompt.md')}")
     return 0
 
 
@@ -607,6 +736,7 @@ def resume(args: argparse.Namespace) -> int:
     current_phase = PHASES[state["current_phase_index"]]
     note = args.human_note.strip() if args.human_note else f"{current_phase['title']} approved"
     append_prompt_log("human-checkpoint", note, state=state)
+    log_approval_entry(note, current_phase["id"])
     state["phase_history"].append({
         "phase": current_phase["id"],
         "completed_at": now_iso(),
@@ -632,6 +762,20 @@ def resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def reject(args: argparse.Namespace) -> int:
+    state = require_state()
+    phase = PHASES[state["current_phase_index"]]
+    note = args.human_note.strip() if args.human_note else f"{phase['title']} rejected for revision"
+    append_prompt_log("checkpoint-rejection", note, state=state)
+    log_rejection_entry(note, phase["id"])
+    state["updated_at"] = now_iso()
+    write_json(STATE_PATH, state)
+    refresh_scaffolding(state)
+    print(f"Checkpoint rejection logged for phase {phase['title']}.")
+    print("Revise the current phase artifacts and stop again at the same checkpoint.")
+    return 0
+
+
 def change_requirement(args: argparse.Namespace) -> int:
     state = require_state()
     text = args.text.strip()
@@ -650,6 +794,7 @@ def change_requirement(args: argparse.Namespace) -> int:
     state["updated_at"] = now_iso()
     write_json(STATE_PATH, state)
     append_prompt_log("change-requirement", text, state=state, extra={"from_phase": entry["from_phase"]})
+    log_requirement_change_entry(text, entry["from_phase"])
     write_text(
         CURRENT_DIR / "requirement_change.md",
         "\n".join([
@@ -671,7 +816,19 @@ def change_requirement(args: argparse.Namespace) -> int:
 def log_human_prompt(args: argparse.Namespace) -> int:
     state = read_json(STATE_PATH) if STATE_PATH.exists() else None
     append_prompt_log(args.kind, args.text, state=state)
+    log_human_prompt_entry(args.text, state, kind=args.kind)
     print("Prompt logged.")
+    return 0
+
+
+def manual_override(args: argparse.Namespace) -> int:
+    state = read_json(STATE_PATH) if STATE_PATH.exists() else None
+    text = args.text.strip()
+    if not text:
+        raise RuntimeError("Manual override text cannot be empty.")
+    append_prompt_log("manual-override", text, state=state)
+    log_manual_override_entry(text, state)
+    print("Manual override logged.")
     return 0
 
 
@@ -691,8 +848,12 @@ def review_prompts(_: argparse.Namespace) -> int:
     suggestions = []
     if kind_counts.get("change-requirement", 0) >= 1:
         suggestions.append("- Requirement changes occurred after bootstrap. Keep an explicit human scope confirmation before implementation.")
+    if kind_counts.get("checkpoint-rejection", 0) >= 1:
+        suggestions.append("- One or more checkpoints were rejected. Tighten phase deliverables or make review artifacts easier to skim.")
     if kind_counts.get("human-checkpoint", 0) < max(1, len(PHASES) // 2):
         suggestions.append("- Human approvals are sparse relative to the number of phases. Consider pausing more often for review artifacts.")
+    if kind_counts.get("manual-override", 0) >= 1:
+        suggestions.append("- Manual overrides occurred. Consider adding a first-class command or clearer scaffold artifact for that scenario.")
     if any(keyword in word_counter for keyword in ("review", "prototype", "approve")):
         suggestions.append("- Human review language appears frequently. Keep checkpoint files concise and easy to skim.")
     if any(keyword in word_counter for keyword in ("context", "files", "module")):
@@ -743,9 +904,17 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="Show current workflow phase and checkpoint.")
     status_parser.set_defaults(func=workflow_status)
 
+    refresh_parser = subparsers.add_parser("refresh", help="Regenerate scaffold files for the current workflow state.")
+    refresh_parser.add_argument("--note", default="", help="Optional note describing why scaffolding was refreshed.")
+    refresh_parser.set_defaults(func=refresh)
+
     resume_parser = subparsers.add_parser("resume", help="Advance to the next phase after a human checkpoint.")
     resume_parser.add_argument("--human-note", default="", help="Checkpoint note or approval text.")
     resume_parser.set_defaults(func=resume)
+
+    reject_parser = subparsers.add_parser("reject", help="Log a checkpoint rejection and stay in the current phase.")
+    reject_parser.add_argument("--human-note", default="", help="Checkpoint rejection or revision note.")
+    reject_parser.set_defaults(func=reject)
 
     change_parser = subparsers.add_parser("change-requirement", help="Log a requirement change and rewind to replanning.")
     change_parser.add_argument("text", help="Requirement change text.")
@@ -756,8 +925,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     log_parser = subparsers.add_parser("log-human-prompt", help="Append an arbitrary human prompt to the workflow log.")
     log_parser.add_argument("text", help="Prompt text to log.")
-    log_parser.add_argument("--kind", default="user-turn", help="Prompt category.")
+    log_parser.add_argument("--kind", default="human-prompt", help="Prompt category.")
     log_parser.set_defaults(func=log_human_prompt)
+
+    override_parser = subparsers.add_parser("manual-override", help="Log a manual workflow override without advancing phases.")
+    override_parser.add_argument("text", help="Override description.")
+    override_parser.set_defaults(func=manual_override)
 
     return parser
 
