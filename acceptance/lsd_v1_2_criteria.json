@@ -1,0 +1,118 @@
+{
+  "source_document": "/Users/jonathanleung/Documents/C++/LSD req.txt",
+  "source_version": "LSD v1.2",
+  "generated_for_repo": "blind debate adjudicator / debate_system",
+  "purpose": "Structured traceability map from the LSD v1.2 design spec into implementation and testing work.",
+  "criteria": [
+    {
+      "id": "LSD-UI-01",
+      "section": "2.1",
+      "title": "User-facing blindness",
+      "channel": "ui_e2e",
+      "status": "partial",
+      "requirement": "Public debate surfaces expose no identity signals, likes, follower counts, contribution totals, leaderboards, or top-contributor affordances.",
+      "current_surface": ["frontend/index.html", "frontend/new_debate.html", "frontend/topics.html", "frontend/verdict.html"],
+      "current_coverage": "Partially covered by the current browser suite and visual design review.",
+      "next_test": "Add explicit negative assertions for forbidden identity/social strings on public pages."
+    },
+    {
+      "id": "LSD-UI-02",
+      "section": "3",
+      "title": "Visible moderation metadata",
+      "channel": "ui_e2e",
+      "status": "partial",
+      "requirement": "Snapshots publish moderation template version, allowed/blocked counts, block-reason histogram, borderline rate, and suppression rules.",
+      "current_surface": ["frontend/new_debate.html", "frontend/index.html", "frontend/snapshot.html"],
+      "current_coverage": "Template/version and allowed-vs-blocked basics are visible; borderline-rate and suppression rules are not surfaced yet.",
+      "next_test": "Extend the snapshot and home-page UI assertions once borderline-rate data exists."
+    },
+    {
+      "id": "LSD-UI-03",
+      "section": "4",
+      "title": "Immutable snapshot dossier",
+      "channel": "api_plus_ui",
+      "status": "partial",
+      "requirement": "Each snapshot publishes id, timestamp, trigger, moderation version, frame mode, deterministic recipes, replay manifest, and tamper-evident hashes.",
+      "current_surface": ["backend/app_v2.py", "frontend/index.html", "frontend/verdict.html", "frontend/topics.html"],
+      "current_coverage": "Id, timestamp, trigger, and moderation version are present; frame metadata, replay manifest, and hashes are missing.",
+      "next_test": "Add API assertions first, then expose the missing fields in snapshot/detail UI."
+    },
+    {
+      "id": "LSD-UI-04",
+      "section": "5",
+      "title": "Frame transparency",
+      "channel": "ui_e2e",
+      "status": "missing",
+      "requirement": "The system exposes single-frame or multi-frame mode, frame set version, review cadence, justification dossier, and petition track outputs.",
+      "current_surface": [],
+      "current_coverage": "No frame UI or API is implemented in the current app.",
+      "next_test": "Create a dedicated frame dossier page and frame-sensitive verdict surfaces before enforcing in CI."
+    },
+    {
+      "id": "LSD-UI-05",
+      "section": "6",
+      "title": "Topic diagnostics",
+      "channel": "ui_e2e",
+      "status": "partial",
+      "requirement": "Topics are neutral, bounded, and publish relevance plus fragmentation, merge sensitivity, mass concentration, and dominance indicators.",
+      "current_surface": ["frontend/topics.html", "frontend/audits.html"],
+      "current_coverage": "Topic rows, relevance, drift, coherence, and distinctness exist; dominance and merge-sensitivity outputs are incomplete.",
+      "next_test": "Add dominance-share and merge-sensitivity widgets, then cover them in browser tests."
+    },
+    {
+      "id": "LSD-UI-06",
+      "section": "8.1",
+      "title": "AU completeness proxy",
+      "channel": "api",
+      "status": "missing",
+      "requirement": "Each argument unit gets a structural completeness proxy used for selection diagnostics.",
+      "current_surface": [],
+      "current_coverage": "Not represented in current APIs or UI.",
+      "next_test": "Implement at extraction/selection layer and expose diagnostics in audit pages."
+    },
+    {
+      "id": "LSD-UI-07",
+      "section": "10 and 11",
+      "title": "Integrity and selection transparency",
+      "channel": "api_plus_ui",
+      "status": "missing",
+      "requirement": "The system publishes aggregate integrity indicators, selection recipes, centrality cap behavior, rarity slice diagnostics, and budget adequacy indicators.",
+      "current_surface": [],
+      "current_coverage": "The current app does not expose these diagnostics.",
+      "next_test": "Implement audit endpoints first, then surface them in the audits page."
+    },
+    {
+      "id": "LSD-UI-08",
+      "section": "13 to 17",
+      "title": "Decision dossier outputs",
+      "channel": "ui_e2e",
+      "status": "partial",
+      "requirement": "The verdict surface publishes D distribution, verdict/confidence, topic contributions, decisive premises/arguments, remove-topic counterfactuals, evidence-gap summaries, and frame sensitivity when applicable.",
+      "current_surface": ["frontend/verdict.html", "frontend/evidence.html"],
+      "current_coverage": "Verdict, confidence, D distribution, and topic contributions exist; decisive-premise lists, remove-topic counterfactuals, frame sensitivity, and evidence-gap summaries are still missing.",
+      "next_test": "Expand verdict/evidence views and then add browser assertions."
+    },
+    {
+      "id": "LSD-UI-09",
+      "section": "18 and 19",
+      "title": "Replicates and audits",
+      "channel": "ui_e2e",
+      "status": "partial",
+      "requirement": "The system publishes replicate composition and the minimal high-leverage audit set, including label swap, extraction overlap, judge dispersion, frame sensitivity, integrity indicators, rarity impact, merge sensitivity, budget adequacy, and centrality cap effect.",
+      "current_surface": ["frontend/audits.html", "frontend/verdict.html"],
+      "current_coverage": "Label symmetry, extraction stability, and some audit scaffolding exist; the full v1.2 audit set does not.",
+      "next_test": "Implement missing audit data first, then add API and browser checks."
+    },
+    {
+      "id": "LSD-UI-10",
+      "section": "20",
+      "title": "Governance and incident hooks",
+      "channel": "manual_plus_ui",
+      "status": "missing",
+      "requirement": "The system publishes changelogs, fairness audits, appeal pathways, judge-pool governance summaries, and additive incident snapshots.",
+      "current_surface": [],
+      "current_coverage": "No governance or incident-reporting surface is implemented today.",
+      "next_test": "Add a governance page and incident model before enforcing acceptance."
+    }
+  ]
+}

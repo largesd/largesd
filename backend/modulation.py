@@ -372,14 +372,8 @@ class ModulationEngine:
     def _evaluate_repetition_rule(self, text: str, condition: Dict) -> bool:
         """Evaluate a repetition detection rule"""
         max_repeated = condition.get("max_repeated_chars", 20)
-        
-        # Check for repeated characters (e.g., "aaaaaaaaaa")
-        for char in set(text):
-            count = text.count(char)
-            if count > max_repeated:
-                return True
-        
-        return False
+        pattern = r"(\S)\1{" + str(max_repeated) + r",}"
+        return re.search(pattern, text) is not None
     
     def get_audit_info(self) -> Dict:
         """

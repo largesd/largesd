@@ -18,7 +18,7 @@ from debate_engine import DebateEngine
 from database import DebateDatabase
 from models import Side
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 CORS(app)
 
 # JWT Configuration

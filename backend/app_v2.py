@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from debate_engine_v2 import DebateEngineV2
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 CORS(app)
 
 # Initialize debate engine
@@ -37,6 +37,7 @@ def health():
     return jsonify({
         "status": "healthy",
         "version": "2.0",
+        "auth_enabled": False,
         "timestamp": datetime.now().isoformat()
     })
 

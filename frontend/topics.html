@@ -77,7 +77,7 @@
     <a class="pill" href="audits.html#topic-geometry">Open topic audit</a>
   </div>
   
-  <div class="table-wrap" id="topics-table-container">
+  <div class="table-wrap" id="topics-table-container" data-testid="topics-table-container">
     <table class="table">
       <thead>
         <tr>
@@ -89,7 +89,7 @@
           <th><span class="tooltip" data-tooltip="Separation from nearest topic">Distinctness</span></th>
         </tr>
       </thead>
-      <tbody id="topics-tbody">
+      <tbody id="topics-tbody" data-testid="topics-tbody">
         <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading topics...</td></tr>
       </tbody>
     </table>
@@ -172,7 +172,7 @@ function renderTopics(topics) {
   const tbody = document.getElementById('topics-tbody');
   
   tbody.innerHTML = topics.map(t => `
-    <tr>
+    <tr data-testid="topic-row-${t.topic_id}">
       <td><a class='mono' href='topic_${t.topic_id}.html'>${t.topic_id}</a></td>
       <td>
         <a href='topic_${t.topic_id}.html'>${t.name}</a>

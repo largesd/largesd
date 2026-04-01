@@ -55,18 +55,18 @@
       <h2>Verdict</h2>
       <p class="lede">The result is intentionally conservative: the system only commits when the margin is stable across reruns.</p>
     </div>
-    <span class="pill warn" id="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
+    <span class="pill warn" id="verdict-pill" data-testid="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
   </div>
   
   <div class="kpis">
     <div class="kpi">
       <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,FOR}">Overall FOR</span></div>
-      <div class="value mono" id="overall-for">0.61</div>
+      <div class="value mono" id="overall-for" data-testid="overall-for">0.61</div>
       <div class="hint">weighted quality sum</div>
     </div>
     <div class="kpi">
       <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,AGAINST}">Overall AGAINST</span></div>
-      <div class="value mono" id="overall-against">0.60</div>
+      <div class="value mono" id="overall-against" data-testid="overall-against">0.60</div>
       <div class="hint">weighted quality sum</div>
     </div>
     <div class="kpi">
@@ -133,7 +133,7 @@
           <th>Contribution to D</th>
         </tr>
       </thead>
-      <tbody id="contributions-tbody">
+      <tbody id="contributions-tbody" data-testid="contributions-tbody">
         <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
       </tbody>
     </table>
