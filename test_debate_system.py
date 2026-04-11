@@ -270,6 +270,7 @@ def test_full_pipeline():
     # Create temp directory for isolated database
     temp_dir = tempfile.mkdtemp()
     db_path = os.path.join(temp_dir, "test_debate.db")
+    engine = None
     
     try:
         # Initialize engine with mock provider
@@ -344,9 +345,109 @@ def test_full_pipeline():
         assert 'counterfactuals' in snapshot, "Should have counterfactuals"
         print("✓ Counterfactual analysis available")
         
-        # Database connection is per-operation, no explicit close needed
-        
     finally:
+        if engine is not None:
+            engine.shutdown()
+        shutil.rmtree(temp_dir)
+
+
+def test_v2_uses_skill_fact_checker():
+    """Verify v2 now wires the canonical fact-checking skill and exposes stats."""
+    print("\n=== Testing V2 Fact-Check Skill Wiring ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_v2_fact_checker.db")
+    engine = None
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+
+        assert engine.fact_checker.__class__.__name__ == "FactCheckingSkill", \
+            f"Expected FactCheckingSkill, got {type(engine.fact_checker)}"
+        assert engine.extraction_engine.fact_checker is engine.fact_checker, \
+            "ExtractionEngine should share the same fact-check provider"
+
+        stats = engine.get_fact_check_stats()
+        assert stats["mode"] == "OFFLINE", f"Expected OFFLINE mode, got {stats['mode']}"
+        assert stats["async_enabled"] is False, "OFFLINE mode should not enable async workers"
+        assert "cache" in stats and "audit" in stats and "queue" in stats, "Stats should expose fact-check internals"
+        print("✓ V2 engine uses FactCheckingSkill and exposes fact-check stats")
+    finally:
+        if engine is not None:
+            engine.shutdown()
+        shutil.rmtree(temp_dir)
+
+
+def test_v2_resolves_pending_fact_checks_before_scoring():
+    """Verify the v2 engine resolves or neutralizes pending fact checks before scoring."""
+    print("\n=== Testing V2 Pending Fact-Check Resolution ===")
+
+    from backend.extraction import ExtractedFact
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_v2_fact_resolution.db")
+    engine = None
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="ONLINE_ALLOWLIST",
+            llm_provider="mock",
+            num_judges=3,
+        )
+        engine._fact_check_wait_timeout_seconds = 0.02
+        engine._fact_check_poll_interval_seconds = 0.0
+
+        completed_fact = ExtractedFact(
+            fact_id="fact_1",
+            fact_text="Claim one",
+            topic_id="t1",
+            side="FOR",
+            p_true=0.5,
+            fact_check_job_id="job_1",
+            fact_check_status="pending",
+        )
+
+        attempts = {"count": 0}
+
+        def completes_on_second_refresh(facts):
+            attempts["count"] += 1
+            if attempts["count"] >= 2:
+                facts[0].p_true = 0.82
+                facts[0].fact_check_status = "completed"
+            return facts
+
+        engine.extraction_engine.update_fact_check_results = completes_on_second_refresh
+
+        resolved = engine._resolve_fact_checks([completed_fact])
+        assert attempts["count"] >= 2, "Engine should keep polling while a fact check is pending"
+        assert resolved[0].fact_check_status == "completed", f"Expected completed, got {resolved[0].fact_check_status}"
+        assert abs(resolved[0].p_true - 0.82) < 1e-9, f"Expected resolved p_true, got {resolved[0].p_true}"
+
+        timed_out_fact = ExtractedFact(
+            fact_id="fact_2",
+            fact_text="Claim two",
+            topic_id="t1",
+            side="FOR",
+            p_true=0.5,
+            fact_check_job_id="job_2",
+            fact_check_status="pending",
+        )
+
+        engine.extraction_engine.update_fact_check_results = lambda facts: facts
+        timed_out = engine._resolve_fact_checks([timed_out_fact])
+        assert timed_out[0].fact_check_status == "failed", \
+            f"Pending facts should be neutralized after timeout, got {timed_out[0].fact_check_status}"
+        assert timed_out[0].p_true == 0.5, "Timed-out facts should fall back to neutral p_true"
+        print("✓ V2 resolves completed jobs and neutralizes timed-out pending jobs before scoring")
+    finally:
+        if engine is not None:
+            engine.shutdown()
         shutil.rmtree(temp_dir)
 
 
@@ -596,6 +697,8 @@ def run_all_tests():
         
         # Integration tests
         ("Full Pipeline", test_full_pipeline),
+        ("V2 Fact-Check Skill Wiring", test_v2_uses_skill_fact_checker),
+        ("V2 Pending Fact-Check Resolution", test_v2_resolves_pending_fact_checks_before_scoring),
         ("Topic Geometry", test_topic_geometry),
         
         # Audit tests
