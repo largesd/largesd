@@ -49,7 +49,7 @@ class FactCheckQueue:
     
     def submit(self, claim_text: str, normalized_claim: str, claim_hash: str,
                fact_mode: str, allowlist_version: str,
-               temporal_context, request_context) -> FactCheckJob:
+               temporal_context, request_context, contains_pii: bool = False) -> FactCheckJob:
         """
         Submit a job to the queue.
         
@@ -69,6 +69,7 @@ class FactCheckQueue:
                 allowlist_version=allowlist_version,
                 temporal_context=temporal_context,
                 request_context=request_context,
+                contains_pii=contains_pii,
                 status="queued",
             )
             
