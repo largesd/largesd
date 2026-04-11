@@ -189,20 +189,25 @@ class ExtractionEngine:
                     request_context = RequestContext(
                         post_id=post_id or span.post_id,
                     )
-                    
-                    # Use async submission if skill supports it
-                    if hasattr(self.fact_checker, 'check_fact_async'):
+
+                    # Only use async submission when the fact-checking skill has async enabled.
+                    if isinstance(self.fact_checker, FactCheckingSkill) and getattr(self.fact_checker, '_async_enabled', False):
                         job = self.fact_checker.check_fact_async(
                             claim_text=span.span_text,
                             request_context=request_context
                         )
                         fact.fact_check_job_id = job.job_id
                     else:
-                        # Fallback to sync
-                        result = self.fact_checker.check_fact(
-                            claim_text=span.span_text,
-                            request_context=request_context
-                        )
+                        # Otherwise force a resolved result before returning to the caller.
+                        if isinstance(self.fact_checker, FactCheckingSkill):
+                            result = self.fact_checker.check_fact(
+                                claim_text=span.span_text,
+                                request_context=request_context
+                            )
+                        else:
+                            result = self.fact_checker.check_fact(
+                                claim_text=span.span_text,
+                            )
                         fact.p_true = result.factuality_score
                         fact.fact_check_status = "completed"
                         

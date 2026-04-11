@@ -3,6 +3,8 @@ Enhanced Debate Engine v2
 Full implementation with span extraction, canonicalization, audits, and persistence
 """
 import os
+import sys
+import time
 import uuid
 import json
 from datetime import datetime
@@ -16,11 +18,13 @@ from extraction import ExtractionEngine, ExtractedSpan, ExtractedFact, Extracted
 from extraction import CanonicalFact as ExCanonicalFact, CanonicalArgument as ExCanonicalArgument
 from topic_engine import TopicEngine, Topic
 from scoring_engine import ScoringEngine, TopicSideScores
-from fact_checker import FactChecker
 from tokenizer import ContentMassCalculator, get_canonical_tokenizer
 from modulation import ModulationEngine, ModulationOutcome, create_modulated_post
 from snapshot_diff import SnapshotDiffEngine
 from evidence_targets import EvidenceTargetAnalyzer
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from skills.fact_checking import FactCheckingSkill
 
 
 class DebateEngineV2:
@@ -53,10 +57,22 @@ class DebateEngineV2:
             num_judges=num_judges,
             api_key=api_key
         )
-        self.extraction_engine = ExtractionEngine(self.llm_client)
+        self._fact_check_mode = fact_check_mode
+        self._async_enabled = fact_check_mode == "ONLINE_ALLOWLIST"
+        self._fact_check_wait_timeout_seconds = 2.0
+        self._fact_check_poll_interval_seconds = 0.05
+
+        self.fact_checker = FactCheckingSkill(
+            mode=fact_check_mode,
+            allowlist_version="v1",
+            enable_async=self._async_enabled,
+        )
+        self.extraction_engine = ExtractionEngine(
+            self.llm_client,
+            fact_check_skill=self.fact_checker,
+        )
         self.topic_engine = TopicEngine(self.llm_client)
         self.scoring_engine = ScoringEngine(self.llm_client, num_judges=num_judges)
-        self.fact_checker = FactChecker(mode=fact_check_mode)
         self.content_mass_calculator = ContentMassCalculator()
         
         # Initialize modulation engine with template (MSD §3)
@@ -72,6 +88,34 @@ class DebateEngineV2:
         
         # In-memory cache
         self._debate_cache: Dict[str, Dict] = {}
+
+    def _resolve_fact_checks(self, facts: List[ExtractedFact]) -> List[ExtractedFact]:
+        """Wait briefly for async fact checks so scoring never sees pending values."""
+        if not facts:
+            return facts
+
+        resolved_facts = self.extraction_engine.update_fact_check_results(facts)
+
+        if self._fact_check_mode != "ONLINE_ALLOWLIST" or not self._async_enabled:
+            return resolved_facts
+
+        def has_pending(items: List[ExtractedFact]) -> bool:
+            return any(
+                fact.fact_check_job_id and fact.fact_check_status == "pending"
+                for fact in items
+            )
+
+        deadline = time.time() + self._fact_check_wait_timeout_seconds
+        while has_pending(resolved_facts) and time.time() < deadline:
+            time.sleep(self._fact_check_poll_interval_seconds)
+            resolved_facts = self.extraction_engine.update_fact_check_results(resolved_facts)
+
+        for fact in resolved_facts:
+            if fact.fact_check_job_id and fact.fact_check_status == "pending":
+                fact.p_true = 0.5
+                fact.fact_check_status = "failed"
+
+        return resolved_facts
     
     def create_debate(self, resolution: str, scope: str) -> Dict:
         """Create a new debate"""
@@ -315,13 +359,9 @@ class DebateEngineV2:
                 
                 # Extract facts from spans
                 extracted_facts = self.extraction_engine.extract_facts_from_spans(
-                    fact_spans, tid, post['side']
+                    fact_spans, tid, post['side'], post_id=post['post_id']
                 )
-                
-                # Fact-check each fact
-                for fact in extracted_facts:
-                    check_result = self.fact_checker.check_fact(fact.fact_text)
-                    fact.p_true = check_result.factuality_score
+                extracted_facts = self._resolve_fact_checks(extracted_facts)
                 
                 all_extracted_facts.extend(extracted_facts)
                 
@@ -622,3 +662,17 @@ class DebateEngineV2:
             debate_id, snapshot_id
         )
         return result.to_dict()
+
+    def get_fact_check_stats(self) -> Dict:
+        """Get statistics from the fact checking skill."""
+        return {
+            'cache': self.fact_checker.get_cache_stats(),
+            'audit': self.fact_checker.get_audit_stats(),
+            'queue': self.fact_checker.get_queue_stats(),
+            'mode': self._fact_check_mode,
+            'async_enabled': self._async_enabled,
+        }
+
+    def shutdown(self):
+        """Shutdown the debate engine and its fact-checking workers."""
+        self.fact_checker.shutdown()
