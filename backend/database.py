@@ -43,6 +43,9 @@ class DebateDatabase:
                 debate_id TEXT PRIMARY KEY,
                 resolution TEXT NOT NULL,
                 scope TEXT NOT NULL,
+                motion TEXT DEFAULT '',
+                moderation_criteria TEXT DEFAULT '',
+                debate_frame TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
                 current_snapshot_id TEXT,
                 user_id TEXT,
@@ -235,6 +238,9 @@ class DebateDatabase:
 
         # Lightweight schema migrations for older local databases.
         self._ensure_column(cursor, "debates", "user_id", "TEXT")
+        self._ensure_column(cursor, "debates", "motion", "TEXT DEFAULT ''")
+        self._ensure_column(cursor, "debates", "moderation_criteria", "TEXT DEFAULT ''")
+        self._ensure_column(cursor, "debates", "debate_frame", "TEXT DEFAULT ''")
         self._ensure_column(cursor, "posts", "user_id", "TEXT")
         
         conn.commit()
@@ -247,12 +253,16 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO debates 
-            (debate_id, resolution, scope, created_at, current_snapshot_id, user_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (debate_id, resolution, scope, motion, moderation_criteria, debate_frame,
+             created_at, current_snapshot_id, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             debate_data['debate_id'],
             debate_data['resolution'],
             debate_data['scope'],
+            debate_data.get('motion', debate_data.get('resolution', '')),
+            debate_data.get('moderation_criteria', ''),
+            debate_data.get('debate_frame', ''),
             debate_data['created_at'],
             debate_data.get('current_snapshot_id'),
             debate_data.get('user_id')

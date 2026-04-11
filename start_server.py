@@ -10,6 +10,7 @@ import argparse
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
+from backend.debate_proposal import DEFAULT_DEBATE_FRAME, DEFAULT_MODERATION_CRITERIA
 from backend.app import app, current_debate, debate_engine
 
 def main():
@@ -30,8 +31,9 @@ def main():
     global current_debate
     if current_debate is None:
         current_debate = debate_engine.create_debate(
-            resolution="Resolved: AI should be banned.",
-            scope="Whether AI development should be banned and the implications for safety, economics, and society."
+            motion="Resolved: AI should be banned.",
+            moderation_criteria=DEFAULT_MODERATION_CRITERIA,
+            debate_frame=DEFAULT_DEBATE_FRAME,
         )
     
     # Generate initial snapshot
@@ -40,7 +42,7 @@ def main():
     snapshot = current_debate.current_snapshot
     
     print(f"  Debate ID:        {current_debate.debate_id}")
-    print(f"  Resolution:       {current_debate.resolution}")
+    print(f"  Motion:           {current_debate.motion or current_debate.resolution}")
     print(f"  Fact Check Mode:  {args.fact_mode}")
     print()
     print(f"  Initial Snapshot: {snapshot.snapshot_id}")

@@ -13,6 +13,7 @@ from flask_cors import CORS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from debate_engine_v2 import DebateEngineV2
+from debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
@@ -29,6 +30,19 @@ debate_engine = DebateEngineV2(
 
 # Store for current debate
 current_debate = None
+
+
+def _debate_response_payload(debate):
+    hydrated = hydrate_debate_record(debate) or {}
+    return {
+        "debate_id": hydrated.get("debate_id"),
+        "motion": hydrated.get("motion"),
+        "resolution": hydrated.get("resolution"),
+        "moderation_criteria": hydrated.get("moderation_criteria"),
+        "debate_frame": hydrated.get("debate_frame"),
+        "scope": hydrated.get("scope"),
+        "created_at": hydrated.get("created_at"),
+    }
 
 
 @app.route('/api/health', methods=['GET'])
@@ -48,17 +62,20 @@ def create_debate():
     global current_debate
     
     data = request.json or {}
-    resolution = data.get('resolution', 'Resolved: AI should be banned.')
-    scope = data.get('scope', 'Whether AI development should be banned and the implications.')
-    
-    current_debate = debate_engine.create_debate(resolution, scope)
-    
-    return jsonify({
-        "debate_id": current_debate['debate_id'],
-        "resolution": current_debate['resolution'],
-        "scope": current_debate['scope'],
-        "created_at": current_debate['created_at']
-    })
+    proposal, missing_fields = parse_debate_proposal_payload(data)
+    if missing_fields:
+        return jsonify({
+            "error": f"Missing required fields: {', '.join(missing_fields)}",
+            "missing_fields": missing_fields,
+        }), 400
+
+    current_debate = debate_engine.create_debate(
+        proposal['motion'],
+        proposal['moderation_criteria'],
+        proposal['debate_frame'],
+    )
+
+    return jsonify(_debate_response_payload(current_debate))
 
 
 @app.route('/api/debate', methods=['GET'])
@@ -70,21 +87,22 @@ def get_debate():
         # Return empty state when no debate has been started
         return jsonify({
             "debate_id": None,
+            "motion": None,
             "resolution": None,
+            "moderation_criteria": None,
+            "debate_frame": None,
             "scope": None,
             "created_at": None,
             "current_snapshot_id": None,
             "has_debate": False
         })
     
-    return jsonify({
-        "debate_id": current_debate['debate_id'],
-        "resolution": current_debate['resolution'],
-        "scope": current_debate['scope'],
-        "created_at": current_debate['created_at'],
+    payload = _debate_response_payload(current_debate)
+    payload.update({
         "current_snapshot_id": current_debate.get('current_snapshot_id'),
         "has_debate": True
     })
+    return jsonify(payload)
 
 
 @app.route('/api/debate/posts', methods=['POST'])

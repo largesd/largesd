@@ -234,6 +234,9 @@ class Debate:
     resolution: str
     scope: str
     created_at: datetime
+    motion: str = ""
+    moderation_criteria: str = ""
+    debate_frame: str = ""
     user_id: Optional[str] = None  # Creator of the debate
     current_snapshot: Optional[Snapshot] = None
     snapshots: List[Snapshot] = field(default_factory=list)

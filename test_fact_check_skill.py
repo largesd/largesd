@@ -364,8 +364,15 @@ def test_msd_requirements():
     # Test debate creation
     engine = DebateEngine(fact_check_mode="OFFLINE")
     debate = engine.create_debate(
-        resolution="Should advanced AI development be paused?",
-        scope="Discussion of AI governance and safety"
+        motion="Should advanced AI development be paused?",
+        moderation_criteria=(
+            "Allow evidence-backed arguments about governance and safety. Block harassment, "
+            "spam, PII, and off-topic content."
+        ),
+        debate_frame=(
+            "Judge which side best informs a neutral policymaker balancing safety, innovation, "
+            "and enforceability."
+        ),
     )
     assert debate.debate_id, "Debate should have ID"
     print("✓ Debate creation works")

@@ -36,14 +36,18 @@ class DebateSystemTester:
             return False
         return False
     
-    def create_debate(self, resolution, scope):
+    def create_debate(self, motion, moderation_criteria, debate_frame):
         """Create a new debate"""
         print(f"\n[Creating Debate]")
-        print(f"  Resolution: {resolution}")
+        print(f"  Motion: {motion}")
         
         response = requests.post(
             f"{self.base_url}/api/debate",
-            json={"resolution": resolution, "scope": scope}
+            json={
+                "motion": motion,
+                "moderation_criteria": moderation_criteria,
+                "debate_frame": debate_frame,
+            }
         )
         
         if response.status_code == 200:
@@ -193,8 +197,17 @@ def run_scenario_ai_regulation(base_url=BASE_URL):
     
     # Create debate
     debate = tester.create_debate(
-        resolution="Should advanced AI development be paused for safety reasons?",
-        scope="Discussion of AI governance, safety, and innovation trade-offs"
+        motion="Should advanced AI development be paused for safety reasons?",
+        moderation_criteria=(
+            "Allow good-faith arguments that engage the pause motion directly. "
+            "Block harassment, spam, PII, and off-topic content. Prefer evidence "
+            "about safety, governance, competitiveness, and current impacts."
+        ),
+        debate_frame=(
+            "Judge which side most fairly interprets the pause motion, best captures "
+            "the core clash between safety and continued deployment, and most usefully "
+            "informs a neutral policymaker."
+        ),
     )
     
     if not debate:
@@ -263,8 +276,15 @@ def run_scenario_renewable_energy(base_url=BASE_URL):
     
     # Create debate
     debate = tester.create_debate(
-        resolution="Should governments provide subsidies for renewable energy?",
-        scope="Economic, environmental, and policy considerations"
+        motion="Should governments provide subsidies for renewable energy?",
+        moderation_criteria=(
+            "Allow evidence-backed arguments about costs, benefits, fairness, and "
+            "implementation. Block harassment, spam, PII, and off-topic content."
+        ),
+        debate_frame=(
+            "Judge which side best informs a neutral policymaker balancing economic "
+            "efficiency, environmental impact, grid reliability, and long-term public value."
+        ),
     )
     
     if not debate:
@@ -331,8 +351,12 @@ def run_modulation_test(base_url=BASE_URL):
     
     # Create debate
     debate = tester.create_debate(
-        resolution="Test debate for moderation",
-        scope="Testing modulation rules"
+        motion="Test debate for moderation",
+        moderation_criteria=(
+            "Allow only good-faith arguments that engage the motion directly. Block "
+            "harassment, spam, PII, and off-topic content."
+        ),
+        debate_frame="Judge the moderation outcomes by whether the criteria are applied fairly and consistently.",
     )
     
     if not debate:
