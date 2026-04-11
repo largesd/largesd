@@ -68,6 +68,8 @@
     <div class="callout" id="debate-prompt-content">
       <div style="font-size:18px;font-weight:750;color:var(--muted)" id="resolution-display">No debate started yet.</div>
       <small id="frame-display" style="display:none">Create a new debate to get started.</small><br>
+      <small id="frame-meta-display" style="display:none"></small><br>
+      <small id="sides-display" style="display:none"></small><br>
       <small id="criteria-display" style="display:none"></small>
     </div>
 
@@ -228,10 +230,16 @@ async function loadData() {
     // Update debate info based on whether a debate exists
     const motion = debateData.motion || debateData.resolution;
     if (debateData.has_debate && motion) {
+      const activeFrame = debateData.active_frame || {};
       document.getElementById('resolution-display').textContent = motion;
       document.getElementById('resolution-display').style.color = '';
       document.getElementById('frame-display').textContent = debateData.debate_frame ? `Frame: ${debateData.debate_frame}` : '';
       document.getElementById('frame-display').style.display = debateData.debate_frame ? '' : 'none';
+      document.getElementById('frame-meta-display').textContent = activeFrame.frame_id ? `Active frame: v${activeFrame.version || 1} • ${activeFrame.stage || 'substantive'}` : '';
+      document.getElementById('frame-meta-display').style.display = activeFrame.frame_id ? '' : 'none';
+      const hasSides = Array.isArray(activeFrame.sides) && activeFrame.sides.length > 0;
+      document.getElementById('sides-display').textContent = hasSides ? `Sides: ${activeFrame.sides.map(side => side.label).join(', ')}` : '';
+      document.getElementById('sides-display').style.display = hasSides ? '' : 'none';
       document.getElementById('criteria-display').textContent = debateData.moderation_criteria ? `Moderation criteria: ${debateData.moderation_criteria}` : '';
       document.getElementById('criteria-display').style.display = debateData.moderation_criteria ? '' : 'none';
     } else {
@@ -239,6 +247,8 @@ async function loadData() {
       document.getElementById('resolution-display').textContent = 'No debate started yet.';
       document.getElementById('resolution-display').style.color = 'var(--muted)';
       document.getElementById('frame-display').style.display = 'none';
+      document.getElementById('frame-meta-display').style.display = 'none';
+      document.getElementById('sides-display').style.display = 'none';
       document.getElementById('criteria-display').style.display = 'none';
     }
     

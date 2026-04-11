@@ -75,6 +75,7 @@ def health():
     """Health check endpoint"""
     return jsonify({
         "status": "healthy",
+        "supports_frame_versioning": False,
         "timestamp": datetime.now().isoformat()
     })
 

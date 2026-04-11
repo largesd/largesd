@@ -97,11 +97,18 @@ def test_debate_proposal_requirements():
     proposal, missing_fields = parse_debate_proposal_payload({
         "motion": "Should cities ban private cars downtown?",
         "moderation_criteria": "Allow evidence-based arguments and block harassment or off-topic content.",
-        "debate_frame": "Judge which side best balances access, emissions, and practical enforcement."
+        "debate_frame": "Judge which side best balances access, emissions, and practical enforcement.",
+        "frame_sides": "FOR | Supports the downtown ban.\nAGAINST | Opposes the downtown ban.",
+        "frame_evaluation_criteria": "Logical coherence\nFeasibility\nNet public benefit",
+        "frame_definitions": "Downtown: the city center business district",
+        "frame_scope_constraints": "Focus on the next 10 years\nAssume current transit funding remains constant",
     })
     assert not missing_fields, f"Expected a complete proposal, got missing fields: {missing_fields}"
     assert proposal["resolution"] == proposal["motion"], "Motion should hydrate the legacy resolution field"
-    assert "Debate frame:" in proposal["scope"], "Internal scope should include the debate frame"
+    assert "Frame summary:" in proposal["scope"], "Internal scope should include the frame summary"
+    assert len(proposal["active_frame"]["sides"]) == 2, "Structured frame should normalize sides"
+    assert proposal["active_frame"]["evaluation_criteria"], "Structured frame should include evaluation criteria"
+    assert proposal["active_frame"]["definitions"], "Structured frame should include definitions"
     print("✓ Complete proposal payload hydrates the legacy scoring context")
 
     _, missing_fields = parse_debate_proposal_payload({
@@ -111,6 +118,102 @@ def test_debate_proposal_requirements():
         f"Expected missing moderation criteria and debate frame, got {missing_fields}"
     )
     print("✓ Missing proposal fields are reported explicitly")
+
+
+def test_frame_versioning_and_multiside_snapshot():
+    """Test frame versioning and multi-sided scoring."""
+    print("\n=== Testing DebateFrame Versioning & Multi-Side Snapshot ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_frames.db")
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+
+        debate = engine.create_debate({
+            "motion": "What should governments do about frontier AI deployment?",
+            "moderation_criteria": (
+                "Allow arguments directly engaging the policy choice. Block harassment, spam, "
+                "PII, and off-topic content."
+            ),
+            "debate_frame": "Compare the most decision-useful policy option for a neutral regulator.",
+            "frame": {
+                "stage": "substantive",
+                "sides": [
+                    {"label": "PAUSE", "description": "Temporarily pause frontier deployment."},
+                    {"label": "REGULATE", "description": "Allow deployment under tighter regulation."},
+                    {"label": "OPEN", "description": "Allow broad deployment with minimal new restrictions."},
+                ],
+                "evaluation_criteria": [
+                    "Risk reduction",
+                    "Economic feasibility",
+                    "Decision usefulness for a regulator",
+                ],
+                "definitions": [
+                    {"term": "Frontier AI", "definition": "Models at the capability frontier for general-purpose use."}
+                ],
+                "scope_constraints": [
+                    "Focus on national policy choices over the next five years.",
+                    "Assume current compute trends continue.",
+                ],
+            },
+        })
+
+        assert debate["active_frame"]["version"] == 1, "Initial frame should be version 1"
+        assert len(debate["active_frame"]["sides"]) == 3, "Initial frame should retain all sides"
+
+        updated = engine.create_frame_version(debate["debate_id"], {
+            "debate_frame": "Refine the frame around immediate deployment policy rather than long-run governance.",
+            "frame": {
+                "stage": "substantive",
+                "sides": [
+                    {"label": "PAUSE", "description": "Pause new deployment until evaluations improve."},
+                    {"label": "REGULATE", "description": "Permit deployment with stronger licensing and audits."},
+                    {"label": "OPEN", "description": "Permit broad deployment with minimal new constraints."},
+                ],
+                "evaluation_criteria": [
+                    "Risk reduction",
+                    "Implementability",
+                    "Quality of evidence",
+                ],
+                "definitions": [
+                    {"term": "Deployment", "definition": "Releasing a frontier model for public or enterprise use."}
+                ],
+                "scope_constraints": [
+                    "Focus on immediate policy choices for the next two years.",
+                ],
+            },
+        })
+
+        assert updated["active_frame"]["version"] == 2, "New frame should increment the version"
+        assert updated["active_frame"]["supersedes_frame_id"], "Frame versions should preserve lineage"
+
+        frames = engine.get_debate_frames(debate["debate_id"])
+        assert len(frames) == 2, "Debate should retain both frame versions"
+
+        for side in ["PAUSE", "REGULATE", "OPEN"]:
+            engine.submit_post(
+                debate_id=debate["debate_id"],
+                side=side,
+                topic_id=None,
+                facts=f"{side} factual premise about deployment risk and implementation.",
+                inference=f"Therefore the {side} policy is the strongest option under the active frame.",
+                counter_arguments="",
+            )
+
+        snapshot = engine.generate_snapshot(debate["debate_id"], trigger_type="manual")
+        assert snapshot["frame_id"] == updated["active_frame_id"], "Snapshot should bind to the active frame"
+        assert snapshot["side_order"] == ["PAUSE", "REGULATE", "OPEN"], "Snapshot should preserve frame side order"
+        assert len(snapshot["overall_scores"]) == 3, "Snapshot should score all active sides"
+        print("✓ Frame versions persist and multi-sided snapshots score the active frame only")
+
+    finally:
+        shutil.rmtree(temp_dir)
 
 
 def test_span_extraction():
@@ -732,6 +835,7 @@ def run_all_tests():
         
         # Integration tests
         ("Full Pipeline", test_full_pipeline),
+        ("DebateFrame Versioning & Multi-Side Snapshot", test_frame_versioning_and_multiside_snapshot),
         ("V2 Fact-Check Skill Wiring", test_v2_uses_skill_fact_checker),
         ("V2 Pending Fact-Check Resolution", test_v2_resolves_pending_fact_checks_before_scoring),
         ("Topic Geometry", test_topic_geometry),
