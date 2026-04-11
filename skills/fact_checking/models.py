@@ -245,6 +245,7 @@ class FactCheckJob:
     allowlist_version: str
     temporal_context: Optional[TemporalContext]
     request_context: RequestContext
+    contains_pii: bool = False
     status: str = "queued"  # queued, processing, completed, failed
     result: Optional[FactCheckResult] = None
     created_at: datetime = field(default_factory=datetime.now)

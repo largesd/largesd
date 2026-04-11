@@ -244,6 +244,10 @@ class FactCheckingSkill:
         # Normalize and hash
         normalized = ClaimNormalizer.normalize(claim_text)
         claim_hash = ClaimNormalizer.compute_hash(normalized)
+
+        # Check for PII so async jobs preserve the same query-sanitization guarantees as sync checks
+        pii_result = PIIDetector.detect(claim_text)
+        contains_pii = pii_result.contains_pii
         
         # Create default request context
         if request_context is None:
@@ -258,6 +262,7 @@ class FactCheckingSkill:
             allowlist_version=self.allowlist_version,
             temporal_context=temporal_context,
             request_context=request_context,
+            contains_pii=contains_pii,
         )
         
         return job
@@ -295,7 +300,7 @@ class FactCheckingSkill:
             job.claim_text,
             job.normalized_claim,
             job.claim_hash,
-            False,  # PII check already done
+            job.contains_pii,
             job.temporal_context,
         )
         

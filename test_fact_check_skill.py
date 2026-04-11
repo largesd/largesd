@@ -53,6 +53,24 @@ def test_normalization():
     norm2 = ClaimNormalizer.normalize(text2)
     assert norm2 == "population is 1000000", f"Got: {norm2}"
     print("✓ Number normalization works")
+
+    # Test repeated thousands separators
+    text3 = "Budget is 1,234,567"
+    norm3 = ClaimNormalizer.normalize(text3)
+    assert norm3 == "budget is 1234567", f"Got: {norm3}"
+    print("✓ Repeated thousands separators normalize iteratively")
+
+    # Test alternate percent spelling
+    text4 = "Inflation rose 3.5 per cent"
+    norm4 = ClaimNormalizer.normalize(text4)
+    assert norm4 == "inflation rose 3.5%", f"Got: {norm4}"
+    print("✓ 'per cent' normalization works")
+
+    # Test non-breaking spaces and unicode punctuation
+    text5 = "\u00a0“AI\u2014safety”\u00a0matters\u00a0"
+    norm5 = ClaimNormalizer.normalize(text5)
+    assert norm5 == '"ai-safety" matters', f"Got: {norm5}"
+    print("✓ Unicode punctuation and non-breaking spaces normalize correctly")
     
     # Test hash stability
     hash1 = ClaimNormalizer.compute_hash(norm1)
@@ -143,6 +161,20 @@ def test_pii_detection():
     sanitized = PIIDetector.sanitize_for_external_query(text_with_email)
     assert "@" not in sanitized, "Email should be removed from query"
     print("✓ PII sanitization works")
+
+    # Detection types should be deterministic when multiple PII categories are present
+    multi_pii_text = "Email john@example.com or call 555-123-4567"
+    multi_result = PIIDetector.detect(multi_pii_text)
+    assert multi_result.detected_types == ["email", "phone"], f"Got: {multi_result.detected_types}"
+    print("✓ PII detected types are returned in deterministic order")
+
+    # Query sanitization should remove multiple supported PII categories
+    mixed_query = "Reach john@example.com from 10.0.0.1 or use card 4111 1111 1111 1111"
+    mixed_sanitized = PIIDetector.sanitize_for_external_query(mixed_query)
+    assert "@" not in mixed_sanitized, "Email should be removed"
+    assert "10.0.0.1" not in mixed_sanitized, "IP address should be removed"
+    assert "4111" not in mixed_sanitized, "Credit card should be removed"
+    print("✓ Query sanitization removes multiple PII categories")
 
 
 def test_online_allowlist_simulation():
@@ -256,6 +288,65 @@ def test_async_processing():
     print(f"✓ Queue stats: {stats}")
     
     skill.shutdown()
+
+
+def test_async_pii_propagation():
+    """Test that async processing preserves PII context and sanitizes retrieval queries"""
+    print("\n=== Testing Async PII Propagation ===")
+
+    from skills.fact_checking.queue import reset_global_queue
+    import uuid
+
+    reset_global_queue()
+
+    captured_queries = []
+
+    skill = FactCheckingSkill(
+        mode="ONLINE_ALLOWLIST",
+        allowlist_version="v1",
+        enable_async=True,
+        async_worker_count=1
+    )
+
+    original_retrieve = skill._evidence_retriever.retrieve_evidence
+
+    def capture_retrieve(normalized_claim: str, claim_hash: str, allowlist_version: str):
+        captured_queries.append(normalized_claim)
+        return [], 0
+
+    skill._evidence_retriever.retrieve_evidence = capture_retrieve
+
+    try:
+        unique_claim = (
+            f"Contact john+{uuid.uuid4().hex[:8]}@example.com "
+            f"or call 555-123-4567 for details"
+        )
+        job = skill.check_fact_async(
+            unique_claim,
+            request_context=RequestContext(post_id="post_async_pii")
+        )
+
+        assert job.contains_pii, "Async job should preserve PII detection state"
+
+        import time
+        deadline = time.time() + 3.0
+        result = None
+        while time.time() < deadline:
+            result = skill.get_job_result(job.job_id)
+            if result is not None:
+                break
+            time.sleep(0.05)
+
+        assert result is not None, "Async result should complete"
+        assert result.contains_pii, "Async result should preserve contains_pii"
+        assert captured_queries, "Evidence retrieval should have been called"
+        assert "@" not in captured_queries[0], f"Sanitized async query still contains email: {captured_queries[0]}"
+        assert "555" not in captured_queries[0], f"Sanitized async query still contains phone digits: {captured_queries[0]}"
+        print("✓ Async processing preserves PII state and sanitizes the retrieval query")
+    finally:
+        skill._evidence_retriever.retrieve_evidence = original_retrieve
+        skill.shutdown()
+        reset_global_queue()
 
 
 def test_msd_requirements():
@@ -378,6 +469,7 @@ def run_all_tests():
         test_online_allowlist_simulation,
         test_verdict_thresholds,
         test_async_processing,
+        test_async_pii_propagation,
         test_msd_requirements,
         test_temporal_claims,
         test_audit_logging,

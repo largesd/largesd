@@ -27,7 +27,6 @@ class PIIDetector:
     - Social Security Numbers
     - Credit card numbers
     - IP addresses
-    - Names (basic pattern)
     """
     
     # Regex patterns for PII detection
@@ -81,8 +80,8 @@ class PIIDetector:
             redaction_hash = hashlib.sha256(original.encode()).hexdigest()[:8]
             redacted = redacted[:start] + f"[{pii_type.upper()}_{redaction_hash}]" + redacted[end:]
         
-        # Remove duplicates from detected types
-        detected_types = list(set(detected_types))
+        # Remove duplicates while keeping a deterministic order for testing and downstream use
+        detected_types = sorted(set(detected_types))
         
         return PIIDetectionResult(
             contains_pii=len(detected_types) > 0,
