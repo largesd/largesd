@@ -54,20 +54,30 @@ def open_new_debate_page(page: Page, base_url: str) -> None:
 def create_debate(page: Page, base_url: str) -> Dict[str, str]:
     open_new_debate_page(page, base_url)
 
-    resolution = f"Resolved: External AI audits should be mandatory ({unique_suffix()})."
-    scope = (
-        "Whether mandatory external audits improve safety, accountability, and "
-        "public trust enough to justify the operational burden."
+    motion = f"Resolved: External AI audits should be mandatory ({unique_suffix()})."
+    debate_frame = (
+        "Judge which side best balances safety, accountability, operational burden, "
+        "and public trust for a neutral policymaker."
+    )
+    moderation_criteria = (
+        "Allow good-faith arguments that engage the motion directly. Block harassment, "
+        "doxxing, spam, and off-topic content. Prefer concrete evidence and fair "
+        "summaries of opposing arguments."
     )
 
-    page.get_by_test_id("debate-resolution-input").fill(resolution)
-    page.get_by_test_id("debate-scope-input").fill(scope)
+    page.get_by_test_id("debate-motion-input").fill(motion)
+    page.get_by_test_id("debate-frame-input").fill(debate_frame)
+    page.get_by_test_id("debate-moderation-input").fill(moderation_criteria)
     page.get_by_test_id("create-debate-button").click()
 
     expect(page.get_by_test_id("status-message")).to_contain_text("Debate created")
-    expect(page.get_by_test_id("active-debate-resolution")).to_contain_text(resolution)
+    expect(page.get_by_test_id("active-debate-motion")).to_contain_text(motion)
 
-    return {"resolution": resolution, "scope": scope}
+    return {
+        "motion": motion,
+        "debate_frame": debate_frame,
+        "moderation_criteria": moderation_criteria,
+    }
 
 
 def submit_post(page: Page, side: str, topic_id: str, facts: str, inference: str) -> None:
@@ -105,7 +115,7 @@ def criterion_ac1(page: Page, base_url: str) -> List[str]:
     expect(page.get_by_test_id("post-access-hint")).to_contain_text("Guest posting is enabled")
 
     return [
-        f"Created debate via the browser: {debate['resolution']}",
+        f"Created debate via the browser: {debate['motion']}",
         "Posting unlocked after debate creation.",
     ]
 

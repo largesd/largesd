@@ -23,6 +23,7 @@ from backend.models import (
 # Import ModulationOutcome from modulation to ensure consistency
 # (The one in models is a duplicate for dataclass compatibility)
 from backend.modulation import ModulationOutcome as ModOutcome, BlockReason as BlockReasonMod
+from backend.debate_proposal import parse_debate_proposal_payload
 from backend.debate_engine_v2 import DebateEngineV2
 from backend.scoring_engine import ScoringEngine, TopicSideScores
 from backend.llm_client import LLMClient, MockLLMProvider
@@ -87,6 +88,29 @@ def test_modulation_system():
     assert 'template_version' in audit_info
     assert 'rule_count' in audit_info
     print(f"✓ Modulation audit info: {audit_info['template_name']} v{audit_info['template_version']}")
+
+
+def test_debate_proposal_requirements():
+    """Test mandatory debate proposal fields for new debates."""
+    print("\n=== Testing Debate Proposal Requirements ===")
+
+    proposal, missing_fields = parse_debate_proposal_payload({
+        "motion": "Should cities ban private cars downtown?",
+        "moderation_criteria": "Allow evidence-based arguments and block harassment or off-topic content.",
+        "debate_frame": "Judge which side best balances access, emissions, and practical enforcement."
+    })
+    assert not missing_fields, f"Expected a complete proposal, got missing fields: {missing_fields}"
+    assert proposal["resolution"] == proposal["motion"], "Motion should hydrate the legacy resolution field"
+    assert "Debate frame:" in proposal["scope"], "Internal scope should include the debate frame"
+    print("✓ Complete proposal payload hydrates the legacy scoring context")
+
+    _, missing_fields = parse_debate_proposal_payload({
+        "motion": "Should cities ban private cars downtown?"
+    })
+    assert missing_fields == ["moderation criteria", "debate frame"], (
+        f"Expected missing moderation criteria and debate frame, got {missing_fields}"
+    )
+    print("✓ Missing proposal fields are reported explicitly")
 
 
 def test_span_extraction():
@@ -284,10 +308,20 @@ def test_full_pipeline():
         
         # 1. Create debate
         debate = engine.create_debate(
-            resolution="Should governments subsidize renewable energy?",
-            scope="Economic and environmental policy discussion"
+            motion="Should governments subsidize renewable energy?",
+            moderation_criteria=(
+                "Allow evidence-backed arguments about costs, benefits, and fairness. "
+                "Block harassment, spam, PII, and off-topic content."
+            ),
+            debate_frame=(
+                "Judge which side best informs a neutral policymaker balancing economic "
+                "efficiency, environmental impact, and long-term public value."
+            ),
         )
         assert debate['debate_id'], "Debate should have ID"
+        assert debate['motion'] == "Should governments subsidize renewable energy?"
+        assert debate['moderation_criteria'], "Debate should store moderation criteria"
+        assert debate['debate_frame'], "Debate should store the debate frame"
         print(f"✓ Created debate: {debate['debate_id']}")
         
         # 2. Submit FOR posts
@@ -690,6 +724,7 @@ def run_all_tests():
     tests = [
         # Unit tests
         ("Modulation System", test_modulation_system),
+        ("Debate Proposal Requirements", test_debate_proposal_requirements),
         ("Span Extraction", test_span_extraction),
         ("Fact Canonicalization", test_fact_canonicalization),
         ("Scoring Formulas", test_scoring_formulas),

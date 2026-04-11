@@ -10,6 +10,8 @@ import sys
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
+from backend.debate_proposal import DEFAULT_DEBATE_FRAME, DEFAULT_MODERATION_CRITERIA
+
 def main():
     parser = argparse.ArgumentParser(
         description='Blind Debate Adjudicator Server v2'
@@ -120,7 +122,8 @@ def main():
     if not current_debate:
         debate_engine.create_debate(
             "Resolved: AI should be banned.",
-            "Whether AI development should be banned and the implications for safety, economics, and society."
+            DEFAULT_MODERATION_CRITERIA,
+            DEFAULT_DEBATE_FRAME,
         )
     
     # Run the Flask app

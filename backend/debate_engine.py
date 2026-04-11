@@ -15,6 +15,7 @@ from models import (
 )
 from extraction import ExtractionEngine
 from scoring import ScoringEngine
+from debate_proposal import parse_debate_proposal_payload
 
 # Import new fact checking skill
 import sys
@@ -59,14 +60,28 @@ class DebateEngine:
         self._fact_check_mode = fact_check_mode
         self._async_enabled = enable_async_fact_check
     
-    def create_debate(self, resolution: str, scope: str, user_id: Optional[str] = None) -> Debate:
-        """Create a new debate"""
+    def create_debate(self, motion: str, moderation_criteria: str,
+                      debate_frame: str, user_id: Optional[str] = None) -> Debate:
+        """Create a new debate proposal with mandatory motion, moderation criteria, and frame."""
         debate_id = f"debate_{uuid.uuid4().hex[:8]}"
+        proposal, missing_fields = parse_debate_proposal_payload({
+            'motion': motion,
+            'moderation_criteria': moderation_criteria,
+            'debate_frame': debate_frame,
+        })
+        if missing_fields:
+            raise ValueError(
+                f"Missing required debate proposal fields: {', '.join(missing_fields)}"
+            )
+
         debate = Debate(
             debate_id=debate_id,
-            resolution=resolution,
-            scope=scope,
+            resolution=proposal['resolution'],
+            scope=proposal['scope'],
             created_at=datetime.now(),
+            motion=proposal['motion'],
+            moderation_criteria=proposal['moderation_criteria'],
+            debate_frame=proposal['debate_frame'],
             user_id=user_id
         )
         self.debates[debate_id] = debate

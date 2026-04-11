@@ -22,6 +22,7 @@ from tokenizer import ContentMassCalculator, get_canonical_tokenizer
 from modulation import ModulationEngine, ModulationOutcome, create_modulated_post
 from snapshot_diff import SnapshotDiffEngine
 from evidence_targets import EvidenceTargetAnalyzer
+from debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from skills.fact_checking import FactCheckingSkill
@@ -117,17 +118,29 @@ class DebateEngineV2:
 
         return resolved_facts
     
-    def create_debate(self, resolution: str, scope: str) -> Dict:
-        """Create a new debate"""
+    def create_debate(self, motion: str, moderation_criteria: str, debate_frame: str) -> Dict:
+        """Create a new debate proposal with mandatory motion, moderation criteria, and frame."""
         debate_id = f"debate_{uuid.uuid4().hex[:8]}"
-        
-        debate_data = {
+        proposal, missing_fields = parse_debate_proposal_payload({
+            'motion': motion,
+            'moderation_criteria': moderation_criteria,
+            'debate_frame': debate_frame,
+        })
+        if missing_fields:
+            raise ValueError(
+                f"Missing required debate proposal fields: {', '.join(missing_fields)}"
+            )
+
+        debate_data = hydrate_debate_record({
             'debate_id': debate_id,
-            'resolution': resolution,
-            'scope': scope,
+            'motion': proposal['motion'],
+            'resolution': proposal['resolution'],
+            'moderation_criteria': proposal['moderation_criteria'],
+            'debate_frame': proposal['debate_frame'],
+            'scope': proposal['scope'],
             'created_at': datetime.now().isoformat(),
             'current_snapshot_id': None
-        }
+        })
         
         # Save to database
         self.db.save_debate(debate_data)
@@ -146,6 +159,7 @@ class DebateEngineV2:
         # Load from database
         debate = self.db.get_debate(debate_id)
         if debate:
+            debate = hydrate_debate_record(debate)
             self._debate_cache[debate_id] = debate
         return debate
     

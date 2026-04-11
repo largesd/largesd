@@ -67,7 +67,8 @@
     
     <div class="callout" id="debate-prompt-content">
       <div style="font-size:18px;font-weight:750;color:var(--muted)" id="resolution-display">No debate started yet.</div>
-      <small id="scope-display" style="display:none">Create a new debate to get started.</small>
+      <small id="frame-display" style="display:none">Create a new debate to get started.</small><br>
+      <small id="criteria-display" style="display:none"></small>
     </div>
 
     <hr />
@@ -225,16 +226,20 @@ async function loadData() {
     }
     
     // Update debate info based on whether a debate exists
-    if (debateData.has_debate && debateData.resolution) {
-      document.getElementById('resolution-display').textContent = debateData.resolution;
+    const motion = debateData.motion || debateData.resolution;
+    if (debateData.has_debate && motion) {
+      document.getElementById('resolution-display').textContent = motion;
       document.getElementById('resolution-display').style.color = '';
-      document.getElementById('scope-display').textContent = debateData.scope || '';
-      document.getElementById('scope-display').style.display = '';
+      document.getElementById('frame-display').textContent = debateData.debate_frame ? `Frame: ${debateData.debate_frame}` : '';
+      document.getElementById('frame-display').style.display = debateData.debate_frame ? '' : 'none';
+      document.getElementById('criteria-display').textContent = debateData.moderation_criteria ? `Moderation criteria: ${debateData.moderation_criteria}` : '';
+      document.getElementById('criteria-display').style.display = debateData.moderation_criteria ? '' : 'none';
     } else {
       // No debate started yet - show empty state
       document.getElementById('resolution-display').textContent = 'No debate started yet.';
       document.getElementById('resolution-display').style.color = 'var(--muted)';
-      document.getElementById('scope-display').style.display = 'none';
+      document.getElementById('frame-display').style.display = 'none';
+      document.getElementById('criteria-display').style.display = 'none';
     }
     
     // Load snapshot data
