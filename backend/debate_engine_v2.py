@@ -22,7 +22,11 @@ from tokenizer import ContentMassCalculator, get_canonical_tokenizer
 from modulation import ModulationEngine, ModulationOutcome, create_modulated_post
 from snapshot_diff import SnapshotDiffEngine
 from evidence_targets import EvidenceTargetAnalyzer
-from debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
+from debate_proposal import (
+    build_internal_scope,
+    hydrate_debate_record,
+    parse_debate_proposal_payload,
+)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from skills.fact_checking import FactCheckingSkill
@@ -117,38 +121,136 @@ class DebateEngineV2:
                 fact.fact_check_status = "failed"
 
         return resolved_facts
-    
-    def create_debate(self, motion: str, moderation_criteria: str, debate_frame: str) -> Dict:
-        """Create a new debate proposal with mandatory motion, moderation criteria, and frame."""
+
+    @staticmethod
+    def _frame_side_order(frame: Optional[Dict[str, Any]]) -> List[str]:
+        if not frame:
+            return ["FOR", "AGAINST"]
+        return [side["side_id"] for side in frame.get("sides", [])] or ["FOR", "AGAINST"]
+
+    def _attach_active_frame(self, debate: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        hydrated = hydrate_debate_record(debate)
+        if not hydrated:
+            return None
+
+        active_frame = None
+        if hydrated.get("active_frame_id"):
+            active_frame = self.db.get_debate_frame(hydrated["active_frame_id"])
+        if not active_frame and hydrated.get("debate_id"):
+            active_frame = self.db.get_active_debate_frame(hydrated["debate_id"])
+
+        if active_frame:
+            active_frame["moderation_criteria"] = hydrated.get("moderation_criteria", "")
+            hydrated["active_frame"] = active_frame
+            hydrated["active_frame_id"] = active_frame.get("frame_id")
+            hydrated["debate_frame"] = active_frame.get("frame_summary", hydrated.get("debate_frame", ""))
+            hydrated["scope"] = build_internal_scope(
+                hydrated.get("motion", ""),
+                hydrated.get("moderation_criteria", ""),
+                active_frame,
+            )
+        return hydrated
+
+    def _build_frame_record(self, debate_id: str, proposal: Dict[str, Any],
+                            version: int, supersedes_frame_id: Optional[str] = None) -> Dict[str, Any]:
+        frame = dict(proposal["active_frame"])
+        frame["frame_id"] = f"frame_{uuid.uuid4().hex[:10]}"
+        frame["debate_id"] = debate_id
+        frame["version"] = version
+        frame["supersedes_frame_id"] = supersedes_frame_id
+        frame["created_at"] = datetime.now().isoformat()
+        frame["is_active"] = True
+        return frame
+
+    def create_debate(self, motion: str | Dict[str, Any],
+                      moderation_criteria: Optional[str] = None,
+                      debate_frame: Any = None) -> Dict:
+        """Create a new debate with an initial structured DebateFrame."""
         debate_id = f"debate_{uuid.uuid4().hex[:8]}"
-        proposal, missing_fields = parse_debate_proposal_payload({
-            'motion': motion,
-            'moderation_criteria': moderation_criteria,
-            'debate_frame': debate_frame,
-        })
+        raw_payload = (
+            motion if isinstance(motion, dict) else {
+                "motion": motion,
+                "moderation_criteria": moderation_criteria,
+                "debate_frame": debate_frame,
+            }
+        )
+        proposal, missing_fields = parse_debate_proposal_payload(raw_payload)
         if missing_fields:
             raise ValueError(
                 f"Missing required debate proposal fields: {', '.join(missing_fields)}"
             )
 
-        debate_data = hydrate_debate_record({
-            'debate_id': debate_id,
-            'motion': proposal['motion'],
-            'resolution': proposal['resolution'],
-            'moderation_criteria': proposal['moderation_criteria'],
-            'debate_frame': proposal['debate_frame'],
-            'scope': proposal['scope'],
-            'created_at': datetime.now().isoformat(),
-            'current_snapshot_id': None
-        })
-        
-        # Save to database
+        frame_record = self._build_frame_record(debate_id, proposal, version=1)
+        debate_data = {
+            "debate_id": debate_id,
+            "motion": proposal["motion"],
+            "resolution": proposal["resolution"],
+            "moderation_criteria": proposal["moderation_criteria"],
+            "debate_frame": frame_record["frame_summary"],
+            "scope": proposal["scope"],
+            "active_frame_id": frame_record["frame_id"],
+            "created_at": datetime.now().isoformat(),
+            "current_snapshot_id": None,
+        }
+
         self.db.save_debate(debate_data)
-        
-        # Cache
-        self._debate_cache[debate_id] = debate_data
-        
-        return debate_data
+        self.db.save_debate_frame(frame_record)
+        self.db.set_active_frame(debate_id, frame_record["frame_id"])
+
+        hydrated = self._attach_active_frame(debate_data)
+        self._debate_cache[debate_id] = hydrated
+        return hydrated
+
+    def create_frame_version(self, debate_id: str,
+                             payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Create and activate a new frame version for an existing debate."""
+        debate = self.get_debate(debate_id)
+        if not debate:
+            raise ValueError(f"Debate {debate_id} not found")
+
+        current_frame = debate.get("active_frame")
+        prior_frame = {
+            **(current_frame or {}),
+            "moderation_criteria": debate.get("moderation_criteria", ""),
+        }
+        proposal, missing_fields = parse_debate_proposal_payload(payload, prior_frame=prior_frame)
+        if missing_fields:
+            raise ValueError(
+                f"Missing required debate proposal fields: {', '.join(missing_fields)}"
+            )
+
+        existing_frames = self.db.get_debate_frames(debate_id)
+        next_version = (existing_frames[-1]["version"] + 1) if existing_frames else 1
+        frame_record = self._build_frame_record(
+            debate_id,
+            proposal,
+            version=next_version,
+            supersedes_frame_id=current_frame.get("frame_id") if current_frame else None,
+        )
+        self.db.save_debate_frame(frame_record)
+        self.db.set_active_frame(debate_id, frame_record["frame_id"])
+
+        debate.update({
+            "motion": proposal["motion"],
+            "resolution": proposal["resolution"],
+            "moderation_criteria": proposal["moderation_criteria"],
+            "debate_frame": frame_record["frame_summary"],
+            "scope": build_internal_scope(
+                proposal["motion"],
+                proposal["moderation_criteria"],
+                frame_record,
+            ),
+            "active_frame_id": frame_record["frame_id"],
+        })
+        self.db.save_debate(debate)
+
+        hydrated = self._attach_active_frame(debate)
+        self._debate_cache[debate_id] = hydrated
+        return hydrated
+
+    def get_debate_frames(self, debate_id: str) -> List[Dict[str, Any]]:
+        """Get all frame versions for a debate."""
+        return self.db.get_debate_frames(debate_id)
     
     def get_debate(self, debate_id: str) -> Optional[Dict]:
         """Get debate by ID"""
@@ -159,7 +261,7 @@ class DebateEngineV2:
         # Load from database
         debate = self.db.get_debate(debate_id)
         if debate:
-            debate = hydrate_debate_record(debate)
+            debate = self._attach_active_frame(debate)
             self._debate_cache[debate_id] = debate
         return debate
     
@@ -172,13 +274,26 @@ class DebateEngineV2:
         debate = self.get_debate(debate_id)
         if not debate:
             raise ValueError(f"Debate {debate_id} not found")
+
+        active_frame = debate.get("active_frame")
+        if not active_frame:
+            raise ValueError("Debate has no active frame")
+
+        normalized_side = (side or "").strip()
+        allowed_sides = {item["side_id"] for item in active_frame.get("sides", [])}
+        if normalized_side not in allowed_sides:
+            raise ValueError(
+                f"Side '{normalized_side}' is not in the active frame. "
+                f"Allowed sides: {', '.join(sorted(allowed_sides))}"
+            )
         
         post_id = f"post_{uuid.uuid4().hex[:12]}"
         
         post_data = {
             'post_id': post_id,
             'debate_id': debate_id,
-            'side': side.upper(),
+            'frame_id': active_frame.get('frame_id'),
+            'side': normalized_side,
             'topic_id': topic_id,
             'facts': facts,
             'inference': inference,
@@ -258,9 +373,17 @@ class DebateEngineV2:
         debate = self.get_debate(debate_id)
         if not debate:
             raise ValueError(f"Debate {debate_id} not found")
-        
-        # Get all posts for this debate
-        posts = self.db.get_posts_by_debate(debate_id)
+
+        active_frame = debate.get("active_frame")
+        if not active_frame:
+            raise ValueError("Debate has no active frame")
+
+        side_order = self._frame_side_order(active_frame)
+        frame_id = active_frame["frame_id"]
+        frame_context = debate["scope"]
+
+        # Get only posts submitted under the active frame version
+        posts = self.db.get_posts_by_debate(debate_id, frame_id=frame_id)
         allowed_posts = [p for p in posts if p['modulation_outcome'] == 'allowed']
         blocked_posts = [p for p in posts if p['modulation_outcome'] == 'blocked']
         
@@ -272,21 +395,21 @@ class DebateEngineV2:
         
         # Extract or update topics
         previous_topics = []
-        previous_snapshot = self.db.get_latest_snapshot(debate_id)
+        previous_snapshot = self.db.get_latest_snapshot(debate_id, frame_id=frame_id)
         if previous_snapshot:
             # Load previous topics
-            prev_topics_data = self.db.get_topics_by_debate(debate_id)
+            prev_topics_data = self.db.get_topics_by_debate(debate_id, frame_id=frame_id)
             previous_topics = [Topic(**t) for t in prev_topics_data]
         
         # Extract new topics
         topics = self.topic_engine.extract_topics_from_posts(
             allowed_posts,
-            debate['resolution']
+            frame_context
         )
         
         # Enforce topic bounds
         topics = self.topic_engine.enforce_topic_bounds(
-            topics, allowed_posts, debate['resolution']
+            topics, allowed_posts, frame_context
         )
         
         # Compute topic drift
@@ -307,6 +430,7 @@ class DebateEngineV2:
             topic_data = {
                 'topic_id': topic.topic_id,
                 'debate_id': debate_id,
+                'frame_id': frame_id,
                 'name': topic.name,
                 'scope': topic.scope,
                 'relevance': topic.relevance,
@@ -397,6 +521,7 @@ class DebateEngineV2:
                 fact_data = {
                     'canon_fact_id': cf.canon_fact_id,
                     'debate_id': debate_id,
+                    'frame_id': frame_id,
                     'topic_id': cf.topic_id,
                     'side': cf.side,
                     'canon_fact_text': cf.canon_fact_text,
@@ -423,6 +548,7 @@ class DebateEngineV2:
                 arg_data = {
                     'canon_arg_id': ca.canon_arg_id,
                     'debate_id': debate_id,
+                    'frame_id': frame_id,
                     'topic_id': ca.topic_id,
                     'side': ca.side,
                     'inference_text': ca.inference_text,
@@ -453,17 +579,18 @@ class DebateEngineV2:
         for topic in topics:
             tid = topic.topic_id
             args = topic_arguments.get(tid, [])
-            
-            for_args = [a for a in args if a['side'] == 'FOR']
-            against_args = [a for a in args if a['side'] == 'AGAINST']
-            
-            if for_args:
-                summary_for = self.llm_client.generate_steelman_summary(for_args, 'FOR')
-                topic.summary_for = summary_for.get('summary', '')
-            
-            if against_args:
-                summary_against = self.llm_client.generate_steelman_summary(against_args, 'AGAINST')
-                topic.summary_against = summary_against.get('summary', '')
+
+            if "FOR" in side_order:
+                for_args = [a for a in args if a['side'] == 'FOR']
+                if for_args:
+                    summary_for = self.llm_client.generate_steelman_summary(for_args, 'FOR')
+                    topic.summary_for = summary_for.get('summary', '')
+
+            if "AGAINST" in side_order:
+                against_args = [a for a in args if a['side'] == 'AGAINST']
+                if against_args:
+                    summary_against = self.llm_client.generate_steelman_summary(against_args, 'AGAINST')
+                    topic.summary_against = summary_against.get('summary', '')
         
         # Compute scores
         scores = self.scoring_engine.compute_debate_scores(
@@ -473,7 +600,9 @@ class DebateEngineV2:
              for t in topics],
             topic_facts,
             topic_arguments,
-            topic_content_mass
+            topic_content_mass,
+            side_order=side_order,
+            frame_context=frame_context,
         )
         
         # Run replicates for verdict
@@ -481,17 +610,21 @@ class DebateEngineV2:
             [{'topic_id': t.topic_id} for t in topics],
             topic_facts,
             topic_arguments,
-            topic_content_mass
+            topic_content_mass,
+            side_order=side_order,
+            frame_context=frame_context,
         )
         
-        verdict_result = self.scoring_engine.compute_verdict(replicates)
+        verdict_result = self.scoring_engine.compute_verdict(replicates, side_order=side_order)
         
         # Compute counterfactuals
         counterfactuals = self.scoring_engine.compute_counterfactuals(
             [{'topic_id': t.topic_id} for t in topics],
             topic_facts,
             topic_arguments,
-            topic_content_mass
+            topic_content_mass,
+            side_order=side_order,
+            frame_context=frame_context,
         )
         
         # Run audits
@@ -505,7 +638,9 @@ class DebateEngineV2:
             [{'topic_id': t.topic_id} for t in topics],
             topic_facts,
             topic_arguments,
-            topic_content_mass
+            topic_content_mass,
+            side_order=side_order,
+            frame_context=frame_context,
         )
         
         # 3. Relevance sensitivity
@@ -513,7 +648,9 @@ class DebateEngineV2:
             [{'topic_id': t.topic_id} for t in topics],
             topic_facts,
             topic_arguments,
-            topic_content_mass
+            topic_content_mass,
+            side_order=side_order,
+            frame_context=frame_context,
         )
         
         # Create snapshot
@@ -522,6 +659,7 @@ class DebateEngineV2:
         snapshot_data = {
             'snapshot_id': snapshot_id,
             'debate_id': debate_id,
+            'frame_id': frame_id,
             'timestamp': datetime.now().isoformat(),
             'trigger_type': trigger_type,
             'template_name': self.modulation_engine.template.name,
@@ -529,6 +667,8 @@ class DebateEngineV2:
             'allowed_count': len(allowed_posts),
             'blocked_count': len(blocked_posts),
             'block_reasons': dict(block_reasons),
+            'side_order': side_order,
+            'overall_scores': scores['overall_scores'],
             'overall_for': scores['overall_for'],
             'overall_against': scores['overall_against'],
             'margin_d': scores['margin_d'],
@@ -545,6 +685,7 @@ class DebateEngineV2:
         # Update debate current snapshot
         debate['current_snapshot_id'] = snapshot_id
         self.db.save_debate(debate)
+        self._debate_cache[debate_id] = self._attach_active_frame(debate)
         
         # Save audits
         for audit_type, audit_data in [
@@ -564,6 +705,8 @@ class DebateEngineV2:
         # Return complete snapshot data
         return {
             **snapshot_data,
+            'leader': verdict_result.get('leader'),
+            'runner_up': verdict_result.get('runner_up'),
             'topics': [
                 {
                     'topic_id': t.topic_id,

@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 
+from debate_proposal import hydrate_frame_record, serialize_frame_record
+
 
 class DebateDatabase:
     """SQLite database for debate system persistence"""
@@ -46,10 +48,34 @@ class DebateDatabase:
                 motion TEXT DEFAULT '',
                 moderation_criteria TEXT DEFAULT '',
                 debate_frame TEXT DEFAULT '',
+                active_frame_id TEXT,
                 created_at TEXT NOT NULL,
                 current_snapshot_id TEXT,
                 user_id TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS debate_frames (
+                frame_id TEXT PRIMARY KEY,
+                debate_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                stage TEXT NOT NULL,
+                label TEXT DEFAULT '',
+                motion TEXT NOT NULL,
+                frame_summary TEXT DEFAULT '',
+                sides TEXT NOT NULL,
+                evaluation_criteria TEXT NOT NULL,
+                definitions TEXT NOT NULL,
+                scope_constraints TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                supersedes_frame_id TEXT,
+                framing_debate_id TEXT,
+                created_at TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                FOREIGN KEY (debate_id) REFERENCES debates(debate_id),
+                UNIQUE (debate_id, version)
             )
         """)
         
@@ -58,6 +84,7 @@ class DebateDatabase:
             CREATE TABLE IF NOT EXISTS posts (
                 post_id TEXT PRIMARY KEY,
                 debate_id TEXT NOT NULL,
+                frame_id TEXT,
                 user_id TEXT,
                 side TEXT NOT NULL,
                 topic_id TEXT,
@@ -93,6 +120,7 @@ class DebateDatabase:
             CREATE TABLE IF NOT EXISTS topics (
                 topic_id TEXT PRIMARY KEY,
                 debate_id TEXT NOT NULL,
+                frame_id TEXT,
                 name TEXT NOT NULL,
                 scope TEXT NOT NULL,
                 relevance REAL DEFAULT 0.0,
@@ -129,6 +157,7 @@ class DebateDatabase:
             CREATE TABLE IF NOT EXISTS canonical_facts (
                 canon_fact_id TEXT PRIMARY KEY,
                 debate_id TEXT NOT NULL,
+                frame_id TEXT,
                 topic_id TEXT NOT NULL,
                 side TEXT NOT NULL,
                 canon_fact_text TEXT NOT NULL,
@@ -161,6 +190,7 @@ class DebateDatabase:
             CREATE TABLE IF NOT EXISTS canonical_arguments (
                 canon_arg_id TEXT PRIMARY KEY,
                 debate_id TEXT NOT NULL,
+                frame_id TEXT,
                 topic_id TEXT NOT NULL,
                 side TEXT NOT NULL,
                 inference_text TEXT NOT NULL,
@@ -179,6 +209,7 @@ class DebateDatabase:
             CREATE TABLE IF NOT EXISTS snapshots (
                 snapshot_id TEXT PRIMARY KEY,
                 debate_id TEXT NOT NULL,
+                frame_id TEXT,
                 timestamp TEXT NOT NULL,
                 trigger_type TEXT NOT NULL,
                 template_name TEXT NOT NULL,
@@ -186,6 +217,8 @@ class DebateDatabase:
                 allowed_count INTEGER DEFAULT 0,
                 blocked_count INTEGER DEFAULT 0,
                 block_reasons TEXT,
+                side_order TEXT,
+                overall_scores TEXT,
                 overall_for REAL DEFAULT 0.0,
                 overall_against REAL DEFAULT 0.0,
                 margin_d REAL DEFAULT 0.0,
@@ -241,7 +274,15 @@ class DebateDatabase:
         self._ensure_column(cursor, "debates", "motion", "TEXT DEFAULT ''")
         self._ensure_column(cursor, "debates", "moderation_criteria", "TEXT DEFAULT ''")
         self._ensure_column(cursor, "debates", "debate_frame", "TEXT DEFAULT ''")
+        self._ensure_column(cursor, "debates", "active_frame_id", "TEXT")
         self._ensure_column(cursor, "posts", "user_id", "TEXT")
+        self._ensure_column(cursor, "posts", "frame_id", "TEXT")
+        self._ensure_column(cursor, "topics", "frame_id", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "frame_id", "TEXT")
+        self._ensure_column(cursor, "canonical_arguments", "frame_id", "TEXT")
+        self._ensure_column(cursor, "snapshots", "frame_id", "TEXT")
+        self._ensure_column(cursor, "snapshots", "side_order", "TEXT")
+        self._ensure_column(cursor, "snapshots", "overall_scores", "TEXT")
         
         conn.commit()
         conn.close()
@@ -254,8 +295,8 @@ class DebateDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO debates 
             (debate_id, resolution, scope, motion, moderation_criteria, debate_frame,
-             created_at, current_snapshot_id, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             active_frame_id, created_at, current_snapshot_id, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             debate_data['debate_id'],
             debate_data['resolution'],
@@ -263,6 +304,7 @@ class DebateDatabase:
             debate_data.get('motion', debate_data.get('resolution', '')),
             debate_data.get('moderation_criteria', ''),
             debate_data.get('debate_frame', ''),
+            debate_data.get('active_frame_id'),
             debate_data['created_at'],
             debate_data.get('current_snapshot_id'),
             debate_data.get('user_id')
@@ -278,6 +320,94 @@ class DebateDatabase:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+
+    # Debate frame operations
+    def save_debate_frame(self, frame_data: Dict[str, Any]):
+        """Save or update a debate frame version."""
+        serialized = serialize_frame_record(frame_data)
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO debate_frames
+            (frame_id, debate_id, version, stage, label, motion, frame_summary,
+             sides, evaluation_criteria, definitions, scope_constraints, notes,
+             supersedes_frame_id, framing_debate_id, created_at, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            serialized['frame_id'],
+            serialized['debate_id'],
+            serialized['version'],
+            serialized['stage'],
+            serialized['label'],
+            serialized['motion'],
+            serialized['frame_summary'],
+            serialized['sides'],
+            serialized['evaluation_criteria'],
+            serialized['definitions'],
+            serialized['scope_constraints'],
+            serialized['notes'],
+            serialized['supersedes_frame_id'],
+            serialized['framing_debate_id'],
+            serialized['created_at'],
+            serialized['is_active'],
+        ))
+        conn.commit()
+        conn.close()
+
+    def set_active_frame(self, debate_id: str, frame_id: str):
+        """Mark one frame active for a debate and deactivate the rest."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE debate_frames SET is_active = 0 WHERE debate_id = ?",
+            (debate_id,),
+        )
+        cursor.execute(
+            "UPDATE debate_frames SET is_active = 1 WHERE frame_id = ?",
+            (frame_id,),
+        )
+        cursor.execute(
+            "UPDATE debates SET active_frame_id = ? WHERE debate_id = ?",
+            (frame_id, debate_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_debate_frame(self, frame_id: str) -> Optional[Dict[str, Any]]:
+        """Get a debate frame by ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM debate_frames WHERE frame_id = ?", (frame_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return hydrate_frame_record(dict(row)) if row else None
+
+    def get_active_debate_frame(self, debate_id: str) -> Optional[Dict[str, Any]]:
+        """Get the active frame for a debate."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM debate_frames
+            WHERE debate_id = ? AND is_active = 1
+            ORDER BY version DESC
+            LIMIT 1
+        """, (debate_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return hydrate_frame_record(dict(row)) if row else None
+
+    def get_debate_frames(self, debate_id: str) -> List[Dict[str, Any]]:
+        """List all frames for a debate in version order."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM debate_frames
+            WHERE debate_id = ?
+            ORDER BY version ASC
+        """, (debate_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [hydrate_frame_record(dict(row)) for row in rows]
     
     # Post operations
     def save_post(self, post_data: Dict[str, Any]):
@@ -286,12 +416,13 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO posts
-            (post_id, debate_id, user_id, side, topic_id, facts, inference, counter_arguments,
+            (post_id, debate_id, frame_id, user_id, side, topic_id, facts, inference, counter_arguments,
              timestamp, modulation_outcome, block_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             post_data['post_id'],
             post_data['debate_id'],
+            post_data.get('frame_id'),
             post_data.get('user_id'),
             post_data['side'],
             post_data.get('topic_id'),
@@ -305,11 +436,18 @@ class DebateDatabase:
         conn.commit()
         conn.close()
     
-    def get_posts_by_debate(self, debate_id: str) -> List[Dict[str, Any]]:
+    def get_posts_by_debate(self, debate_id: str,
+                            frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all posts for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM posts WHERE debate_id = ?", (debate_id,))
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM posts WHERE debate_id = ? AND frame_id = ?",
+                (debate_id, frame_id),
+            )
+        else:
+            cursor.execute("SELECT * FROM posts WHERE debate_id = ?", (debate_id,))
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -366,12 +504,13 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO topics
-            (topic_id, debate_id, name, scope, relevance, drift_score, coherence, distinctness,
+            (topic_id, debate_id, frame_id, name, scope, relevance, drift_score, coherence, distinctness,
              parent_topic_ids, operation, summary_for, summary_against, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             topic_data['topic_id'],
             topic_data['debate_id'],
+            topic_data.get('frame_id'),
             topic_data['name'],
             topic_data['scope'],
             topic_data.get('relevance', 0.0),
@@ -387,11 +526,18 @@ class DebateDatabase:
         conn.commit()
         conn.close()
     
-    def get_topics_by_debate(self, debate_id: str) -> List[Dict[str, Any]]:
+    def get_topics_by_debate(self, debate_id: str,
+                             frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all topics for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM topics WHERE debate_id = ?", (debate_id,))
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM topics WHERE debate_id = ? AND frame_id = ?",
+                (debate_id, frame_id),
+            )
+        else:
+            cursor.execute("SELECT * FROM topics WHERE debate_id = ?", (debate_id,))
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -403,12 +549,13 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO canonical_facts
-            (canon_fact_id, debate_id, topic_id, side, canon_fact_text, member_fact_ids,
+            (canon_fact_id, debate_id, frame_id, topic_id, side, canon_fact_text, member_fact_ids,
              p_true, provenance_links, referenced_by_au_ids, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fact_data['canon_fact_id'],
             fact_data['debate_id'],
+            fact_data.get('frame_id'),
             fact_data['topic_id'],
             fact_data['side'],
             fact_data['canon_fact_text'],
@@ -421,11 +568,18 @@ class DebateDatabase:
         conn.commit()
         conn.close()
     
-    def get_canonical_facts_by_debate(self, debate_id: str) -> List[Dict[str, Any]]:
+    def get_canonical_facts_by_debate(self, debate_id: str,
+                                      frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all canonical facts for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM canonical_facts WHERE debate_id = ?", (debate_id,))
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM canonical_facts WHERE debate_id = ? AND frame_id = ?",
+                (debate_id, frame_id),
+            )
+        else:
+            cursor.execute("SELECT * FROM canonical_facts WHERE debate_id = ?", (debate_id,))
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -446,12 +600,13 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO canonical_arguments
-            (canon_arg_id, debate_id, topic_id, side, inference_text, supporting_facts,
+            (canon_arg_id, debate_id, frame_id, topic_id, side, inference_text, supporting_facts,
              member_au_ids, provenance_links, reasoning_score, reasoning_iqr, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             arg_data['canon_arg_id'],
             arg_data['debate_id'],
+            arg_data.get('frame_id'),
             arg_data['topic_id'],
             arg_data['side'],
             arg_data['inference_text'],
@@ -465,11 +620,18 @@ class DebateDatabase:
         conn.commit()
         conn.close()
     
-    def get_canonical_arguments_by_debate(self, debate_id: str) -> List[Dict[str, Any]]:
+    def get_canonical_arguments_by_debate(self, debate_id: str,
+                                          frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all canonical arguments for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM canonical_arguments WHERE debate_id = ?", (debate_id,))
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM canonical_arguments WHERE debate_id = ? AND frame_id = ?",
+                (debate_id, frame_id),
+            )
+        else:
+            cursor.execute("SELECT * FROM canonical_arguments WHERE debate_id = ?", (debate_id,))
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -490,13 +652,15 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO snapshots
-            (snapshot_id, debate_id, timestamp, trigger_type, template_name, template_version,
-             allowed_count, blocked_count, block_reasons, overall_for, overall_against,
-             margin_d, ci_d_lower, ci_d_upper, confidence, verdict, topic_scores)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (snapshot_id, debate_id, frame_id, timestamp, trigger_type, template_name, template_version,
+             allowed_count, blocked_count, block_reasons, side_order, overall_scores,
+             overall_for, overall_against, margin_d, ci_d_lower, ci_d_upper, confidence,
+             verdict, topic_scores)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             snapshot_data['snapshot_id'],
             snapshot_data['debate_id'],
+            snapshot_data.get('frame_id'),
             snapshot_data['timestamp'],
             snapshot_data['trigger_type'],
             snapshot_data['template_name'],
@@ -504,6 +668,8 @@ class DebateDatabase:
             snapshot_data.get('allowed_count', 0),
             snapshot_data.get('blocked_count', 0),
             json.dumps(snapshot_data.get('block_reasons', {})),
+            json.dumps(snapshot_data.get('side_order', [])),
+            json.dumps(snapshot_data.get('overall_scores', {})),
             snapshot_data.get('overall_for', 0.0),
             snapshot_data.get('overall_against', 0.0),
             snapshot_data.get('margin_d', 0.0),
@@ -516,26 +682,40 @@ class DebateDatabase:
         conn.commit()
         conn.close()
     
-    def get_snapshots_by_debate(self, debate_id: str) -> List[Dict[str, Any]]:
+    def get_snapshots_by_debate(self, debate_id: str,
+                                frame_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all snapshots for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM snapshots WHERE debate_id = ? ORDER BY timestamp DESC",
-            (debate_id,)
-        )
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM snapshots WHERE debate_id = ? AND frame_id = ? ORDER BY timestamp DESC",
+                (debate_id, frame_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM snapshots WHERE debate_id = ? ORDER BY timestamp DESC",
+                (debate_id,)
+            )
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
     
-    def get_latest_snapshot(self, debate_id: str) -> Optional[Dict[str, Any]]:
+    def get_latest_snapshot(self, debate_id: str,
+                            frame_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Get latest snapshot for a debate"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM snapshots WHERE debate_id = ? ORDER BY timestamp DESC LIMIT 1",
-            (debate_id,)
-        )
+        if frame_id:
+            cursor.execute(
+                "SELECT * FROM snapshots WHERE debate_id = ? AND frame_id = ? ORDER BY timestamp DESC LIMIT 1",
+                (debate_id, frame_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM snapshots WHERE debate_id = ? ORDER BY timestamp DESC LIMIT 1",
+                (debate_id,)
+            )
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None

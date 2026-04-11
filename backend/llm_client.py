@@ -313,12 +313,15 @@ class LLMClient:
         
         return None
     
-    def judge_reasoning(self, argument_text: str, supporting_facts: List[str]) -> List[Dict]:
+    def judge_reasoning(self, argument_text: str, supporting_facts: List[str],
+                        side: str = "", frame_context: str = "") -> List[Dict]:
         """
         Multi-judge reasoning evaluation (MSD §10.2, §14.B)
         Returns list of judge evaluations with disagreement statistics
         """
-        prompt = f"""Evaluate the reasoning strength of the following argument.
+        frame_text = f"\nActive Debate Frame:\n{frame_context}\n" if frame_context else ""
+        side_text = f"\nSide under evaluation: {side}\n" if side else ""
+        prompt = f"""Evaluate the reasoning strength of the following argument.{side_text}{frame_text}
 
 Supporting Facts:
 {chr(10).join(f"- {f}" for f in supporting_facts)}
@@ -402,12 +405,15 @@ Respond in JSON format:
             "disagreement_level": "high" if iqr > 0.2 else "moderate" if iqr > 0.1 else "low"
         }
     
-    def judge_coverage(self, opposing_argument: Dict, rebuttal_text: str) -> List[Dict]:
+    def judge_coverage(self, opposing_argument: Dict, rebuttal_text: str,
+                       side: str = "", frame_context: str = "") -> List[Dict]:
         """
         Multi-judge coverage evaluation
         Returns list of judge determinations on whether argument is addressed
         """
-        prompt = f"""Determine if the following opposing argument has been adequately addressed/rebutted.
+        frame_text = f"\nActive Debate Frame:\n{frame_context}\n" if frame_context else ""
+        side_text = f"\nSide being evaluated: {side}\n" if side else ""
+        prompt = f"""Determine if the following opposing argument has been adequately addressed/rebutted.{side_text}{frame_text}
 
 Opposing Argument:
 {opposing_argument.get('inference_text', '')}
@@ -553,7 +559,8 @@ Respond in JSON format:
         """Extract topics from debate posts"""
         combined_text = chr(10).join(f"Post {i+1}: {text}" for i, text in enumerate(posts_text))
         
-        prompt = f"""Extract distinct debate topics from these posts about: {debate_resolution}
+        prompt = f"""Extract distinct debate topics from these posts under the active debate frame:
+{debate_resolution}
 
 Posts:
 {combined_text}

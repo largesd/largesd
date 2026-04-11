@@ -60,20 +60,24 @@
   
   <div class="kpis">
     <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,FOR}">Overall FOR</span></div>
+      <div class="label" id="overall-a-label"><span class="tooltip" data-tooltip="Weighted quality score for the first comparison side">Overall FOR</span></div>
       <div class="value mono" id="overall-for" data-testid="overall-for">0.61</div>
       <div class="hint">weighted quality sum</div>
     </div>
     <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,AGAINST}">Overall AGAINST</span></div>
+      <div class="label" id="overall-b-label"><span class="tooltip" data-tooltip="Weighted quality score for the second comparison side">Overall AGAINST</span></div>
       <div class="value mono" id="overall-against" data-testid="overall-against">0.60</div>
       <div class="hint">weighted quality sum</div>
     </div>
     <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="D = FOR − AGAINST (margin)">D (Margin)</span></div>
+      <div class="label" id="margin-label"><span class="tooltip" data-tooltip="Margin between the leading side and its closest competitor">Lead Margin</span></div>
       <div class="value mono" id="margin-d">0.01</div>
-      <div class="hint">replicate-based</div>
+      <div class="hint" id="margin-hint">replicate-based</div>
     </div>
+  </div>
+
+  <div class="callout soft" id="score-summary" style="margin-top: 16px;">
+    Active side scores will appear here after a snapshot is generated.
   </div>
 
   <hr />
@@ -128,9 +132,9 @@
         <tr>
           <th>Topic</th>
           <th><span class="tooltip" data-tooltip="Topic relevance weight">Rel<sub>t</sub></span></th>
-          <th><span class="tooltip" data-tooltip="FOR quality score">Q<sub>FOR</sub></span></th>
-          <th><span class="tooltip" data-tooltip="AGAINST quality score">Q<sub>AGAINST</sub></span></th>
-          <th>Contribution to D</th>
+          <th id="contrib-side-a"><span class="tooltip" data-tooltip="Quality score for the first comparison side">Q<sub>FOR</sub></span></th>
+          <th id="contrib-side-b"><span class="tooltip" data-tooltip="Quality score for the second comparison side">Q<sub>AGAINST</sub></span></th>
+          <th id="contrib-margin-header">Contribution to lead margin</th>
         </tr>
       </thead>
       <tbody id="contributions-tbody" data-testid="contributions-tbody">
@@ -194,6 +198,50 @@
 
 <script>
 const API_BASE = window.location.origin;
+let currentSideOrder = ['FOR', 'AGAINST'];
+
+function comparisonPair(sideOrder = [], overallScores = {}) {
+  const scoreEntries = Object.entries(overallScores || {})
+    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+  if (scoreEntries.length > 2) {
+    return [
+      scoreEntries[0][0],
+      (scoreEntries[1] && scoreEntries[1][0]) || 'AGAINST'
+    ];
+  }
+  if (sideOrder.length >= 2) {
+    return [sideOrder[0], sideOrder[1]];
+  }
+  return [
+    (scoreEntries[0] && scoreEntries[0][0]) || 'FOR',
+    (scoreEntries[1] && scoreEntries[1][0]) || 'AGAINST'
+  ];
+}
+
+function renderScoreSummary(overallScores = {}, verdict = 'NO VERDICT') {
+  const summaryEl = document.getElementById('score-summary');
+  const entries = Object.entries(overallScores || {});
+  if (!entries.length) {
+    summaryEl.textContent = 'Active side scores will appear here after a snapshot is generated.';
+    return;
+  }
+
+  const ordered = entries.sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+  summaryEl.innerHTML = `
+    <strong>Frame score summary:</strong>
+    ${ordered.map(([side, score]) => `<span class="pill">${side}: <span class="mono">${Number(score).toFixed(2)}</span></span>`).join(' ')}
+    <div style="margin-top:8px;"><small>Current verdict: ${verdict}</small></div>
+  `;
+}
+
+function applyComparisonLabels(sideA, sideB) {
+  document.getElementById('overall-a-label').textContent = `Overall ${sideA}`;
+  document.getElementById('overall-b-label').textContent = `Overall ${sideB}`;
+  document.getElementById('contrib-side-a').textContent = `Q ${sideA}`;
+  document.getElementById('contrib-side-b').textContent = `Q ${sideB}`;
+  document.getElementById('margin-label').textContent = `${sideA} vs ${sideB}`;
+  document.getElementById('margin-hint').textContent = 'leader minus nearest competitor';
+}
 
 async function loadData() {
   try {
@@ -202,6 +250,9 @@ async function loadData() {
     const snapshotData = await snapshotRes.json();
     
     if (!snapshotData.error) {
+      currentSideOrder = snapshotData.side_order && snapshotData.side_order.length
+        ? snapshotData.side_order
+        : currentSideOrder;
       // Update header
       document.getElementById('header-verdict').textContent = snapshotData.verdict;
       document.getElementById('header-confidence').textContent = snapshotData.confidence.toFixed(2);
@@ -209,11 +260,16 @@ async function loadData() {
       document.getElementById('header-updated').textContent = new Date(snapshotData.timestamp).toLocaleString();
       document.getElementById('verdict-mobile').textContent = snapshotData.verdict;
       document.getElementById('confidence-mobile').textContent = snapshotData.confidence.toFixed(2);
-      
+
+      const overallScores = snapshotData.overall_scores || {};
+      const [sideA, sideB] = comparisonPair(currentSideOrder, overallScores);
+      applyComparisonLabels(sideA, sideB);
+      renderScoreSummary(overallScores, snapshotData.verdict);
+
       // Update KPIs
-      document.getElementById('overall-for').textContent = snapshotData.overall_for.toFixed(2);
-      document.getElementById('overall-against').textContent = snapshotData.overall_against.toFixed(2);
-      document.getElementById('margin-d').textContent = snapshotData.margin_d.toFixed(4);
+      document.getElementById('overall-for').textContent = Number(overallScores[sideA] ?? snapshotData.overall_for ?? 0).toFixed(2);
+      document.getElementById('overall-against').textContent = Number(overallScores[sideB] ?? snapshotData.overall_against ?? 0).toFixed(2);
+      document.getElementById('margin-d').textContent = Number(snapshotData.margin_d ?? 0).toFixed(4);
       
       // Update verdict display
       const verdictClass = snapshotData.verdict === 'FOR' ? 'verdict-for' : snapshotData.verdict === 'AGAINST' ? 'verdict-against' : 'verdict-neutral';
@@ -233,24 +289,30 @@ async function loadData() {
     const verdictData = await verdictRes.json();
     
     if (!verdictData.error && verdictData.topic_contributions) {
-      renderContributions(verdictData.topic_contributions);
+      currentSideOrder = verdictData.side_order && verdictData.side_order.length
+        ? verdictData.side_order
+        : currentSideOrder;
+      renderContributions(verdictData.topic_contributions, verdictData.overall_scores || {});
     }
   } catch (error) {
     console.error('Error loading data:', error);
   }
 }
 
-function renderContributions(contributions) {
+function renderContributions(contributions, overallScores = {}) {
   const tbody = document.getElementById('contributions-tbody');
-  
+  const [sideA, sideB] = comparisonPair(currentSideOrder, overallScores);
+  applyComparisonLabels(sideA, sideB);
+
   tbody.innerHTML = contributions.map(c => {
     const contribClass = c.contribution_to_d > 0 ? 'style="color:var(--good)"' : c.contribution_to_d < 0 ? 'style="color:var(--warn)"' : '';
+    const sideScores = c.scores_by_side || {};
     return `
       <tr>
         <td><a href="topic_${c.topic_id}.html">${c.topic_id} ${c.name}</a></td>
         <td class="mono">${c.relevance.toFixed(2)}</td>
-        <td class="mono">${c.q_for.toFixed(2)}</td>
-        <td class="mono">${c.q_against.toFixed(2)}</td>
+        <td class="mono">${Number((sideScores[sideA] && sideScores[sideA].quality) ?? c.q_for ?? 0).toFixed(2)}</td>
+        <td class="mono">${Number((sideScores[sideB] && sideScores[sideB].quality) ?? c.q_against ?? 0).toFixed(2)}</td>
         <td class="mono" ${contribClass}>${c.contribution_to_d > 0 ? '+' : ''}${c.contribution_to_d.toFixed(4)}</td>
       </tr>
     `;

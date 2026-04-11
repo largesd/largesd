@@ -19,6 +19,7 @@ class Topic:
     topic_id: str
     name: str
     scope: str
+    frame_id: str = ""
     relevance: float = 0.0
     drift_score: float = 0.0
     coherence: float = 0.0
@@ -91,38 +92,50 @@ class TopicEngine:
         return topics
     
     def _create_default_topics(self, debate_resolution: str) -> List[Topic]:
-        """Create default topics for AI ban debate"""
+        """Create neutral default topics when extraction cannot yet infer clusters."""
         defaults = [
             Topic(
                 topic_id=f"topic_t{uuid.uuid4().hex[:6]}",
-                name="Safety & misuse risk",
-                scope="Whether banning AI reduces harms like misinformation, weaponization, or catastrophic misuse, versus mitigation via governance.",
+                name="Definitions & interpretation",
+                scope=(
+                    "How the motion should be interpreted, which definitions are controlling, "
+                    "and whether either side relies on a contested framing assumption."
+                ),
                 relevance=0.34,
-                keywords=["safety", "misuse", "risk", "harm", "weaponization"],
+                keywords=["definition", "interpretation", "frame", "meaning", "terms"],
                 created_at=datetime.now().isoformat()
             ),
             Topic(
                 topic_id=f"topic_t{uuid.uuid4().hex[:6]}",
-                name="Economic & social impact",
-                scope="Effects on jobs, inequality, productivity, and access to opportunity under a ban vs regulated deployment.",
+                name="Evidence & causal impact",
+                scope=(
+                    "The main empirical claims and causal mechanisms that would make the motion true "
+                    "or false under the current frame."
+                ),
                 relevance=0.28,
-                keywords=["economic", "jobs", "inequality", "productivity"],
+                keywords=["evidence", "impact", "cause", "outcome", "data"],
                 created_at=datetime.now().isoformat()
             ),
             Topic(
                 topic_id=f"topic_t{uuid.uuid4().hex[:6]}",
-                name="Enforceability & geopolitics",
-                scope="Feasibility of enforcing a ban globally and the strategic consequences if some actors comply and others do not.",
+                name="Implementation & feasibility",
+                scope=(
+                    "Whether the proposed position is workable in practice, including incentives, "
+                    "administration, enforceability, and likely real-world execution."
+                ),
                 relevance=0.22,
-                keywords=["enforceability", "geopolitics", "global", "compliance"],
+                keywords=["implementation", "feasibility", "enforcement", "incentives", "practical"],
                 created_at=datetime.now().isoformat()
             ),
             Topic(
                 topic_id=f"topic_t{uuid.uuid4().hex[:6]}",
-                name="Rights, freedom & innovation",
-                scope="Whether banning AI violates rights (speech, research) and stifles beneficial innovation, versus moral duties to prevent harm.",
+                name="Trade-offs & decision relevance",
+                scope=(
+                    "Which side best handles the key trade-offs a neutral decision-maker should care "
+                    "about under the active frame."
+                ),
                 relevance=0.16,
-                keywords=["rights", "freedom", "innovation", "research", "speech"],
+                keywords=["tradeoff", "decision", "balance", "cost", "benefit"],
                 created_at=datetime.now().isoformat()
             )
         ]
