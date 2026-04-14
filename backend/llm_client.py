@@ -132,7 +132,7 @@ class MockLLMProvider(LLMProvider):
             content=json.dumps({
                 "factuality_score": score,
                 "confidence": round(random.uniform(0.5, 0.9), 2),
-                "verdict": "SUPPORTED" if score > 0.7 else "MIXED" if score > 0.4 else "INSUFFICIENT_EVIDENCE",
+                "verdict": "SUPPORTED" if score > 0.7 else "INSUFFICIENT",
                 "evidence_summary": "Based on available sources, this claim has " + 
                     ("strong support" if score > 0.7 else "mixed support" if score > 0.4 else "limited empirical backing"),
                 "sources": [

@@ -14,7 +14,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from .models import (
-    FactCheckResult, FactCheckVerdict, FactCheckStatus, 
+    FactCheckResult, FactCheckVerdict, FactCheckStatus, EvidenceTier,
     TemporalContext, RequestContext, CacheResult,
     FactCheckJob
 )
@@ -319,7 +319,7 @@ class FactCheckingSkill:
     def _check_offline(self, claim_text: str, normalized_claim: str,
                       claim_hash: str, contains_pii: bool,
                       temporal_context: Optional[TemporalContext]) -> FactCheckResult:
-        """OFFLINE mode: Return neutral result"""
+        """OFFLINE mode: Return neutral result per LSD §13"""
         return FactCheckResult(
             claim_text=claim_text,
             normalized_claim_text=normalized_claim,
@@ -327,10 +327,11 @@ class FactCheckingSkill:
             fact_mode="OFFLINE",
             allowlist_version=self.allowlist_version,
             status=FactCheckStatus.UNVERIFIED_OFFLINE,
-            verdict=FactCheckVerdict.UNVERIFIED,
+            verdict=FactCheckVerdict.INSUFFICIENT,
             factuality_score=0.5,
             confidence=0.0,
             confidence_explanation="OFFLINE mode: no source lookup performed",
+            operationalization="Live source lookup would be required to confirm or refute this claim.",
             evidence=[],
             algorithm_version=self.config.algorithm_version,
             cache_result=CacheResult.MISS,
@@ -341,7 +342,7 @@ class FactCheckingSkill:
     def _check_online_allowlist(self, claim_text: str, normalized_claim: str,
                                claim_hash: str, contains_pii: bool,
                                temporal_context: Optional[TemporalContext]) -> FactCheckResult:
-        """ONLINE_ALLOWLIST mode: Query approved sources"""
+        """ONLINE_ALLOWLIST mode: Query approved sources per LSD §13"""
         start_time = time.time()
         
         # Check temporal expiration
@@ -353,10 +354,11 @@ class FactCheckingSkill:
                 fact_mode="ONLINE_ALLOWLIST",
                 allowlist_version=self.allowlist_version,
                 status=FactCheckStatus.STALE,
-                verdict=FactCheckVerdict.UNVERIFIED,
+                verdict=FactCheckVerdict.INSUFFICIENT,
                 factuality_score=0.5,
                 confidence=0.0,
                 confidence_explanation="Temporal claim expired; recheck required",
+                operationalization="Updated temporal data would be required to evaluate this claim.",
                 evidence=[],
                 algorithm_version=self.config.algorithm_version,
                 cache_result=CacheResult.MISS,
@@ -374,6 +376,16 @@ class FactCheckingSkill:
             query_claim, claim_hash, self.allowlist_version
         )
         
+        # Assign evidence tiers based on source priority
+        for ev in evidence:
+            ev.evidence_tier = self._determine_evidence_tier(ev.source_id)
+        
+        tier_counts = {
+            "TIER_1": sum(1 for e in evidence if e.evidence_tier == EvidenceTier.TIER_1),
+            "TIER_2": sum(1 for e in evidence if e.evidence_tier == EvidenceTier.TIER_2),
+            "TIER_3": sum(1 for e in evidence if e.evidence_tier == EvidenceTier.TIER_3),
+        }
+        
         # Calculate scores
         if evidence:
             # Average support/contradiction from top evidence
@@ -381,11 +393,16 @@ class FactCheckingSkill:
             avg_support = sum(e.support_score for e in top_evidence) / len(top_evidence)
             avg_contradiction = sum(e.contradiction_score for e in top_evidence) / len(top_evidence)
             
-            # Calculate factuality score
-            factuality_score = avg_support
-            
             # Determine verdict
             verdict = self._determine_verdict(avg_support, avg_contradiction)
+            
+            # LSD §13: p ∈ {1,0} for SUPPORTED/REFUTED, p=0.5 for INSUFFICIENT
+            if verdict == FactCheckVerdict.SUPPORTED:
+                factuality_score = 1.0
+            elif verdict == FactCheckVerdict.REFUTED:
+                factuality_score = 0.0
+            else:
+                factuality_score = 0.5
             
             # Calculate confidence
             confidence = self._calculate_confidence(
@@ -393,14 +410,16 @@ class FactCheckingSkill:
             )
             
             status = FactCheckStatus.CHECKED
+            operationalization = "To refute: provide primary evidence contradicting the claim. To confirm: provide additional independent primary sources."
         else:
             # No evidence found
             factuality_score = 0.5
             avg_support = 0.0
             avg_contradiction = 0.0
-            verdict = FactCheckVerdict.INSUFFICIENT_EVIDENCE
+            verdict = FactCheckVerdict.INSUFFICIENT
             confidence = 0.0
             status = FactCheckStatus.NO_ALLOWLIST_EVIDENCE
+            operationalization = "Live retrieval from primary or reputable secondary sources would be required to evaluate this claim."
         
         duration_ms = int((time.time() - start_time) * 1000)
         
@@ -415,7 +434,9 @@ class FactCheckingSkill:
             factuality_score=round(factuality_score, 2),
             confidence=round(confidence, 2),
             confidence_explanation=f"Support: {avg_support:.2f}, Contradiction: {avg_contradiction:.2f}",
+            operationalization=operationalization,
             evidence=evidence,
+            evidence_tier_counts=tier_counts,
             source_count_considered=sources_considered,
             source_count_retained=len(evidence),
             algorithm_version=self.config.algorithm_version,
@@ -428,32 +449,28 @@ class FactCheckingSkill:
     def _determine_verdict(self, support: float, contradiction: float) -> FactCheckVerdict:
         """
         Determine verdict based on support and contradiction scores.
-        
-        Precedence:
-        1. INSUFFICIENT_EVIDENCE (no evidence)
-        2. MIXED (both support and contradiction above thresholds)
-        3. CONTRADICTED (contradiction above threshold)
-        4. SUPPORTED (support above threshold)
-        5. UNVERIFIED (default)
+        LSD §13 vocabulary: SUPPORTED, REFUTED, INSUFFICIENT.
         """
-        # Check for MIXED (both significant)
-        if (support > self.config.mixed_threshold and 
-            contradiction > self.config.mixed_threshold):
-            return FactCheckVerdict.MIXED
-        
         # Check for SUPPORTED
         if support > self.config.support_threshold and contradiction < 0.3:
             return FactCheckVerdict.SUPPORTED
         
-        # Check for CONTRADICTED
+        # Check for REFUTED
         if contradiction > self.config.contradiction_threshold and support < 0.3:
-            return FactCheckVerdict.CONTRADICTED
+            return FactCheckVerdict.REFUTED
         
-        # Check for INSUFFICIENT_EVIDENCE
-        if support < 0.2 and contradiction < 0.2:
-            return FactCheckVerdict.INSUFFICIENT_EVIDENCE
-        
-        return FactCheckVerdict.UNVERIFIED
+        # Mixed or weak signals → INSUFFICIENT
+        return FactCheckVerdict.INSUFFICIENT
+    
+    def _determine_evidence_tier(self, source_id: str) -> EvidenceTier:
+        """Assign evidence tier based on source priority (LSD §13)."""
+        source = self.source_registry.get_source(source_id)
+        if source:
+            if source.priority >= 8:
+                return EvidenceTier.TIER_1
+            elif source.priority >= 4:
+                return EvidenceTier.TIER_2
+        return EvidenceTier.TIER_3
     
     def _calculate_confidence(self, support: float, contradiction: float,
                              evidence_count: int) -> float:

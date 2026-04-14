@@ -183,6 +183,7 @@ class DebateDatabase:
                 allowed_count INTEGER DEFAULT 0,
                 blocked_count INTEGER DEFAULT 0,
                 block_reasons TEXT,
+                frame_id TEXT,
                 overall_for REAL DEFAULT 0.0,
                 overall_against REAL DEFAULT 0.0,
                 margin_d REAL DEFAULT 0.0,
@@ -196,6 +197,8 @@ class DebateDatabase:
         """)
         
         # Audit records table
+        self._ensure_column(cursor, 'snapshots', 'frame_id', 'TEXT')
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_records (
                 audit_id TEXT PRIMARY KEY,
@@ -481,9 +484,9 @@ class DebateDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO snapshots
             (snapshot_id, debate_id, timestamp, trigger_type, template_name, template_version,
-             allowed_count, blocked_count, block_reasons, overall_for, overall_against,
+             allowed_count, blocked_count, block_reasons, frame_id, overall_for, overall_against,
              margin_d, ci_d_lower, ci_d_upper, confidence, verdict, topic_scores)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             snapshot_data['snapshot_id'],
             snapshot_data['debate_id'],
@@ -494,6 +497,7 @@ class DebateDatabase:
             snapshot_data.get('allowed_count', 0),
             snapshot_data.get('blocked_count', 0),
             json.dumps(snapshot_data.get('block_reasons', {})),
+            snapshot_data.get('frame_id'),
             snapshot_data.get('overall_for', 0.0),
             snapshot_data.get('overall_against', 0.0),
             snapshot_data.get('margin_d', 0.0),

@@ -78,6 +78,14 @@ class SourceRegistry:
         """Get allowlist by version"""
         return self._allowlists.get(version)
     
+    def get_source(self, source_id: str) -> Optional[ApprovedSource]:
+        """Get a source by ID across all allowlists."""
+        for allowlist in self._allowlists.values():
+            for source in allowlist.approved_sources:
+                if source.source_id == source_id:
+                    return source
+        return None
+    
     def register_allowlist(self, allowlist: AllowlistVersion):
         """Register a new allowlist version"""
         self._allowlists[allowlist.version] = allowlist

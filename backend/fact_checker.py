@@ -11,7 +11,7 @@ import time
 import random
 
 from models import (
-    FactCheckResult, EvidenceRecord, FactCheckVerdict, FactCheckStatus
+    FactCheckResult, EvidenceRecord, FactCheckVerdict, FactCheckStatus, EvidenceTier
 )
 
 
@@ -172,13 +172,10 @@ class FactChecker:
             verdict = FactCheckVerdict.SUPPORTED
             confidence = 0.7 + (support - 0.7) * 0.5
         elif contradiction > self.CONFIG["contradiction_threshold"] and support < 0.3:
-            verdict = FactCheckVerdict.CONTRADICTED
+            verdict = FactCheckVerdict.REFUTED
             confidence = 0.7 + (contradiction - 0.7) * 0.5
-        elif support > 0.4 and contradiction > 0.4:
-            verdict = FactCheckVerdict.MIXED
-            confidence = 0.5
         else:
-            verdict = FactCheckVerdict.INSUFFICIENT_EVIDENCE
+            verdict = FactCheckVerdict.INSUFFICIENT
             confidence = 0.3
         
         # Check for near-threshold confidence penalty
@@ -189,7 +186,7 @@ class FactChecker:
         
         # Create simulated evidence
         evidence = []
-        if verdict != FactCheckVerdict.INSUFFICIENT_EVIDENCE:
+        if verdict != FactCheckVerdict.INSUFFICIENT:
             evidence = [
                 EvidenceRecord(
                     source_url="https://example.com/source1",
@@ -202,7 +199,8 @@ class FactChecker:
                     relevance_score=0.85,
                     support_score=support,
                     contradiction_score=contradiction,
-                    selected_rank=1
+                    selected_rank=1,
+                    evidence_tier=EvidenceTier.TIER_2
                 )
             ]
         

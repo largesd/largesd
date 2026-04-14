@@ -7,6 +7,7 @@ import sys
 import time
 import uuid
 import json
+import math
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Any
 from collections import defaultdict
@@ -22,6 +23,9 @@ from tokenizer import ContentMassCalculator, get_canonical_tokenizer
 from modulation import ModulationEngine, ModulationOutcome, create_modulated_post
 from snapshot_diff import SnapshotDiffEngine
 from evidence_targets import EvidenceTargetAnalyzer
+from frame_registry import get_public_frame_registry, FrameRegistry
+from governance import GovernanceManager
+from selection_engine import SelectionEngine
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from skills.fact_checking import FactCheckingSkill
@@ -86,6 +90,15 @@ class DebateEngineV2:
         # Initialize evidence target analyzer (MSD §15)
         self.evidence_analyzer = EvidenceTargetAnalyzer(self.db)
         
+        # Initialize frame registry (LSD §5)
+        self.frame_registry = get_public_frame_registry()
+        
+        # Initialize governance manager (LSD §20)
+        self.governance = GovernanceManager(self.db)
+        
+        # Initialize selection engine (LSD §11)
+        self.selection_engine = SelectionEngine()
+        
         # In-memory cache
         self._debate_cache: Dict[str, Dict] = {}
 
@@ -117,7 +130,7 @@ class DebateEngineV2:
 
         return resolved_facts
     
-    def create_debate(self, resolution: str, scope: str) -> Dict:
+    def create_debate(self, resolution: str, scope: str, user_id: Optional[str] = None) -> Dict:
         """Create a new debate"""
         debate_id = f"debate_{uuid.uuid4().hex[:8]}"
         
@@ -126,7 +139,8 @@ class DebateEngineV2:
             'resolution': resolution,
             'scope': scope,
             'created_at': datetime.now().isoformat(),
-            'current_snapshot_id': None
+            'current_snapshot_id': None,
+            'user_id': user_id
         }
         
         # Save to database
@@ -151,7 +165,7 @@ class DebateEngineV2:
     
     def submit_post(self, debate_id: str, side: str, topic_id: Optional[str],
                     facts: str, inference: str,
-                    counter_arguments: str = "") -> Dict:
+                    counter_arguments: str = "", user_id: Optional[str] = None) -> Dict:
         """
         Submit a new post to a debate
         """
@@ -164,6 +178,7 @@ class DebateEngineV2:
         post_data = {
             'post_id': post_id,
             'debate_id': debate_id,
+            'user_id': user_id,
             'side': side.upper(),
             'topic_id': topic_id,
             'facts': facts,
@@ -435,6 +450,60 @@ class DebateEngineV2:
             )
             topic_content_mass[tid] = content_mass
         
+        # LSD §11: Update centrality, distinct_support, and cross-references
+        self._update_canonical_metrics(topic_facts, topic_arguments)
+        
+        # LSD §11: Run deterministic stratified selection per topic-side
+        selected_topic_facts: Dict[str, List[Dict]] = defaultdict(list)
+        selected_topic_arguments: Dict[str, List[Dict]] = defaultdict(list)
+        selection_diagnostics: Dict[str, Any] = {}
+        selection_seed = 42  # Published deterministic seed
+        
+        for topic in topics:
+            tid = topic.topic_id
+            for side in ['FOR', 'AGAINST']:
+                # Set budgets based on pool sizes (policy-parameter)
+                facts_pool = topic_facts.get(tid, [])
+                args_pool = topic_arguments.get(tid, [])
+                budgets = {
+                    'K_E': max(3, min(len([f for f in facts_pool if f.get('side') == side]), 10)),
+                    'K_N': max(1, min(0, 5)),  # No normative facts in current extraction; reserve slot
+                    'K_A': max(3, min(len([a for a in args_pool if a.get('side') == side]), 8)),
+                }
+                
+                selected_set = self.selection_engine.select_for_topic_side(
+                    facts_pool, args_pool, tid, side, budgets, selection_seed
+                )
+                
+                selected_topic_facts[tid].extend(
+                    [dict(f) for f in selected_set.selected_facts]
+                )
+                selected_topic_arguments[tid].extend(
+                    [dict(a) for a in selected_set.selected_arguments]
+                )
+                
+                # Mark selected items
+                selected_fact_ids = set(selected_set.selected_fact_ids)
+                selected_arg_ids = set(selected_set.selected_arg_ids)
+                for f in facts_pool:
+                    if f['canon_fact_id'] in selected_fact_ids:
+                        f['is_selected'] = True
+                        f['is_rarity_slice'] = f.get('canon_fact_id') in (
+                            selected_set.diagnostics.get('pools', {})
+                            .get('empirical_facts', {})
+                            .get('rarity_ids', [])
+                        )
+                for a in args_pool:
+                    if a['canon_arg_id'] in selected_arg_ids:
+                        a['is_selected'] = True
+                        a['is_rarity_slice'] = a.get('canon_arg_id') in (
+                            selected_set.diagnostics.get('pools', {})
+                            .get('arguments', {})
+                            .get('rarity_ids', [])
+                        )
+                
+                selection_diagnostics[f"{tid}_{side}"] = self.selection_engine.get_diagnostics(selected_set)
+        
         # Generate steelman summaries
         for topic in topics:
             tid = topic.topic_id
@@ -451,33 +520,40 @@ class DebateEngineV2:
                 summary_against = self.llm_client.generate_steelman_summary(against_args, 'AGAINST')
                 topic.summary_against = summary_against.get('summary', '')
         
-        # Compute scores
+        # Compute scores on SELECTED items (LSD §11 adjudication budget)
         scores = self.scoring_engine.compute_debate_scores(
             [{'topic_id': t.topic_id, 'name': t.name, 'scope': t.scope,
               'relevance': t.relevance, 'drift_score': t.drift_score,
               'coherence': t.coherence, 'distinctness': t.distinctness}
              for t in topics],
-            topic_facts,
-            topic_arguments,
+            dict(selected_topic_facts),
+            dict(selected_topic_arguments),
             topic_content_mass
         )
         
-        # Run replicates for verdict
+        # Run replicates for verdict on selected items
         replicates = self.scoring_engine.run_replicates(
             [{'topic_id': t.topic_id} for t in topics],
-            topic_facts,
-            topic_arguments,
+            dict(selected_topic_facts),
+            dict(selected_topic_arguments),
             topic_content_mass
         )
         
         verdict_result = self.scoring_engine.compute_verdict(replicates)
         
-        # Compute counterfactuals
+        # Compute counterfactuals on full sets
         counterfactuals = self.scoring_engine.compute_counterfactuals(
             [{'topic_id': t.topic_id} for t in topics],
             topic_facts,
             topic_arguments,
             topic_content_mass
+        )
+        
+        # LSD §17: Build decision dossier
+        decision_dossier = self._build_decision_dossier(
+            topics, topic_facts, topic_arguments,
+            dict(selected_topic_facts), dict(selected_topic_arguments),
+            scores['topic_scores']
         )
         
         # Run audits
@@ -502,6 +578,10 @@ class DebateEngineV2:
             topic_content_mass
         )
         
+        # LSD §5: Get active frame
+        active_frame = self.frame_registry.get_active_frame()
+        frame_id = active_frame.frame_id if active_frame else None
+        
         # Create snapshot
         snapshot_id = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}"
         
@@ -515,6 +595,7 @@ class DebateEngineV2:
             'allowed_count': len(allowed_posts),
             'blocked_count': len(blocked_posts),
             'block_reasons': dict(block_reasons),
+            'frame_id': frame_id,
             'overall_for': scores['overall_for'],
             'overall_against': scores['overall_against'],
             'margin_d': scores['margin_d'],
@@ -537,7 +618,8 @@ class DebateEngineV2:
             ('extraction_stability', stability_audit),
             ('side_label_symmetry', symmetry_audit),
             ('relevance_sensitivity', relevance_audit),
-            ('topic_drift', drift_report)
+            ('topic_drift', drift_report),
+            ('selection_transparency', selection_diagnostics),
         ]:
             self.db.save_audit({
                 'audit_id': f"audit_{snapshot_id}_{audit_type}",
@@ -548,8 +630,10 @@ class DebateEngineV2:
             })
         
         # Return complete snapshot data
+        frame_info = self.get_frame_info()
         return {
             **snapshot_data,
+            'frame': frame_info,
             'topics': [
                 {
                     'topic_id': t.topic_id,
@@ -568,13 +652,17 @@ class DebateEngineV2:
             ],
             'canonical_facts': topic_facts,
             'canonical_arguments': topic_arguments,
+            'selected_facts': dict(selected_topic_facts),
+            'selected_arguments': dict(selected_topic_arguments),
             'audits': {
                 'extraction_stability': stability_audit,
                 'side_label_symmetry': symmetry_audit,
                 'relevance_sensitivity': relevance_audit,
-                'topic_drift': drift_report
+                'topic_drift': drift_report,
+                'selection_transparency': selection_diagnostics,
             },
-            'counterfactuals': counterfactuals
+            'counterfactuals': counterfactuals,
+            'decision_dossier': decision_dossier,
         }
     
     def get_snapshot(self, snapshot_id: str) -> Optional[Dict]:
@@ -671,6 +759,105 @@ class DebateEngineV2:
             'queue': self.fact_checker.get_queue_stats(),
             'mode': self._fact_check_mode,
             'async_enabled': self._async_enabled,
+        }
+    
+    def _update_canonical_metrics(self, topic_facts: Dict[str, List[Dict]],
+                                   topic_arguments: Dict[str, List[Dict]]):
+        """
+        LSD §11: Compute centrality and distinct_support for canonical items,
+        and update fact references from arguments.
+        """
+        for tid, facts in topic_facts.items():
+            args = topic_arguments.get(tid, [])
+            
+            # Update referenced_by_au_ids on facts using arguments
+            fact_refs = defaultdict(set)
+            for arg in args:
+                for fact_id in arg.get('supporting_facts', []):
+                    fact_refs[fact_id].add(arg.get('canon_arg_id'))
+            
+            for fact in facts:
+                fact['referenced_by_au_ids'] = list(fact_refs.get(fact['canon_fact_id'], set()))
+                # Centrality = log(1 + distinct_AU_refs)
+                au_refs = len(fact.get('referenced_by_au_ids', []))
+                fact['centrality'] = round(math.log1p(au_refs), 4)
+                # Distinct support proxy = number of member facts
+                fact['distinct_support'] = len(fact.get('member_fact_ids', set()))
+            
+            for arg in args:
+                au_refs = len(arg.get('member_au_ids', []))
+                arg['centrality'] = round(math.log1p(au_refs), 4)
+                arg['distinct_support'] = au_refs
+    
+    def _build_decision_dossier(self, topics: List[Topic],
+                                topic_facts: Dict[str, List[Dict]],
+                                topic_arguments: Dict[str, List[Dict]],
+                                selected_facts: Dict[str, List[Dict]],
+                                selected_args: Dict[str, List[Dict]],
+                                topic_scores: Dict) -> Dict:
+        """
+        LSD §17: Build decision dossier outputs.
+        """
+        decisive_premises = []
+        evidence_gaps = {}
+        
+        for topic in topics:
+            tid = topic.topic_id
+            facts = topic_facts.get(tid, [])
+            
+            for side in ['FOR', 'AGAINST']:
+                side_facts = [f for f in facts if f.get('side') == side]
+                
+                # Decisive premises: high decisiveness (|p - 0.5|)
+                for fact in side_facts:
+                    decisiveness = abs(fact.get('p_true', 0.5) - 0.5)
+                    if decisiveness > 0.2:
+                        decisive_premises.append({
+                            'canon_fact_id': fact['canon_fact_id'],
+                            'topic_id': tid,
+                            'side': side,
+                            'text': fact['canon_fact_text'][:200],
+                            'p_true': fact['p_true'],
+                            'decisiveness': round(decisiveness, 3),
+                        })
+                
+                # Evidence gap summary
+                insufficiency_rate = 0.0
+                tier_counts = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
+                total_facts = len(side_facts)
+                if total_facts > 0:
+                    insufficient_count = sum(1 for f in side_facts if f.get('p_true', 0.5) == 0.5)
+                    insufficiency_rate = insufficient_count / total_facts
+                    
+                    for f in side_facts:
+                        for tier, count in f.get('evidence_tier_counts', {}).items():
+                            tier_counts[tier] = tier_counts.get(tier, 0) + count
+                
+                evidence_gaps[f"{tid}_{side}"] = {
+                    'insufficiency_rate': round(insufficiency_rate, 3),
+                    'tier_distribution': tier_counts,
+                    'total_facts': total_facts,
+                }
+        
+        # Sort decisive premises by decisiveness
+        decisive_premises.sort(key=lambda x: x['decisiveness'], reverse=True)
+        
+        return {
+            'decisive_premises': decisive_premises[:20],
+            'evidence_gaps': evidence_gaps,
+        }
+    
+    def get_frame_info(self) -> Optional[Dict]:
+        """Get active frame info for snapshots and API (LSD §5)."""
+        frame = self.frame_registry.get_active_frame()
+        if not frame:
+            return None
+        return {
+            'frame_id': frame.frame_id,
+            'version': frame.version,
+            'statement': frame.statement,
+            'scope': frame.scope,
+            'dossier': frame.to_dossier(),
         }
 
     def shutdown(self):

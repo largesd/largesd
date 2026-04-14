@@ -8,12 +8,18 @@ from enum import Enum
 import uuid
 
 
+class EvidenceTier(Enum):
+    """Evidence quality tier per LSD §13"""
+    TIER_1 = "TIER_1"  # primary/official
+    TIER_2 = "TIER_2"  # reputable secondary synthesis
+    TIER_3 = "TIER_3"  # limited/uncertain
+
+
 class FactCheckVerdict(Enum):
     """Deterministic verdict values"""
     SUPPORTED = "SUPPORTED"
-    CONTRADICTED = "CONTRADICTED"
-    MIXED = "MIXED"
-    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    REFUTED = "REFUTED"
+    INSUFFICIENT = "INSUFFICIENT"
     UNVERIFIED = "UNVERIFIED"
 
 
@@ -97,6 +103,7 @@ class EvidenceRecord:
     support_score: float  # [0,1]
     contradiction_score: float  # [0,1]
     selected_rank: int
+    evidence_tier: EvidenceTier = EvidenceTier.TIER_3
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -111,6 +118,7 @@ class EvidenceRecord:
             'support_score': self.support_score,
             'contradiction_score': self.contradiction_score,
             'selected_rank': self.selected_rank,
+            'evidence_tier': self.evidence_tier.value,
         }
 
 
@@ -127,7 +135,9 @@ class FactCheckResult:
     factuality_score: float  # P(fact true) ∈ [0,1]
     confidence: float  # confidence in the fact-check quality ∈ [0,1]
     confidence_explanation: Optional[str]
+    operationalization: Optional[str] = None
     evidence: List[EvidenceRecord] = field(default_factory=list)
+    evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     invalidated_at: Optional[datetime] = None
     invalidation_reason: Optional[str] = None
@@ -151,7 +161,9 @@ class FactCheckResult:
             'factuality_score': self.factuality_score,
             'confidence': self.confidence,
             'confidence_explanation': self.confidence_explanation,
+            'operationalization': self.operationalization,
             'evidence': [e.to_dict() for e in self.evidence],
+            'evidence_tier_counts': self.evidence_tier_counts,
             'created_at': self.created_at.isoformat(),
             'invalidated_at': self.invalidated_at.isoformat() if self.invalidated_at else None,
             'invalidation_reason': self.invalidation_reason,

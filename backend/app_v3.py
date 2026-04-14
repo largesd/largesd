@@ -1047,14 +1047,8 @@ def get_decision_dossier():
     if not snapshot:
         return jsonify({'error': 'No snapshot available'}), 404
     
-    # Retrieve decision dossier from snapshot audits or recompute
+    # Retrieve decision dossier from snapshot audits if available
     audits = debate_engine.get_audits_for_snapshot(snapshot['snapshot_id'])
-    
-    # Get counterfactuals
-    counterfactuals = debate_engine.scoring_engine.compute_counterfactuals(
-        [{'topic_id': t['topic_id']} for t in db.get_topics_by_debate(debate_id)],
-        {}, {}, {}
-    )
     
     # Build evidence gap summary from topic scores
     topic_scores = json.loads(snapshot.get('topic_scores', '{}'))
@@ -1070,6 +1064,9 @@ def get_decision_dossier():
                 'f_all': scores.get('factuality', 0.5),
             }
     
+    # Get counterfactuals from latest snapshot generation if available
+    selection_diag = audits.get('selection_transparency', {})
+    
     return jsonify({
         'snapshot_id': snapshot['snapshot_id'],
         'frame': debate_engine.get_frame_info(),
@@ -1078,8 +1075,8 @@ def get_decision_dossier():
         'overall_for': snapshot['overall_for'],
         'overall_against': snapshot['overall_against'],
         'margin_d': snapshot['margin_d'],
-        'counterfactuals': counterfactuals,
         'evidence_gaps': evidence_gaps,
+        'selection_diagnostics': selection_diag,
     })
 
 

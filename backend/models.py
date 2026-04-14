@@ -27,11 +27,16 @@ class BlockReason(Enum):
     PROMPT_INJECTION = "prompt_injection"
 
 
+class EvidenceTier(Enum):
+    TIER_1 = "TIER_1"  # primary/official
+    TIER_2 = "TIER_2"  # reputable secondary synthesis
+    TIER_3 = "TIER_3"  # limited/uncertain
+
+
 class FactCheckVerdict(Enum):
     SUPPORTED = "SUPPORTED"
-    CONTRADICTED = "CONTRADICTED"
-    MIXED = "MIXED"
-    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    REFUTED = "REFUTED"
+    INSUFFICIENT = "INSUFFICIENT"
     UNVERIFIED = "UNVERIFIED"
 
 
@@ -58,6 +63,7 @@ class EvidenceRecord:
     support_score: float
     contradiction_score: float
     selected_rank: int
+    evidence_tier: EvidenceTier = EvidenceTier.TIER_3
 
 
 @dataclass
@@ -73,7 +79,9 @@ class FactCheckResult:
     factuality_score: float  # P(fact true) ∈ [0,1]
     confidence: float  # confidence in the fact-check quality
     confidence_explanation: Optional[str]
+    operationalization: Optional[str] = None  # what would confirm/refute
     evidence: List[EvidenceRecord] = field(default_factory=list)
+    evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     invalidated_at: Optional[datetime] = None
     invalidation_reason: Optional[str] = None
@@ -126,6 +134,10 @@ class CanonicalFact:
     merged_provenance_links: List[Span]
     referenced_by_au_ids: Set[str]
     p_true: float = 0.5
+    centrality: float = 0.0
+    distinct_support: int = 0
+    is_rarity_slice: bool = False
+    evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -153,6 +165,9 @@ class CanonicalArgument:
     merged_provenance: List[Span]
     reasoning_score: float = 0.5  # median across judges
     reasoning_iqr: float = 0.0
+    centrality: float = 0.0
+    distinct_support: int = 0
+    is_rarity_slice: bool = False
 
 
 @dataclass
@@ -218,6 +233,7 @@ class Snapshot:
     canonical_facts: Dict[str, List[CanonicalFact]]  # topic_id -> facts
     canonical_arguments: Dict[str, List[CanonicalArgument]]  # topic_id -> args
     topic_scores: Dict[str, TopicSideScores]  # "topic_id_side" -> scores
+    frame_id: Optional[str] = None
     overall_for: float = 0.0
     overall_against: float = 0.0
     margin_d: float = 0.0

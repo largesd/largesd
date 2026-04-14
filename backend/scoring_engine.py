@@ -43,15 +43,37 @@ class ScoringEngine:
         self.num_judges = num_judges
         self.num_replicates = num_replicates
     
-    def compute_factuality(self, facts: List[Dict]) -> float:
+    def compute_factuality(self, facts: List[Dict]) -> Dict[str, float]:
         """
-        Compute Factuality F_{t,s}
-        F_{t,s} = (1 / K_{t,s}) * Σ_k p_{t,s,k}
+        Compute Factuality F_{t,s} and LSD §13 diagnostics.
+        Returns dict with f_all, f_supported_only, insufficiency_rate.
         """
         if not facts:
-            return 0.5
+            return {
+                'f_all': 0.5,
+                'f_supported_only': 0.5,
+                'insufficiency_rate': 1.0,
+            }
         
-        return sum(f.get('p_true', 0.5) for f in facts) / len(facts)
+        p_values = [f.get('p_true', 0.5) for f in facts]
+        f_all = sum(p_values) / len(facts)
+        
+        # LSD §13: facts with p=0.5 are treated as INSUFFICIENT
+        decisive_facts = [f for f in facts if f.get('p_true', 0.5) != 0.5]
+        insufficient_facts = [f for f in facts if f.get('p_true', 0.5) == 0.5]
+        
+        if decisive_facts:
+            f_supported_only = sum(f.get('p_true', 0.5) for f in decisive_facts) / len(decisive_facts)
+        else:
+            f_supported_only = 0.5
+        
+        insufficiency_rate = len(insufficient_facts) / len(facts)
+        
+        return {
+            'f_all': f_all,
+            'f_supported_only': f_supported_only,
+            'insufficiency_rate': insufficiency_rate,
+        }
     
     def compute_reasoning_strength(self, arguments: List[Dict],
                                    side: str) -> Tuple[float, float, List[Dict]]:
@@ -222,13 +244,15 @@ class ScoringEngine:
             against_args = [a for a in args if a.get('side') == 'AGAINST']
             
             # Compute FOR scores
-            f_for = self.compute_factuality(for_facts)
+            f_for_diagnostics = self.compute_factuality(for_facts)
+            f_for = f_for_diagnostics['f_all']
             reason_for, reason_iqr_for, judge_details_for = self.compute_reasoning_strength(for_args, 'FOR')
             cov_for, cov_iqr_for = self.compute_coverage(for_args, against_args, facts)
             q_for = self.compute_quality(f_for, reason_for, cov_for)
             
             # Compute AGAINST scores
-            f_against = self.compute_factuality(against_facts)
+            f_against_diagnostics = self.compute_factuality(against_facts)
+            f_against = f_against_diagnostics['f_all']
             reason_against, reason_iqr_against, judge_details_against = self.compute_reasoning_strength(against_args, 'AGAINST')
             cov_against, cov_iqr_against = self.compute_coverage(against_args, for_args, facts)
             q_against = self.compute_quality(f_against, reason_against, cov_against)
@@ -238,6 +262,8 @@ class ScoringEngine:
                 'topic_id': topic_id,
                 'side': 'FOR',
                 'factuality': round(f_for, 2),
+                'f_supported_only': round(f_for_diagnostics['f_supported_only'], 2),
+                'insufficiency_rate': round(f_for_diagnostics['insufficiency_rate'], 2),
                 'reasoning': round(reason_for, 2),
                 'coverage': round(cov_for, 2),
                 'quality': round(q_for, 2),
@@ -253,6 +279,8 @@ class ScoringEngine:
                 'topic_id': topic_id,
                 'side': 'AGAINST',
                 'factuality': round(f_against, 2),
+                'f_supported_only': round(f_against_diagnostics['f_supported_only'], 2),
+                'insufficiency_rate': round(f_against_diagnostics['insufficiency_rate'], 2),
                 'reasoning': round(reason_against, 2),
                 'coverage': round(cov_against, 2),
                 'quality': round(q_against, 2),
