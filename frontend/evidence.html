@@ -23,7 +23,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate_v3.html">New Debate / Post Point</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html">Audits</a>
@@ -164,7 +164,7 @@ function showEvidenceContent() {
 
 function renderDebateChoices(debates) {
   if (!debates.length) {
-    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate_v3.html">New Debate / Post Point</a> to generate live evidence targets.';
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to generate live evidence targets.';
   }
 
   const buttons = debates.map((debate) => `
@@ -255,7 +255,7 @@ async function initEvidencePage() {
 
   const snapshot = await BDA.loadSnapshot();
   if (!snapshot || !snapshot.has_snapshot) {
-    showEvidenceEmpty('This debate does not have a snapshot yet. Generate one from <a href="new_debate_v3.html">New Debate / Post Point</a> first.');
+    showEvidenceEmpty('This debate does not have a snapshot yet. Generate one from <a href="new_debate.html">New Debate / Post Point</a> first.');
     return;
   }
 

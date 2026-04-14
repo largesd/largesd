@@ -1206,10 +1206,6 @@ def serve_static(path):
     """Serve static files"""
     if not path:
         path = 'index.html'
-    elif path == 'new_debate.html':
-        # Keep the long-lived public URL stable when v3 is the active server.
-        path = 'new_debate_v3.html'
-
     # Security: prevent directory traversal
     path = path.replace('..', '').lstrip('/')
     

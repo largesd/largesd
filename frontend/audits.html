@@ -27,7 +27,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate_v3.html">New Debate / Post Point</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html" class="active" aria-current="page">Audits</a>
@@ -236,7 +236,7 @@ function showAuditsContent() {
 
 function renderDebateChoices(debates) {
   if (!debates.length) {
-    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate_v3.html">New Debate / Post Point</a> to unlock live audits.';
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to unlock live audits.';
   }
 
   const buttons = debates.map((debate) => `
@@ -375,7 +375,7 @@ async function initAuditsPage() {
 
   const snapshot = await BDA.loadSnapshot();
   if (!snapshot || !snapshot.has_snapshot) {
-    showAuditsEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate_v3.html">New Debate / Post Point</a> first.');
+    showAuditsEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate.html">New Debate / Post Point</a> first.');
     return;
   }
 

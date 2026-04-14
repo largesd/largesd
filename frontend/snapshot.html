@@ -25,7 +25,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate_v3.html">New Debate / Post Point</a>
+      <a href="new_debate.html">New Debate / Post Point</a>
       <a href="snapshot.html" class="active" aria-current="page">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html">Audits</a>
@@ -195,7 +195,7 @@ function showSnapshotContent() {
 
 function renderDebateChoices(debates) {
   if (!debates.length) {
-    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate_v3.html">New Debate / Post Point</a> to generate a live snapshot.';
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to generate a live snapshot.';
   }
 
   const buttons = debates.map((debate) => `
@@ -315,7 +315,7 @@ async function initSnapshotPage() {
 
   const snapshot = await BDA.loadSnapshot();
   if (!snapshot || !snapshot.has_snapshot) {
-    showSnapshotEmpty('This debate does not have a snapshot yet. Add posts in <a href="new_debate_v3.html">New Debate / Post Point</a>, then generate a snapshot.');
+    showSnapshotEmpty('This debate does not have a snapshot yet. Add posts in <a href="new_debate.html">New Debate / Post Point</a>, then generate a snapshot.');
     return;
   }
 
