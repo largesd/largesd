@@ -14,7 +14,7 @@
       "title": "Create a debate from the UI from a blank-start snapshot state",
       "checks": [
         "When the app starts without an active debate, the create-debate form is visible.",
-        "Submitting a resolution and scope creates the active debate and unlocks posting.",
+        "Submitting a motion, moderation criteria, and debate frame creates the active debate and unlocks posting.",
         "The public posting surface remains identity-blind and centered on arguments rather than contributors."
       ]
     },

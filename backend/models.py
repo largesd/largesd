@@ -176,6 +176,7 @@ class Topic:
     topic_id: str
     name: str
     scope: str
+    frame_id: str = ""
     relevance: float = 0.0  # Rel_t - content mass share
     drift_score: float = 0.0
     coherence: float = 0.0
@@ -209,6 +210,7 @@ class Post:
     inference: str
     counter_arguments: str
     timestamp: datetime
+    frame_id: str = ""
     modulation_outcome: ModulationOutcome = ModulationOutcome.ALLOWED
     block_reason: Optional[BlockReason] = None
     
@@ -234,6 +236,8 @@ class Snapshot:
     canonical_arguments: Dict[str, List[CanonicalArgument]]  # topic_id -> args
     topic_scores: Dict[str, TopicSideScores]  # "topic_id_side" -> scores
     frame_id: Optional[str] = None
+    side_order: List[str] = field(default_factory=list)
+    overall_scores: Dict[str, float] = field(default_factory=dict)
     overall_for: float = 0.0
     overall_against: float = 0.0
     margin_d: float = 0.0
@@ -244,12 +248,38 @@ class Snapshot:
 
 
 @dataclass
+class DebateFrame:
+    """Structured frame defining debate question, sides, rubric, and scope."""
+    frame_id: str
+    debate_id: str
+    version: int
+    stage: str
+    motion: str
+    frame_summary: str
+    sides: List[Dict[str, str]]
+    evaluation_criteria: List[str]
+    definitions: List[Dict[str, str]]
+    scope_constraints: List[str]
+    created_at: datetime
+    label: str = ""
+    notes: str = ""
+    supersedes_frame_id: Optional[str] = None
+    framing_debate_id: Optional[str] = None
+    is_active: bool = True
+
+
+@dataclass
 class Debate:
     """Complete debate state"""
     debate_id: str
     resolution: str
     scope: str
     created_at: datetime
+    motion: str = ""
+    moderation_criteria: str = ""
+    debate_frame: str = ""
+    active_frame_id: Optional[str] = None
+    active_frame: Optional[DebateFrame] = None
     user_id: Optional[str] = None  # Creator of the debate
     current_snapshot: Optional[Snapshot] = None
     snapshots: List[Snapshot] = field(default_factory=list)

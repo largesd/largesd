@@ -13,6 +13,7 @@ from flask_cors import CORS
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from debate_engine_v2 import DebateEngineV2
+from debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
@@ -31,6 +32,22 @@ debate_engine = DebateEngineV2(
 current_debate = None
 
 
+def _debate_response_payload(debate):
+    hydrated = hydrate_debate_record(debate) or {}
+    active_frame = hydrated.get("active_frame")
+    return {
+        "debate_id": hydrated.get("debate_id"),
+        "motion": hydrated.get("motion"),
+        "resolution": hydrated.get("resolution"),
+        "moderation_criteria": hydrated.get("moderation_criteria"),
+        "debate_frame": hydrated.get("debate_frame"),
+        "scope": hydrated.get("scope"),
+        "active_frame_id": hydrated.get("active_frame_id"),
+        "active_frame": active_frame,
+        "created_at": hydrated.get("created_at"),
+    }
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -38,6 +55,7 @@ def health():
         "status": "healthy",
         "version": "2.0",
         "auth_enabled": False,
+        "supports_frame_versioning": True,
         "timestamp": datetime.now().isoformat()
     })
 
@@ -48,17 +66,16 @@ def create_debate():
     global current_debate
     
     data = request.json or {}
-    resolution = data.get('resolution', 'Resolved: AI should be banned.')
-    scope = data.get('scope', 'Whether AI development should be banned and the implications.')
-    
-    current_debate = debate_engine.create_debate(resolution, scope)
-    
-    return jsonify({
-        "debate_id": current_debate['debate_id'],
-        "resolution": current_debate['resolution'],
-        "scope": current_debate['scope'],
-        "created_at": current_debate['created_at']
-    })
+    proposal, missing_fields = parse_debate_proposal_payload(data)
+    if missing_fields:
+        return jsonify({
+            "error": f"Missing required fields: {', '.join(missing_fields)}",
+            "missing_fields": missing_fields,
+        }), 400
+
+    current_debate = debate_engine.create_debate(data)
+
+    return jsonify(_debate_response_payload(current_debate))
 
 
 @app.route('/api/debate', methods=['GET'])
@@ -70,21 +87,77 @@ def get_debate():
         # Return empty state when no debate has been started
         return jsonify({
             "debate_id": None,
+            "motion": None,
             "resolution": None,
+            "moderation_criteria": None,
+            "debate_frame": None,
             "scope": None,
+            "active_frame_id": None,
+            "active_frame": None,
+            "frame_count": 0,
             "created_at": None,
             "current_snapshot_id": None,
             "has_debate": False
         })
     
-    return jsonify({
-        "debate_id": current_debate['debate_id'],
-        "resolution": current_debate['resolution'],
-        "scope": current_debate['scope'],
-        "created_at": current_debate['created_at'],
+    payload = _debate_response_payload(current_debate)
+    payload["frame_count"] = len(
+        debate_engine.get_debate_frames(current_debate["debate_id"])
+    )
+    payload.update({
         "current_snapshot_id": current_debate.get('current_snapshot_id'),
         "has_debate": True
     })
+    return jsonify(payload)
+
+
+@app.route('/api/debate/frame', methods=['GET'])
+def get_active_frame():
+    """Get the active debate frame."""
+    global current_debate
+
+    if not current_debate:
+        return jsonify({"error": "No active debate"}), 400
+
+    return jsonify({
+        "debate_id": current_debate["debate_id"],
+        "active_frame": current_debate.get("active_frame"),
+    })
+
+
+@app.route('/api/debate/frames', methods=['GET'])
+def list_debate_frames():
+    """List all debate frame versions."""
+    global current_debate
+
+    if not current_debate:
+        return jsonify({"error": "No active debate"}), 400
+
+    frames = debate_engine.get_debate_frames(current_debate["debate_id"])
+    return jsonify({
+        "debate_id": current_debate["debate_id"],
+        "active_frame_id": current_debate.get("active_frame_id"),
+        "frames": frames,
+    })
+
+
+@app.route('/api/debate/frames', methods=['POST'])
+def create_frame_version():
+    """Create and activate a new frame version on the current debate."""
+    global current_debate
+
+    if not current_debate:
+        return jsonify({"error": "No active debate"}), 400
+
+    data = request.json or {}
+    try:
+        current_debate = debate_engine.create_frame_version(
+            current_debate["debate_id"],
+            data,
+        )
+        return jsonify(_debate_response_payload(current_debate))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route('/api/debate/posts', methods=['POST'])
@@ -140,6 +213,7 @@ def generate_snapshot():
         
         return jsonify({
             "snapshot_id": snapshot['snapshot_id'],
+            "frame_id": snapshot.get('frame_id'),
             "timestamp": snapshot['timestamp'],
             "trigger_type": snapshot['trigger_type'],
             "template_name": snapshot['template_name'],
@@ -147,12 +221,16 @@ def generate_snapshot():
             "allowed_count": snapshot['allowed_count'],
             "blocked_count": snapshot['blocked_count'],
             "block_reasons": snapshot['block_reasons'],
+            "side_order": snapshot.get('side_order', []),
+            "overall_scores": snapshot.get('overall_scores', {}),
             "overall_for": snapshot['overall_for'],
             "overall_against": snapshot['overall_against'],
             "margin_d": snapshot['margin_d'],
             "ci_d": [snapshot['ci_d_lower'], snapshot['ci_d_upper']],
             "confidence": snapshot['confidence'],
             "verdict": snapshot['verdict'],
+            "leader": snapshot.get('leader'),
+            "runner_up": snapshot.get('runner_up'),
             "num_topics": len(snapshot.get('topics', [])),
             "audits_available": list(snapshot.get('audits', {}).keys())
         })
@@ -174,7 +252,10 @@ def get_current_snapshot():
         return jsonify({"error": "No active debate", "has_debate": False}), 400
     
     # Get latest snapshot from database
-    snapshot = debate_engine.db.get_latest_snapshot(current_debate['debate_id'])
+    snapshot = debate_engine.db.get_latest_snapshot(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     if not snapshot:
         # Return empty state when debate exists but no snapshot yet
@@ -182,6 +263,7 @@ def get_current_snapshot():
             "has_debate": True,
             "has_snapshot": False,
             "snapshot_id": None,
+            "frame_id": current_debate.get('active_frame_id'),
             "timestamp": None,
             "trigger_type": None,
             "template_name": None,
@@ -189,6 +271,8 @@ def get_current_snapshot():
             "allowed_count": 0,
             "blocked_count": 0,
             "block_reasons": {},
+            "side_order": [],
+            "overall_scores": {},
             "overall_for": None,
             "overall_against": None,
             "margin_d": None,
@@ -201,6 +285,7 @@ def get_current_snapshot():
         "has_debate": True,
         "has_snapshot": True,
         "snapshot_id": snapshot['snapshot_id'],
+        "frame_id": snapshot.get('frame_id'),
         "timestamp": snapshot['timestamp'],
         "trigger_type": snapshot['trigger_type'],
         "template_name": snapshot['template_name'],
@@ -208,6 +293,8 @@ def get_current_snapshot():
         "allowed_count": snapshot['allowed_count'],
         "blocked_count": snapshot['blocked_count'],
         "block_reasons": json.loads(snapshot.get('block_reasons', '{}')),
+        "side_order": json.loads(snapshot.get('side_order', '[]')),
+        "overall_scores": json.loads(snapshot.get('overall_scores', '{}')),
         "overall_for": snapshot['overall_for'],
         "overall_against": snapshot['overall_against'],
         "margin_d": snapshot['margin_d'],
@@ -226,21 +313,30 @@ def get_topics():
         return jsonify({"error": "No active debate"}), 400
     
     # Get topics from database
-    topics = debate_engine.db.get_topics_by_debate(current_debate['debate_id'])
+    topics = debate_engine.db.get_topics_by_debate(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     if not topics:
-        return jsonify({"topics": []})
+        return jsonify({"topics": [], "side_order": []})
     
     # Get latest snapshot for scores
-    snapshot = debate_engine.db.get_latest_snapshot(current_debate['debate_id'])
+    snapshot = debate_engine.db.get_latest_snapshot(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     topic_scores = {}
+    side_order = []
     
     if snapshot:
         topic_scores = json.loads(snapshot.get('topic_scores', '{}'))
+        side_order = json.loads(snapshot.get('side_order', '[]'))
     
     topics_data = []
     for topic in topics:
         tid = topic['topic_id']
+        scores_by_side = topic_scores.get(tid, {})
         
         topics_data.append({
             "topic_id": tid,
@@ -254,13 +350,14 @@ def get_topics():
             "summary_against": topic.get('summary_against', ''),
             "operation": topic.get('operation', 'created'),
             "parent_topic_ids": json.loads(topic.get('parent_topic_ids', '[]')),
+            "scores_by_side": scores_by_side,
             "scores": {
-                "FOR": topic_scores.get(f"{tid}_FOR", {}),
-                "AGAINST": topic_scores.get(f"{tid}_AGAINST", {})
-            }
+                "FOR": scores_by_side.get("FOR", {}),
+                "AGAINST": scores_by_side.get("AGAINST", {})
+            },
         })
     
-    return jsonify({"topics": topics_data})
+    return jsonify({"topics": topics_data, "side_order": side_order})
 
 
 @app.route('/api/debate/topics/<topic_id>/facts', methods=['GET'])
@@ -322,42 +419,62 @@ def get_verdict():
     if not current_debate:
         return jsonify({"error": "No active debate"}), 400
     
-    snapshot = debate_engine.db.get_latest_snapshot(current_debate['debate_id'])
+    snapshot = debate_engine.db.get_latest_snapshot(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     if not snapshot:
         return jsonify({"error": "No snapshot available"}), 404
     
     # Build topic contributions
     topic_scores = json.loads(snapshot.get('topic_scores', '{}'))
-    topics = debate_engine.db.get_topics_by_debate(current_debate['debate_id'])
+    overall_scores = json.loads(snapshot.get('overall_scores', '{}'))
+    side_order = json.loads(snapshot.get('side_order', '[]'))
+    topics = debate_engine.db.get_topics_by_debate(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     contributions = []
     for topic in topics:
         tid = topic['topic_id']
-        for_key = f"{tid}_FOR"
-        against_key = f"{tid}_AGAINST"
-        
-        for_scores = topic_scores.get(for_key, {})
-        against_scores = topic_scores.get(against_key, {})
-        
-        contribution = topic['relevance'] * (for_scores.get('quality', 0) - against_scores.get('quality', 0))
+        scores_by_side = topic_scores.get(tid, {})
+        ordered_sides = sorted(
+            scores_by_side.items(),
+            key=lambda item: (-item[1].get('quality', 0), item[0]),
+        )
+        leader_side = ordered_sides[0][0] if ordered_sides else None
+        runner_up_side = ordered_sides[1][0] if len(ordered_sides) > 1 else None
+        lead_quality = ordered_sides[0][1].get('quality', 0) if ordered_sides else 0
+        runner_up_quality = ordered_sides[1][1].get('quality', 0) if len(ordered_sides) > 1 else 0
+        contribution = topic['relevance'] * (lead_quality - runner_up_quality)
         contributions.append({
             "topic_id": tid,
             "name": topic['name'],
             "relevance": topic['relevance'],
-            "q_for": for_scores.get('quality', 0),
-            "q_against": against_scores.get('quality', 0),
+            "scores_by_side": scores_by_side,
+            "q_for": scores_by_side.get('FOR', {}).get('quality', 0),
+            "q_against": scores_by_side.get('AGAINST', {}).get('quality', 0),
+            "leader_side": leader_side,
+            "runner_up_side": runner_up_side,
             "contribution_to_d": round(contribution, 4)
         })
     
     return jsonify({
         "snapshot_id": snapshot['snapshot_id'],
+        "frame_id": snapshot.get('frame_id'),
+        "side_order": side_order,
+        "overall_scores": overall_scores,
         "overall_for": snapshot['overall_for'],
         "overall_against": snapshot['overall_against'],
         "margin_d": snapshot['margin_d'],
         "ci_d": [snapshot['ci_d_lower'], snapshot['ci_d_upper']],
         "confidence": snapshot['confidence'],
         "verdict": snapshot['verdict'],
+        "leader": json.loads(snapshot.get('overall_scores', '{}')) and max(
+            overall_scores.items(), key=lambda item: item[1]
+        )[0] if overall_scores else None,
         "topic_contributions": contributions
     })
 
@@ -370,7 +487,10 @@ def get_audits():
     if not current_debate:
         return jsonify({"error": "No active debate"}), 400
     
-    snapshot = debate_engine.db.get_latest_snapshot(current_debate['debate_id'])
+    snapshot = debate_engine.db.get_latest_snapshot(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     if not snapshot:
         return jsonify({"error": "No snapshot available"}), 404
@@ -379,7 +499,10 @@ def get_audits():
     audits = debate_engine.get_audits_for_snapshot(snapshot['snapshot_id'])
     
     # Get topic geometry
-    topics = debate_engine.db.get_topics_by_debate(current_debate['debate_id'])
+    topics = debate_engine.db.get_topics_by_debate(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     topic_geometry = [
         {
             "topic_id": t['topic_id'],
@@ -428,14 +551,20 @@ def get_evidence_targets():
     if not current_debate:
         return jsonify({"error": "No active debate"}), 400
     
-    snapshot = debate_engine.db.get_latest_snapshot(current_debate['debate_id'])
+    snapshot = debate_engine.db.get_latest_snapshot(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     
     if not snapshot:
         return jsonify({"error": "No snapshot available"}), 404
     
     # Get all facts
     all_facts = []
-    topics = debate_engine.db.get_topics_by_debate(current_debate['debate_id'])
+    topics = debate_engine.db.get_topics_by_debate(
+        current_debate['debate_id'],
+        frame_id=current_debate.get('active_frame_id'),
+    )
     for topic in topics:
         facts = debate_engine.db.get_canonical_facts_by_topic(topic['topic_id'])
         all_facts.extend(facts)

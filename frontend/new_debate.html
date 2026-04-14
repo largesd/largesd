@@ -51,10 +51,10 @@
 
 <main>
 
-<!-- Moderation Template (Always Visible) -->
+<!-- Platform Modulation Template (Always Visible) -->
 <section class="card" id="moderation-panel">
-  <h3>Visible Modulation Template</h3>
-  <p class="lede">All posts are evaluated against this template before being Allowed or Blocked.</p>
+  <h3>Platform Modulation Template</h3>
+  <p class="lede">All posts are evaluated against this platform safety template before being Allowed or Blocked.</p>
   
   <div class="row" style="margin-bottom: 12px;">
     <span class="pill">Template: <span class="mono">Standard Civility + PII Guard v3</span></span>
@@ -68,7 +68,7 @@
         <li>Factual claims with supporting evidence</li>
         <li>Logical inferences from stated facts</li>
         <li>Direct engagement with opposing arguments</li>
-        <li>On-topic discussion within scope</li>
+        <li>On-topic discussion within the stated motion and frame</li>
       </ul>
     </div>
     <div class="card" style="box-shadow:none;margin:0;background:rgba(0,0,0,.15);">
@@ -81,7 +81,7 @@
       </ul>
     </div>
   </div>
-  <small>Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict.</small>
+  <small>Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict. Debate-specific moderation criteria are proposed in the form below.</small>
 </section>
 
 <!-- Create Debate -->
@@ -89,41 +89,115 @@
   <div class="section-head">
     <div>
       <h2>Start a Debate</h2>
-      <p class="lede">The v2 app starts blank. Create a debate here before you begin posting arguments.</p>
+      <p class="lede">Every new debate proposal must include a motion, moderation criteria, and a debate frame before posting begins.</p>
     </div>
     <span class="pill" id="create-debate-state" data-testid="create-debate-state">No active debate</span>
   </div>
 
   <div class="grid cols2">
     <div class="form-group">
-      <label for="debate-resolution-input">Resolution *</label>
+      <label for="debate-motion-input">Motion *</label>
       <textarea
-        id="debate-resolution-input"
-        data-testid="debate-resolution-input"
+        id="debate-motion-input"
+        data-testid="debate-motion-input"
         rows="3"
         placeholder="Resolved: AI should be banned."
       >Resolved: AI should be banned.</textarea>
-      <small>Use a clear, contestable statement that supports both sides of the debate.</small>
+      <small>Use a clear, contestable motion. The active frame can define two or more sides for evaluating it.</small>
     </div>
 
     <div class="form-group">
-      <label for="debate-scope-input">Scope *</label>
+      <label for="debate-frame-input">Frame Summary / Core Clash *</label>
       <textarea
-        id="debate-scope-input"
-        data-testid="debate-scope-input"
+        id="debate-frame-input"
+        data-testid="debate-frame-input"
         rows="3"
-        placeholder="Describe what the debate covers and the main areas of disagreement."
-      >Whether AI development should be banned and the implications for safety, economics, and society.</textarea>
-      <small>Scope helps the moderation system keep posts relevant and bounded.</small>
+        placeholder="Describe how the motion should be interpreted and which core clash matters most."
+      >Judge which side most fairly interprets the motion, best captures the core clash, and most usefully informs a neutral decision-maker balancing safety, rights, innovation, and governance trade-offs.</textarea>
+      <small>This summary does not contain arguments. It captures the active frame that will interpret and score them.</small>
     </div>
+  </div>
+
+  <div class="grid cols2" style="margin-top: 18px;">
+    <div class="form-group">
+      <label for="debate-stage-input">Frame Stage *</label>
+      <select id="debate-stage-input" data-testid="debate-stage-input">
+        <option value="substantive" selected>Substantive debate</option>
+        <option value="frame-setting">Frame-setting debate</option>
+      </select>
+      <small>Use <span class="mono">frame-setting</span> when the debate is about selecting the better frame before substantive argument begins.</small>
+    </div>
+
+    <div class="form-group">
+      <label for="debate-sides-input">Sides *</label>
+      <textarea
+        id="debate-sides-input"
+        data-testid="debate-sides-input"
+        rows="4"
+        placeholder="FOR | Supports the motion&#10;AGAINST | Opposes the motion"
+      >FOR | Supports the motion as written.
+AGAINST | Opposes the motion as written.</textarea>
+      <small>One side per line, formatted as <span class="mono">Label | Description</span>.</small>
+    </div>
+  </div>
+
+  <div class="grid cols2" style="margin-top: 18px;">
+    <div class="form-group">
+      <label for="debate-rubric-input">Evaluation Criteria *</label>
+      <textarea
+        id="debate-rubric-input"
+        data-testid="debate-rubric-input"
+        rows="4"
+        placeholder="Logical coherence&#10;Evidence strength&#10;Decision usefulness"
+      >Logical coherence of the argument structure
+Strength and relevance of supporting evidence
+Fair engagement with the strongest opposing case
+Decision usefulness for a neutral evaluator</textarea>
+      <small>The rubric the system should use to judge arguments under this frame.</small>
+    </div>
+
+    <div class="form-group">
+      <label for="debate-definitions-input">Definitions *</label>
+      <textarea
+        id="debate-definitions-input"
+        data-testid="debate-definitions-input"
+        rows="4"
+        placeholder="Term: Definition"
+      >Ordinary meaning: Use ordinary-language meanings unless this frame defines a term more narrowly.</textarea>
+      <small>One definition per line, formatted as <span class="mono">Term: Definition</span>.</small>
+    </div>
+  </div>
+
+  <div class="form-group" style="margin-top: 18px;">
+    <label for="debate-scope-input">Scope & Constraints *</label>
+    <textarea
+      id="debate-scope-input"
+      data-testid="debate-scope-input"
+      rows="4"
+      placeholder="List scope constraints or exclusions"
+    >Stay within the motion, stated definitions, and explicit frame assumptions.
+Prioritize arguments that materially affect a neutral decision-maker's conclusion.</textarea>
+    <small>Use this to define what counts as relevant and what the current frame excludes.</small>
+  </div>
+
+  <div class="form-group" style="margin-top: 18px;">
+    <label for="debate-moderation-input">Moderation Criteria *</label>
+    <textarea
+      id="debate-moderation-input"
+      data-testid="debate-moderation-input"
+      rows="4"
+      placeholder="State the debate-specific moderation and relevance criteria."
+    >Allow good-faith arguments that engage the motion directly. Block harassment, hate speech, doxxing, spam, and off-topic content. Prefer concrete evidence, fair summaries of opposing arguments, and decision-useful comparisons.</textarea>
+    <small>These are debate-specific criteria proposed by the user. They sit on top of the platform modulation template shown above.</small>
   </div>
 
   <div class="row" style="justify-content: space-between; align-items: flex-start;">
     <div>
       <button class="button" data-testid="create-debate-button" onclick="createDebate()">Create Debate</button>
+      <button class="button secondary" id="create-frame-version-button" onclick="publishFrameVersion()" disabled>Publish Frame Version</button>
     </div>
     <div style="text-align: right;">
-      <small style="display: block; margin-bottom: 4px;">Creating a new debate updates the active resolution for this server session.</small>
+      <small style="display: block; margin-bottom: 4px;">Creating a new debate starts a new debate record. Publishing a frame version updates the active frame on the current debate without reinterpreting older posts.</small>
       <span class="pill">Current mode: <span class="mono" id="runtime-mode" data-testid="runtime-mode">Loading...</span></span>
     </div>
   </div>
@@ -149,8 +223,12 @@
   <h2>Post Your Argument</h2>
   
   <div class="callout soft" style="margin-bottom: 16px;">
-    <strong>Active Debate:</strong> <span id="display-resolution" data-testid="active-debate-resolution">Loading...</span>
+    <strong>Active Motion:</strong> <span id="display-motion" data-testid="active-debate-motion">Loading...</span>
     <div style="margin-top: 8px;">
+      <small id="active-frame">Frame: Loading...</small><br>
+      <small id="active-frame-meta">Frame version: Loading...</small><br>
+      <small id="active-sides">Sides: Loading...</small><br>
+      <small id="active-criteria">Moderation criteria: Loading...</small><br>
       <small id="post-access-hint" data-testid="post-access-hint">Checking whether posting is available...</small>
     </div>
   </div>
@@ -161,7 +239,7 @@
     <!-- Side Selection -->
     <div class="form-group">
       <label>Your Position *</label>
-      <div class="row">
+      <div class="row" id="side-options" data-testid="side-options">
         <label class="pill" style="cursor: pointer; padding: 10px 16px;">
           <input type="radio" name="side" value="FOR" style="width: auto; margin-right: 8px;" />
           <span class="side-label for" style="margin: 0;">FOR</span>
@@ -171,7 +249,7 @@
           <span class="side-label against" style="margin: 0;">AGAINST</span>
         </label>
       </div>
-      <small>Select which side of the resolution you are supporting.</small>
+      <small>Select which frame-defined side of the motion you are supporting.</small>
     </div>
 
     <!-- Topic Selection -->
@@ -271,8 +349,14 @@
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms for posting and debate structure.</p>
     
-    <div class="glossary-term">Debate Topic</div>
-    <div class="glossary-def">The central resolution being debated. Must be set before posting and framed neutrally to include both sides' contested areas.</div>
+    <div class="glossary-term">Motion</div>
+    <div class="glossary-def">The proposition being debated. Every new debate must provide a motion before posting starts.</div>
+
+    <div class="glossary-term">Debate Frame</div>
+    <div class="glossary-def">The lens for interpreting the motion and identifying the core clash. If people want to debate the frame first, create a separate debate about the better frame.</div>
+
+    <div class="glossary-term">Moderation Criteria</div>
+    <div class="glossary-def">The debate-specific relevance and conduct criteria proposed alongside the motion and frame. These complement the platform modulation template.</div>
     
     <div class="glossary-term">Argument Unit (AU)</div>
     <div class="glossary-def">A structured contribution consisting of: (1) factual premises (AU_FACTS) and (2) an inference/conclusion (AU_INFERENCE). Traceable to source spans.</div>
@@ -299,17 +383,183 @@ const API_BASE = window.location.origin;
 let pendingPosts = [];
 let authEnabled = true;
 let hasActiveDebate = false;
+let activeFrame = null;
+let frameVersioningEnabled = true;
 
 async function loadRuntimeConfig() {
   try {
     const res = await fetch(`${API_BASE}/api/health`);
     const data = await res.json();
     authEnabled = data.auth_enabled !== false;
+    frameVersioningEnabled = data.supports_frame_versioning !== false;
   } catch (error) {
     authEnabled = true;
+    frameVersioningEnabled = false;
   }
 
   document.getElementById('runtime-mode').textContent = authEnabled ? 'Authenticated posting' : 'Guest posting';
+}
+
+function badgeClassForSide(sideId) {
+  const normalized = (sideId || '').toLowerCase();
+  if (normalized === 'for' || normalized.includes('support') || normalized.includes('affirm')) {
+    return 'for';
+  }
+  if (normalized === 'against' || normalized.includes('oppose') || normalized.includes('neg')) {
+    return 'against';
+  }
+  return '';
+}
+
+function parseMultilineList(value) {
+  return value
+    .split('\n')
+    .map(line => line.trim().replace(/^[-*]\s*/, ''))
+    .filter(Boolean);
+}
+
+function parseSidesInput(value) {
+  return value
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const parts = line.split('|');
+      return {
+        label: (parts[0] || '').trim(),
+        description: (parts[1] || '').trim()
+      };
+    })
+    .filter(item => item.label);
+}
+
+function parseDefinitionsInput(value) {
+  return value
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const separator = line.includes('::') ? '::' : ':';
+      const parts = line.split(separator);
+      return {
+        term: (parts[0] || '').trim(),
+        definition: parts.slice(1).join(separator).trim()
+      };
+    })
+    .filter(item => item.term);
+}
+
+function buildDebatePayload() {
+  return {
+    motion: document.getElementById('debate-motion-input').value.trim(),
+    moderation_criteria: document.getElementById('debate-moderation-input').value.trim(),
+    debate_frame: document.getElementById('debate-frame-input').value.trim(),
+    frame: {
+      stage: document.getElementById('debate-stage-input').value,
+      sides: parseSidesInput(document.getElementById('debate-sides-input').value),
+      evaluation_criteria: parseMultilineList(document.getElementById('debate-rubric-input').value),
+      definitions: parseDefinitionsInput(document.getElementById('debate-definitions-input').value),
+      scope_constraints: parseMultilineList(document.getElementById('debate-scope-input').value)
+    }
+  };
+}
+
+function validateDebatePayload(payload) {
+  if (!payload.motion || !payload.moderation_criteria || !payload.debate_frame) {
+    return 'Please provide a motion, moderation criteria, and frame summary.';
+  }
+  if (!payload.frame.sides.length) {
+    return 'Please define at least one debate side.';
+  }
+  if (!payload.frame.evaluation_criteria.length) {
+    return 'Please provide at least one evaluation criterion.';
+  }
+  if (!payload.frame.definitions.length) {
+    return 'Please provide at least one definition.';
+  }
+  if (!payload.frame.scope_constraints.length) {
+    return 'Please provide at least one scope constraint.';
+  }
+  return '';
+}
+
+function renderSideOptions(frame = null) {
+  const container = document.getElementById('side-options');
+  const sides = (frame && Array.isArray(frame.sides) && frame.sides.length)
+    ? frame.sides
+    : [
+      { side_id: 'FOR', label: 'FOR', description: 'Supports the motion.' },
+      { side_id: 'AGAINST', label: 'AGAINST', description: 'Opposes the motion.' }
+    ];
+
+  container.innerHTML = sides.map(side => `
+    <label class="pill" style="cursor: pointer; padding: 10px 16px;" title="${side.description || ''}">
+      <input type="radio" name="side" value="${side.side_id || side.label}" data-label="${side.label}" style="width: auto; margin-right: 8px;" />
+      <span class="side-label ${badgeClassForSide(side.side_id || side.label)}" style="margin: 0;">${side.label}</span>
+    </label>
+  `).join('');
+}
+
+function populateFrameForm(data = {}) {
+  const frame = data.active_frame || {};
+  if (data.motion || data.resolution) {
+    document.getElementById('debate-motion-input').value = data.motion || data.resolution;
+  }
+  if (data.moderation_criteria) {
+    document.getElementById('debate-moderation-input').value = data.moderation_criteria;
+  }
+  if (data.debate_frame) {
+    document.getElementById('debate-frame-input').value = data.debate_frame;
+  }
+  document.getElementById('debate-stage-input').value = frame.stage || 'substantive';
+  if (frame.sides && frame.sides.length) {
+    document.getElementById('debate-sides-input').value = frame.sides
+      .map(side => `${side.label} | ${side.description || ''}`.trim())
+      .join('\n');
+  }
+  if (frame.evaluation_criteria && frame.evaluation_criteria.length) {
+    document.getElementById('debate-rubric-input').value = frame.evaluation_criteria.join('\n');
+  }
+  if (frame.definitions && frame.definitions.length) {
+    document.getElementById('debate-definitions-input').value = frame.definitions
+      .map(item => `${item.term}: ${item.definition}`)
+      .join('\n');
+  }
+  if (frame.scope_constraints && frame.scope_constraints.length) {
+    document.getElementById('debate-scope-input').value = frame.scope_constraints.join('\n');
+  }
+}
+
+function updateFrameActions() {
+  const button = document.getElementById('create-frame-version-button');
+  button.disabled = !hasActiveDebate || !frameVersioningEnabled;
+  button.title = frameVersioningEnabled
+    ? 'Publish a new active frame version for the current debate.'
+    : 'This server mode does not support frame versioning.';
+}
+
+function updateActiveDebateSummary(data = {}) {
+  activeFrame = data.active_frame || null;
+  const motion = data.motion || data.resolution || 'No active debate';
+  const frameSummary = data.debate_frame
+    ? `Frame: ${data.debate_frame}`
+    : 'Frame: Create a debate to set the frame.';
+  const frameMeta = activeFrame
+    ? `Frame version: v${activeFrame.version || 1} • ${activeFrame.stage || 'substantive'}`
+    : 'Frame version: Create a debate to establish the active frame.';
+  const sides = activeFrame && activeFrame.sides && activeFrame.sides.length
+    ? `Sides: ${activeFrame.sides.map(side => side.label).join(', ')}`
+    : 'Sides: Create a debate to define the sides.';
+  const criteria = data.moderation_criteria
+    ? `Moderation criteria: ${data.moderation_criteria}`
+    : 'Moderation criteria: Create a debate to set the criteria.';
+
+  document.getElementById('display-motion').textContent = motion;
+  document.getElementById('active-frame').textContent = frameSummary;
+  document.getElementById('active-frame-meta').textContent = frameMeta;
+  document.getElementById('active-sides').textContent = sides;
+  document.getElementById('active-criteria').textContent = criteria;
+  renderSideOptions(activeFrame);
 }
 
 function updatePostSectionState() {
@@ -356,8 +606,12 @@ async function loadDebate() {
     const data = await res.json();
     
     if (!data.error) {
-      hasActiveDebate = !!(data.has_debate && data.resolution);
-      document.getElementById('display-resolution').textContent = data.resolution || 'No active debate';
+      const motion = data.motion || data.resolution;
+      hasActiveDebate = !!(data.has_debate && motion);
+      updateActiveDebateSummary(data);
+      if (hasActiveDebate) {
+        populateFrameForm(data);
+      }
       document.getElementById('create-debate-state').textContent = hasActiveDebate ? 'Active debate loaded' : 'No active debate';
     }
     
@@ -376,11 +630,12 @@ async function loadDebate() {
   } catch (error) {
     console.error('Error loading debate:', error);
     hasActiveDebate = false;
-    document.getElementById('display-resolution').textContent = 'No active debate';
+    updateActiveDebateSummary();
     document.getElementById('create-debate-state').textContent = 'No active debate';
     resetSnapshotHeader();
   }
 
+  updateFrameActions();
   updatePostSectionState();
 }
 
@@ -393,13 +648,10 @@ function showStatus(message, isError = false) {
 }
 
 async function createDebate() {
-  const resolutionEl = document.getElementById('debate-resolution-input');
-  const scopeEl = document.getElementById('debate-scope-input');
-  const resolution = resolutionEl.value.trim();
-  const scope = scopeEl.value.trim();
-
-  if (!resolution || !scope) {
-    showStatus('Please provide both a resolution and a scope.', true);
+  const payload = buildDebatePayload();
+  const validationError = validateDebatePayload(payload);
+  if (validationError) {
+    showStatus(validationError, true);
     return;
   }
 
@@ -420,7 +672,7 @@ async function createDebate() {
     const res = await fetch(`${API_BASE}/api/debate`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ resolution, scope })
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
@@ -431,13 +683,63 @@ async function createDebate() {
     }
 
     hasActiveDebate = true;
-    document.getElementById('display-resolution').textContent = data.resolution;
+    updateActiveDebateSummary(data);
+    populateFrameForm(data);
     document.getElementById('create-debate-state').textContent = 'Active debate loaded';
-    showStatus(`Debate created: ${data.resolution}`);
+    showStatus(`Debate created: ${data.motion || data.resolution}`);
+    updateFrameActions();
     updatePostSectionState();
   } catch (error) {
     console.error('Error creating debate:', error);
     showStatus('Error creating debate. Please try again.', true);
+  }
+}
+
+async function publishFrameVersion() {
+  if (!hasActiveDebate) {
+    showStatus('Create a debate before publishing a frame version.', true);
+    return;
+  }
+
+  const payload = buildDebatePayload();
+  const validationError = validateDebatePayload(payload);
+  if (validationError) {
+    showStatus(validationError, true);
+    return;
+  }
+
+  if (authEnabled && !Auth.isLoggedIn()) {
+    updatePostSectionState();
+    showStatus('Please log in to publish a frame version.', true);
+    return;
+  }
+
+  try {
+    const token = Auth.getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (authEnabled && token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/api/debate/frames`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      showStatus(`Error: ${data.error}`, true);
+      return;
+    }
+
+    updateActiveDebateSummary(data);
+    populateFrameForm(data);
+    const version = data.active_frame && data.active_frame.version ? data.active_frame.version : 'new';
+    showStatus(`Active frame updated to version ${version}.`);
+  } catch (error) {
+    console.error('Error publishing frame version:', error);
+    showStatus('Error publishing frame version. Please try again.', true);
   }
 }
 
@@ -458,7 +760,7 @@ function previewPost() {
   
   previewContent.innerHTML = `
     <div class="row" style="margin-bottom: 8px;">
-      <span class="side-label ${side.value.toLowerCase()}">${side.value}</span>
+      <span class="side-label ${badgeClassForSide(side.value)}">${side.dataset.label || side.value}</span>
       <span class="pill">Topic: ${topic.options[topic.selectedIndex].text || 'New topic area'}</span>
     </div>
     <div style="margin: 12px 0;">
@@ -489,7 +791,7 @@ async function submitPost() {
   const counter = document.getElementById('counter-input');
   
   if (!side) {
-    showStatus('Please select a side (FOR or AGAINST).', true);
+    showStatus('Please select a side from the active frame.', true);
     return;
   }
   
@@ -548,6 +850,7 @@ async function submitPost() {
     const post = {
       id: data.post_id,
       side: data.side,
+      sideLabel: side.dataset.label || data.side,
       topic: topic.options[topic.selectedIndex].text,
       facts: facts.value.trim(),
       inference: inference.value.trim(),
@@ -597,7 +900,7 @@ function updatePostsList() {
     <div class="card" style="margin: 12px 0; background: rgba(0,0,0,.15);">
       <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
         <div class="row">
-          <span class="side-label ${post.side.toLowerCase()}">${post.side}</span>
+          <span class="side-label ${badgeClassForSide(post.side)}">${post.sideLabel || post.side}</span>
           <span class="pill">${post.topic}</span>
         </div>
         <span class="pill ${post.modulation_outcome === 'allowed' ? 'good' : 'bad'}">${post.modulation_outcome}</span>
@@ -657,6 +960,7 @@ async function generateSnapshot() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  renderSideOptions();
   await loadRuntimeConfig();
   await loadDebate();
 });
