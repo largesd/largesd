@@ -5,10 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Verdict — Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
   <style>
     .verdict-for { color: var(--good); }
     .verdict-against { color: var(--bad); }
     .verdict-neutral { color: var(--warn); }
+    .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .range-track {
+      position: relative;
+      height: 10px;
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 24px 0 10px 0;
+    }
+    .range-ci {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      background: rgba(109,214,255,.45);
+      border-radius: 999px;
+    }
+    .range-zero,
+    .range-point {
+      position: absolute;
+      top: -6px;
+      width: 2px;
+      height: 22px;
+      background: rgba(255,255,255,.5);
+    }
+    .range-point {
+      background: var(--accent);
+    }
+    .range-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -23,7 +58,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate_v3.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html">Audits</a>
@@ -34,16 +69,17 @@
     </nav>
   </div>
 </header>
+
 <section class="state-strip" aria-label="Current debate state">
   <div class="state-wrap">
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
-    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">0.61</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
     <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
-    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">0.61</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
 </section>
 
@@ -53,96 +89,82 @@
   <div class="section-head">
     <div>
       <h2>Verdict</h2>
-      <p class="lede">The result is intentionally conservative: the system only commits when the margin is stable across reruns.</p>
+      <p class="lede">The system stays conservative: it only commits when the live interval around the margin is clearly on one side of zero.</p>
     </div>
-    <span class="pill warn" id="verdict-pill" data-testid="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
-  </div>
-  
-  <div class="kpis">
-    <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,FOR}">Overall FOR</span></div>
-      <div class="value mono" id="overall-for" data-testid="overall-for">0.61</div>
-      <div class="hint">weighted quality sum</div>
-    </div>
-    <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="Σ_t Rel_t × Q_{t,AGAINST}">Overall AGAINST</span></div>
-      <div class="value mono" id="overall-against" data-testid="overall-against">0.60</div>
-      <div class="hint">weighted quality sum</div>
-    </div>
-    <div class="kpi">
-      <div class="label"><span class="tooltip" data-tooltip="D = FOR − AGAINST (margin)">D (Margin)</span></div>
-      <div class="value mono" id="margin-d">0.01</div>
-      <div class="hint">replicate-based</div>
-    </div>
+    <span class="pill warn" id="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
   </div>
 
-  <hr />
-  <h3>Replicate distribution of D</h3>
-  <p style="font-size:12px;color:var(--muted);margin-top:0">Based on 100 independent replicates (different judge samples + extraction reruns). The distribution shows how stable the margin is.</p>
-  
-  <div class="dist-card">
-    <div class="dist-header">
-      <small>Distribution of D = FOR − AGAINST</small>
-      <small>n = 100 replicates</small>
-    </div>
-    <div class="dist-container">
-      <div class="dist-y-axis">
-        <span>100%</span>
-        <span>50%</span>
-        <span>0%</span>
+  <div class="callout soft" id="verdict-empty" style="display:none;"></div>
+
+  <div id="verdict-content" style="display:none;">
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Overall FOR</div>
+        <div class="value mono" id="overall-for">-</div>
+        <div class="hint">weighted quality sum</div>
       </div>
-      <div class="dist-bars" id="dist-bars" aria-label="Replicate distribution of D">
-        <span style="height:22%" data-height="22%"></span>
-        <span style="height:38%" data-height="38%"></span>
-        <span style="height:88%" data-height="88%"></span>
-        <span style="height:44%" data-height="44%"></span>
-        <span style="height:18%" data-height="18%"></span>
+      <div class="kpi">
+        <div class="label">Overall AGAINST</div>
+        <div class="value mono" id="overall-against">-</div>
+        <div class="hint">weighted quality sum</div>
+      </div>
+      <div class="kpi">
+        <div class="label">D (Margin)</div>
+        <div class="value mono" id="margin-d">-</div>
+        <div class="hint">FOR minus AGAINST</div>
       </div>
     </div>
-    <div class="dist-axis">
-      <span>-0.10</span><span>-0.05</span><span>0.00</span><span>0.05</span><span>0.10</span>
+
+    <hr />
+    <h3>Confidence interval of D</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">This interval is live snapshot data, not a schematic placeholder.</p>
+    <div class="callout soft">
+      <div class="range-track">
+        <div class="range-ci" id="ci-band"></div>
+        <div class="range-zero" id="ci-zero"></div>
+        <div class="range-point" id="ci-point"></div>
+      </div>
+      <div class="range-axis">
+        <span id="axis-min">-</span>
+        <span>0</span>
+        <span id="axis-max">-</span>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <span class="pill">CI(D): <span class="mono" id="ci-d">-</span></span>
+        <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
+        <span class="pill">Confidence: <span class="mono" id="confidence-badge">-</span></span>
+      </div>
+      <small style="display:block;margin-top:12px" id="dist-explanation">Loading interval explanation...</small>
     </div>
-    <div class="dist-legend">
-      <span><span style="display:inline-block;width:12px;height:12px;background:rgba(109,214,255,.5);border-radius:2px"></span> Replicate density</span>
-      <span><span style="display:inline-block;width:20px;height:1px;background:rgba(109,214,255,.8);border-top:1px dashed rgba(109,214,255,.8);vertical-align:middle"></span> Zero line</span>
-      <span><span class="mono" id="median-d">median: 0.01</span></span>
+
+    <hr />
+    <div class="callout soft" id="plain-readout"><strong>Plain-language readout:</strong> Loading...</div>
+
+    <hr />
+    <h3>Per-topic contributions</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">How each topic contributes to the overall margin D.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Rel<sub>t</sub></th>
+            <th>Q<sub>FOR</sub></th>
+            <th>Q<sub>AGAINST</sub></th>
+            <th>Contribution to D</th>
+          </tr>
+        </thead>
+        <tbody id="contributions-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+        </tbody>
+      </table>
     </div>
-    <small style="display:block;margin-top:12px" id="dist-explanation">Most replicates cluster near zero, which is why the interval still straddles both directions.</small>
-  </div>
 
-  <div class="row">
-    <span class="pill"><span class="tooltip" data-tooltip="95% Confidence Interval of D">CI(D)</span>: <span class="mono" id="ci-d">[-0.07, 0.08]</span></span>
-    <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
-    <span class="pill">Confidence: <span class="mono" id="confidence-badge">0.61</span></span>
-  </div>
-
-  <hr />
-  <div class="callout soft" id="plain-readout"><strong>Plain-language readout:</strong> The two sides are effectively tied. Topic t3 helps FOR most, but that edge is mostly cancelled out by t1 and t2.</div>
-
-  <hr />
-  <h3>Per-topic contributions</h3>
-  <p style="font-size:12px;color:var(--muted);margin-top:0">How each topic contributes to the overall margin D.</p>
-  <div class="table-wrap">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Topic</th>
-          <th><span class="tooltip" data-tooltip="Topic relevance weight">Rel<sub>t</sub></span></th>
-          <th><span class="tooltip" data-tooltip="FOR quality score">Q<sub>FOR</sub></span></th>
-          <th><span class="tooltip" data-tooltip="AGAINST quality score">Q<sub>AGAINST</sub></span></th>
-          <th>Contribution to D</th>
-        </tr>
-      </thead>
-      <tbody id="contributions-tbody" data-testid="contributions-tbody">
-        <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <hr />
-  <div class="row">
-    <a class="pill" href="evidence.html">What evidence would change this →</a>
-    <a class="pill" href="audits.html">Back to Audits</a>
+    <hr />
+    <div class="row">
+      <a class="pill" href="evidence.html">What evidence would change this →</a>
+      <a class="pill" href="audits.html">Back to Audits</a>
+    </div>
   </div>
 </section>
 
@@ -165,154 +187,194 @@
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
-    
+
     <div class="glossary-term">D (Margin)</div>
-    <div class="glossary-def">Difference between overall FOR and AGAINST scores: D = Overall_FOR − Overall_AGAINST. Positive = FOR leading; Negative = AGAINST leading.</div>
-    
+    <div class="glossary-def">Difference between the overall FOR and AGAINST scores. Positive means FOR leads; negative means AGAINST leads.</div>
+
     <div class="glossary-term">CI(D)</div>
-    <div class="glossary-def">Confidence Interval for D. If CI(D) crosses zero (includes both positive and negative values), the verdict is "NO VERDICT".</div>
-    
-    <div class="glossary-term">F<sub>t,s</sub> (Factuality)</div>
-    <div class="glossary-def">Mean probability that canonical FACT nodes are true. Calculated as average of P(fact true) across all facts for topic t, side s.</div>
-    
-    <div class="glossary-term">Reason<sub>t,s</sub> (Reasoning)</div>
-    <div class="glossary-def">Median reasoning strength of canonical ARGUMENT nodes, scored by independent judges. Higher = better structured arguments.</div>
-    
-    <div class="glossary-term">Cov<sub>t,s</sub> (Coverage)</div>
-    <div class="glossary-def">Proportion of opposing arguments that are addressed (rebutted/qualified/conceded), weighted by argument leverage. Higher = better rebuttal coverage.</div>
-    
-    <div class="glossary-term">Q<sub>t,s</sub> (Quality)</div>
-    <div class="glossary-def">Geometric mean of Factuality, Reasoning, and Coverage: (F × Reason × Cov)^(1/3). Enforces balance without tuned weights.</div>
-    
-    <div class="glossary-term">IQR</div>
-    <div class="glossary-def">Interquartile Range (75th percentile − 25th percentile). Measures spread of judge scores. Wider IQR = more disagreement among evaluators.</div>
-    
+    <div class="glossary-def">Confidence interval around the margin D. If it crosses zero, the system keeps the verdict at NO VERDICT.</div>
+
+    <div class="glossary-term">Topic contribution</div>
+    <div class="glossary-def">How much a topic's quality gap, weighted by relevance, moves the overall margin.</div>
+
     <hr />
     <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
   </div>
 </div>
 
 <script>
-const API_BASE = window.location.origin;
+function toggleHelp() {
+  BDA.toggleHelp();
+}
 
-async function loadData() {
-  try {
-    // Load snapshot
-    const snapshotRes = await fetch(`${API_BASE}/api/debate/snapshot`);
-    const snapshotData = await snapshotRes.json();
-    
-    if (!snapshotData.error) {
-      // Update header
-      document.getElementById('header-verdict').textContent = snapshotData.verdict;
-      document.getElementById('header-confidence').textContent = snapshotData.confidence.toFixed(2);
-      document.getElementById('header-snapshot').textContent = snapshotData.snapshot_id;
-      document.getElementById('header-updated').textContent = new Date(snapshotData.timestamp).toLocaleString();
-      document.getElementById('verdict-mobile').textContent = snapshotData.verdict;
-      document.getElementById('confidence-mobile').textContent = snapshotData.confidence.toFixed(2);
-      
-      // Update KPIs
-      document.getElementById('overall-for').textContent = snapshotData.overall_for.toFixed(2);
-      document.getElementById('overall-against').textContent = snapshotData.overall_against.toFixed(2);
-      document.getElementById('margin-d').textContent = snapshotData.margin_d.toFixed(4);
-      
-      // Update verdict display
-      const verdictClass = snapshotData.verdict === 'FOR' ? 'verdict-for' : snapshotData.verdict === 'AGAINST' ? 'verdict-against' : 'verdict-neutral';
-      document.getElementById('verdict-pill').innerHTML = `Current state: <strong class="${verdictClass}">${snapshotData.verdict}</strong>`;
-      document.getElementById('verdict-badge').innerHTML = `Verdict: <b>${snapshotData.verdict}</b>`;
-      document.getElementById('confidence-badge').textContent = snapshotData.confidence.toFixed(2);
-      
-      // Update CI
-      document.getElementById('ci-d').textContent = `[${snapshotData.ci_d[0].toFixed(4)}, ${snapshotData.ci_d[1].toFixed(4)}]`;
-      
-      // Update median
-      document.getElementById('median-d').textContent = `median: ${snapshotData.margin_d.toFixed(2)}`;
-    }
-    
-    // Load verdict details
-    const verdictRes = await fetch(`${API_BASE}/api/debate/verdict`);
-    const verdictData = await verdictRes.json();
-    
-    if (!verdictData.error && verdictData.topic_contributions) {
-      renderContributions(verdictData.topic_contributions);
-    }
-  } catch (error) {
-    console.error('Error loading data:', error);
+function showVerdictEmpty(messageHtml) {
+  const empty = document.getElementById('verdict-empty');
+  document.getElementById('verdict-content').style.display = 'none';
+  empty.innerHTML = messageHtml;
+  empty.style.display = 'block';
+}
+
+function showVerdictContent() {
+  document.getElementById('verdict-empty').style.display = 'none';
+  document.getElementById('verdict-content').style.display = 'block';
+}
+
+function renderDebateChoices(debates) {
+  if (!debates.length) {
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate_v3.html">New Debate / Post Point</a> to compute a live verdict.';
   }
+
+  const buttons = debates.map((debate) => `
+    <button class="pill" data-debate-id="${BDA.escapeHtml(debate.debate_id)}">${BDA.escapeHtml(debate.resolution)}</button>
+  `).join('');
+
+  return `
+    <strong>No active debate selected.</strong> Choose a public debate to inspect its live verdict.
+    <div class="choice-list">${buttons}</div>
+  `;
+}
+
+function verdictClass(verdict) {
+  if (verdict === 'FOR') return 'verdict-for';
+  if (verdict === 'AGAINST') return 'verdict-against';
+  return 'verdict-neutral';
+}
+
+function renderInterval(ciLow, ciHigh, margin) {
+  const min = Math.min(ciLow, 0, margin);
+  const max = Math.max(ciHigh, 0, margin);
+  const span = Math.max(max - min, 0.001);
+  const percent = (value) => ((value - min) / span) * 100;
+
+  document.getElementById('axis-min').textContent = BDA.formatNumber(min, 4);
+  document.getElementById('axis-max').textContent = BDA.formatNumber(max, 4);
+  document.getElementById('ci-band').style.left = `${percent(ciLow)}%`;
+  document.getElementById('ci-band').style.width = `${Math.max(percent(ciHigh) - percent(ciLow), 1)}%`;
+  document.getElementById('ci-zero').style.left = `${percent(0)}%`;
+  document.getElementById('ci-point').style.left = `${percent(margin)}%`;
+}
+
+function buildReadout(verdict, contributions, ci) {
+  if (!contributions.length) {
+    return 'No topic contributions are available yet.';
+  }
+
+  const sorted = contributions.slice().sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d));
+  const top = sorted[0];
+  const direction = top.contribution_to_d >= 0 ? 'FOR' : 'AGAINST';
+  const second = sorted[1];
+
+  if (verdict === 'NO VERDICT') {
+    return `The interval still crosses zero. ${top.topic_id} contributes the strongest movement toward ${direction}, but the lead is not stable enough to commit.`;
+  }
+
+  const secondText = second
+    ? ` The next-largest mover is ${second.topic_id}, which pushes ${second.contribution_to_d >= 0 ? 'FOR' : 'AGAINST'}.`
+    : '';
+
+  return `Current live verdict: ${verdict}. ${top.topic_id} is the strongest driver of the margin, and CI(D) stays on the ${verdict === 'FOR' ? 'positive' : 'negative'} side of zero.${secondText}`;
+}
+
+function buildIntervalExplanation(ciLow, ciHigh, verdict) {
+  if (ciLow <= 0 && ciHigh >= 0) {
+    return 'The confidence interval still spans both sides of zero, so the system keeps the verdict at NO VERDICT.';
+  }
+  if (verdict === 'FOR') {
+    return 'The entire interval stays above zero, so the current evidence supports a FOR verdict.';
+  }
+  if (verdict === 'AGAINST') {
+    return 'The entire interval stays below zero, so the current evidence supports an AGAINST verdict.';
+  }
+  return 'The system is using the live interval to decide whether the margin is truly separated from zero.';
+}
+
+function renderVerdict(snapshot, verdictData) {
+  const verdict = snapshot.verdict || verdictData.verdict || 'NO VERDICT';
+  const verdictCss = verdictClass(verdict);
+  const ciLow = snapshot.ci_d?.[0] ?? verdictData.ci_d?.[0] ?? 0;
+  const ciHigh = snapshot.ci_d?.[1] ?? verdictData.ci_d?.[1] ?? 0;
+  const margin = snapshot.margin_d ?? verdictData.margin_d ?? 0;
+
+  document.getElementById('overall-for').textContent = BDA.formatNumber(snapshot.overall_for, 2);
+  document.getElementById('overall-against').textContent = BDA.formatNumber(snapshot.overall_against, 2);
+  document.getElementById('margin-d').textContent = BDA.formatNumber(margin, 4);
+  document.getElementById('ci-d').textContent = `[${BDA.formatNumber(ciLow, 4)}, ${BDA.formatNumber(ciHigh, 4)}]`;
+  document.getElementById('confidence-badge').textContent = BDA.formatNumber(snapshot.confidence, 2);
+  document.getElementById('verdict-pill').innerHTML = `Current state: <strong class="${verdictCss}">${verdict}</strong>`;
+  document.getElementById('verdict-badge').innerHTML = `Verdict: <b>${verdict}</b>`;
+  document.getElementById('dist-explanation').textContent = buildIntervalExplanation(ciLow, ciHigh, verdict);
+
+  renderInterval(ciLow, ciHigh, margin);
+
+  const contributions = verdictData.topic_contributions || [];
+  document.getElementById('plain-readout').innerHTML = `<strong>Plain-language readout:</strong> ${BDA.escapeHtml(buildReadout(verdict, contributions, [ciLow, ciHigh]))}`;
+
+  renderContributions(contributions);
 }
 
 function renderContributions(contributions) {
   const tbody = document.getElementById('contributions-tbody');
-  
-  tbody.innerHTML = contributions.map(c => {
-    const contribClass = c.contribution_to_d > 0 ? 'style="color:var(--good)"' : c.contribution_to_d < 0 ? 'style="color:var(--warn)"' : '';
-    return `
-      <tr>
-        <td><a href="topic_${c.topic_id}.html">${c.topic_id} ${c.name}</a></td>
-        <td class="mono">${c.relevance.toFixed(2)}</td>
-        <td class="mono">${c.q_for.toFixed(2)}</td>
-        <td class="mono">${c.q_against.toFixed(2)}</td>
-        <td class="mono" ${contribClass}>${c.contribution_to_d > 0 ? '+' : ''}${c.contribution_to_d.toFixed(4)}</td>
-      </tr>
-    `;
-  }).join('');
+  if (!contributions.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No contribution data available.</td></tr>';
+    return;
+  }
+
+  const rows = contributions
+    .slice()
+    .sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d))
+    .map((item) => {
+      const style = item.contribution_to_d > 0
+        ? 'style="color:var(--good)"'
+        : item.contribution_to_d < 0
+          ? 'style="color:var(--warn)"'
+          : '';
+      return `
+        <tr>
+          <td><a href="topic.html?id=${encodeURIComponent(item.topic_id)}">${BDA.escapeHtml(item.topic_id)} ${BDA.escapeHtml(item.name || '')}</a></td>
+          <td class="mono">${BDA.formatNumber(item.relevance, 2)}</td>
+          <td class="mono">${BDA.formatNumber(item.q_for, 2)}</td>
+          <td class="mono">${BDA.formatNumber(item.q_against, 2)}</td>
+          <td class="mono" ${style}>${item.contribution_to_d > 0 ? '+' : ''}${BDA.formatNumber(item.contribution_to_d, 4)}</td>
+        </tr>
+      `;
+    });
+
+  tbody.innerHTML = rows.join('');
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', loadData);
+async function initVerdictPage() {
+  const debate = await BDA.loadDebate();
+  if (!debate.has_debate) {
+    const debates = await BDA.loadDebates();
+    showVerdictEmpty(renderDebateChoices(debates));
+    document.querySelectorAll('#verdict-empty [data-debate-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        BDA.setActiveDebateId(button.getAttribute('data-debate-id'));
+        window.location.reload();
+      });
+    });
+    return;
+  }
 
-// Back to top
-const backToTop = document.querySelector('.back-to-top');
-window.addEventListener('scroll', () => {
-  if (window.scrollY > 300) backToTop.classList.add('visible');
-  else backToTop.classList.remove('visible');
-});
+  const snapshot = await BDA.loadSnapshot();
+  if (!snapshot || !snapshot.has_snapshot) {
+    showVerdictEmpty('This debate does not have a snapshot yet. Generate one from <a href="new_debate_v3.html">New Debate / Post Point</a> first.');
+    return;
+  }
 
-// Help panel
-function toggleHelp() {
-  document.getElementById('helpPanel').classList.toggle('open');
-  document.querySelector('.help-overlay').classList.toggle('visible');
+  BDA.updateStateStrip(snapshot);
+
+  try {
+    const verdictData = await BDA.api('/api/debate/verdict');
+    renderVerdict(snapshot, verdictData);
+    showVerdictContent();
+    BDA.setupTableScroll();
+  } catch (error) {
+    showVerdictEmpty(`Unable to load live verdict data right now: ${BDA.escapeHtml(error.message)}`);
+  }
 }
 
-// Table scroll
-document.querySelectorAll('.table-wrap').forEach(wrap => {
-  wrap.classList.add('scrollable');
-  wrap.addEventListener('scroll', () => {
-    const isScrollable = wrap.scrollWidth > wrap.clientWidth;
-    const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
-    wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
-  });
-  wrap.dispatchEvent(new Event('scroll'));
-});
-
-// Mobile state
-if (window.innerWidth <= 640) {
-  document.querySelector('.state-wrap').style.display = 'none';
-  document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
-}
-
-// Tooltips
-const tooltipPopup = document.createElement('div');
-tooltipPopup.className = 'tooltip-popup';
-document.body.appendChild(tooltipPopup);
-
-document.querySelectorAll('.tooltip').forEach(el => {
-  el.addEventListener('mouseenter', (e) => {
-    const text = el.getAttribute('data-tooltip');
-    tooltipPopup.textContent = text;
-    tooltipPopup.classList.add('visible');
-    const rect = el.getBoundingClientRect();
-    const popupRect = tooltipPopup.getBoundingClientRect();
-    let top = rect.top - popupRect.height - 8;
-    let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
-    left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
-    if (top < 10) top = rect.bottom + 8;
-    tooltipPopup.style.top = top + 'px';
-    tooltipPopup.style.left = left + 'px';
-  });
-  el.addEventListener('mouseleave', () => {
-    tooltipPopup.classList.remove('visible');
-  });
-});
+document.addEventListener('DOMContentLoaded', initVerdictPage);
 </script>
 </body>
 </html>

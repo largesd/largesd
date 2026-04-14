@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Topic — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <style>
+    .topic-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0; }
+    .topic-meta-item { background: rgba(0,0,0,.15); padding: 10px; border-radius: 8px; text-align: center; }
+    .topic-meta-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .topic-meta-item .value { font-size: 18px; font-weight: 600; font-family: var(--mono); margin-top: 4px; }
+    .steelman { background: rgba(255,255,255,.03); border-left: 3px solid var(--accent); padding: 12px 16px; margin: 8px 0; }
+    .steelman.for { border-left-color: var(--good); }
+    .steelman.against { border-left-color: var(--warn); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">
+      <div class="brand-dot" aria-hidden="true"></div>
+      <div>
+        <div class="brand-title">Blind Debate Adjudicator</div>
+        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate_v3.html">New Debate / Post Point</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="topics.html" class="active" aria-current="page">Topics</a>
+      <a href="audits.html">Audits</a>
+      <a href="verdict.html">Verdict</a>
+      <a href="admin.html">Admin</a>
+      <a href="about.html">About</a>
+      <button class="help-btn" onclick="BDA.toggleHelp()" aria-label="Open help and glossary">?</button>
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
+    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
+  </div>
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main>
+
+<div class="topic-shell">
+  <aside class="subnav card">
+    <h3 style="margin-top:0;font-size:14px">Topic Navigation</h3>
+    <a href="topics.html" class="subnav-link">← All Topics</a>
+    <hr />
+    <div id="topic-list">
+      <small style="color:var(--muted)">Loading topics...</small>
+    </div>
+  </aside>
+
+  <div class="topic-main">
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2 id="topic-name">Loading...</h2>
+          <p class="lede" id="topic-scope"></p>
+        </div>
+        <span class="pill" id="topic-id-badge">-</span>
+      </div>
+
+      <div class="topic-meta">
+        <div class="topic-meta-item">
+          <div class="label">Relevance</div>
+          <div class="value" id="meta-relevance">-</div>
+        </div>
+        <div class="topic-meta-item">
+          <div class="label">Drift</div>
+          <div class="value" id="meta-drift">-</div>
+        </div>
+        <div class="topic-meta-item">
+          <div class="label">Coherence</div>
+          <div class="value" id="meta-coherence">-</div>
+        </div>
+        <div class="topic-meta-item">
+          <div class="label">Distinctness</div>
+          <div class="value" id="meta-distinctness">-</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="pill">Status: <span class="mono" id="topic-status">-</span></span>
+        <span class="pill" id="topic-operation" style="display:none">-</span>
+      </div>
+
+      <hr />
+      <h3>Steelman Summaries</h3>
+      
+      <div class="steelman for">
+        <strong style="color:var(--good)">FOR:</strong>
+        <p id="summary-for" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
+      </div>
+      
+      <div class="steelman against">
+        <strong style="color:var(--warn)">AGAINST:</strong>
+        <p id="summary-against" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
+      </div>
+
+      <hr />
+      <h3>Topic Scores</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Side</th>
+              <th>Factuality (F)</th>
+              <th>Reasoning</th>
+              <th>Coverage</th>
+              <th>Quality (Q)</th>
+            </tr>
+          </thead>
+          <tbody id="scores-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading scores...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <div class="cta-row">
+        <a class="pill" href="topics.html">← Back to Topics</a>
+        <a class="button" href="new_debate_v3.html">Post in this topic</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Facts & Arguments</h3>
+      <div class="grid cols2" id="facts-args-grid">
+        <div>
+          <h4 style="color:var(--good)">FOR Facts</h4>
+          <div id="for-facts"><small style="color:var(--muted)">Loading...</small></div>
+        </div>
+        <div>
+          <h4 style="color:var(--warn)">AGAINST Facts</h4>
+          <div id="against-facts"><small style="color:var(--muted)">Loading...</small></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div class="help-overlay" onclick="BDA.toggleHelp()"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" onclick="BDA.toggleHelp()" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Topic geometry metrics and terms.</p>
+    
+    <div class="glossary-term">Relevance (Rel)</div>
+    <div class="glossary-def">Content mass share - how much of the total debate content belongs to this topic.</div>
+    
+    <div class="glossary-term">Drift Score</div>
+    <div class="glossary-def">How much this topic has changed from its previous state. Higher = more change.</div>
+    
+    <div class="glossary-term">Coherence</div>
+    <div class="glossary-def">How internally consistent the arguments in this topic are.</div>
+    
+    <div class="glossary-term">Distinctness</div>
+    <div class="glossary-def">How different this topic is from other topics (prevents duplication).</div>
+    
+    <div class="glossary-term">Steelman</div>
+    <div class="glossary-def">A summary presenting the strongest version of each side's arguments.</div>
+  </div>
+</div>
+
+<script>
+// Get topic ID from URL parameter
+const urlParams = new URLSearchParams(window.location.search);
+const topicId = urlParams.get('id') || 't1';
+
+async function loadTopicData() {
+  try {
+    // Load debate and snapshot
+    const debateData = await BDA.loadDebate();
+    if (debateData.has_debate) {
+      const snapshotData = await BDA.loadSnapshot();
+      if (snapshotData) {
+        BDA.updateStateStrip(snapshotData);
+      }
+    }
+    
+    // Load specific topic
+    const topic = await BDA.api(`/api/debate/topics/${topicId}`);
+    
+    if (topic.error) {
+      document.getElementById('topic-name').textContent = 'Topic Not Found';
+      document.getElementById('topic-scope').textContent = topic.error;
+      return;
+    }
+    
+    // Update topic info
+    document.getElementById('topic-name').textContent = topic.name || `Topic ${topicId}`;
+    document.getElementById('topic-scope').textContent = topic.scope || '';
+    document.getElementById('topic-id-badge').textContent = topicId;
+    document.getElementById('topic-status').textContent = 'Active';
+    
+    if (topic.operation && topic.operation !== 'created') {
+      const opBadge = document.getElementById('topic-operation');
+      opBadge.textContent = topic.operation;
+      opBadge.style.display = 'inline-block';
+    }
+    
+    // Update metrics
+    document.getElementById('meta-relevance').textContent = BDA.formatNumber(topic.relevance, 3);
+    document.getElementById('meta-drift').textContent = BDA.formatNumber(topic.drift_score, 3);
+    document.getElementById('meta-coherence').textContent = BDA.formatNumber(topic.coherence, 3);
+    document.getElementById('meta-distinctness').textContent = BDA.formatNumber(topic.distinctness, 3);
+    
+    // Update summaries
+    if (topic.summary_for) {
+      document.getElementById('summary-for').textContent = topic.summary_for;
+      document.getElementById('summary-for').style.color = '';
+    }
+    if (topic.summary_against) {
+      document.getElementById('summary-against').textContent = topic.summary_against;
+      document.getElementById('summary-against').style.color = '';
+    }
+    
+    // Update scores table
+    updateScoresTable(topic.scores);
+    
+    // Update facts
+    updateFacts(topic.facts);
+    
+  } catch (error) {
+    console.error('Error loading topic:', error);
+    document.getElementById('topic-name').textContent = 'Error Loading Topic';
+  }
+}
+
+function updateScoresTable(scores) {
+  const tbody = document.getElementById('scores-tbody');
+  
+  const forScores = scores?.FOR || {};
+  const againstScores = scores?.AGAINST || {};
+  
+  tbody.innerHTML = `
+    <tr class="side-for">
+      <td><strong>FOR</strong></td>
+      <td class="mono">${BDA.formatNumber(forScores.factuality, 3)}</td>
+      <td class="mono">${BDA.formatNumber(forScores.reasoning, 3)}</td>
+      <td class="mono">${BDA.formatNumber(forScores.coverage, 3)}</td>
+      <td class="mono"><strong>${BDA.formatNumber(forScores.quality, 3)}</strong></td>
+    </tr>
+    <tr class="side-against">
+      <td><strong>AGAINST</strong></td>
+      <td class="mono">${BDA.formatNumber(againstScores.factuality, 3)}</td>
+      <td class="mono">${BDA.formatNumber(againstScores.reasoning, 3)}</td>
+      <td class="mono">${BDA.formatNumber(againstScores.coverage, 3)}</td>
+      <td class="mono"><strong>${BDA.formatNumber(againstScores.quality, 3)}</strong></td>
+    </tr>
+  `;
+}
+
+function updateFacts(facts) {
+  const forFacts = facts?.filter(f => f.side === 'FOR') || [];
+  const againstFacts = facts?.filter(f => f.side === 'AGAINST') || [];
+  
+  renderFactList('for-facts', forFacts, 'var(--good)');
+  renderFactList('against-facts', againstFacts, 'var(--warn)');
+}
+
+function renderFactList(elementId, facts, colorVar) {
+  const container = document.getElementById(elementId);
+  
+  if (facts.length === 0) {
+    container.innerHTML = '<small style="color:var(--muted)">No facts yet.</small>';
+    return;
+  }
+  
+  container.innerHTML = facts.map(f => `
+    <div style="background:rgba(0,0,0,.15);padding:10px;border-radius:8px;margin:8px 0;border-left:3px solid ${colorVar}">
+      <div style="font-size:13px">${BDA.escapeHtml(f.canon_fact_text)}</div>
+      <div class="row" style="margin:8px 0 0 0;font-size:11px">
+        <span class="pill">p=${BDA.formatNumber(f.p_true, 2)}</span>
+        <span style="color:var(--muted)">${f.member_count} source${f.member_count !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadTopicList() {
+  try {
+    const data = await BDA.api('/api/debate/topics');
+    const topics = data.topics || [];
+    
+    const container = document.getElementById('topic-list');
+    if (topics.length === 0) {
+      container.innerHTML = '<small style="color:var(--muted)">No topics available.</small>';
+      return;
+    }
+    
+    container.innerHTML = topics.map(t => `
+      <a href="topic.html?id=${t.topic_id}" 
+         class="subnav-link ${t.topic_id === topicId ? 'active' : ''}">
+        ${t.topic_id}: ${t.name}
+      </a>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading topic list:', error);
+  }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  loadTopicData();
+  loadTopicList();
+});
+</script>
+
+</body>
+</html>

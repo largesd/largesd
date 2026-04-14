@@ -31,6 +31,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5000
 DEFAULT_SMOKE_PORT = 5055
 DEFAULT_ACCEPTANCE_PORT = 5080
+DEFAULT_SERVER_VERSION = "v3"
 MANUAL_COMMANDS = (
     "server-check",
     "scenario-ai",
@@ -215,7 +216,7 @@ def build_server_command(args: argparse.Namespace) -> list[str]:
             command.extend(["--fact-mode", args.fact_mode])
     elif args.version == "fast":
         command = [python, "start_server_fast.py", "--host", args.host, "--port", str(args.port)]
-    else:
+    elif args.version == "v2":
         command = [python, "start_server_v2.py", "--host", args.host, "--port", str(args.port)]
         if args.fact_mode:
             command.extend(["--fact-mode", args.fact_mode])
@@ -223,6 +224,20 @@ def build_server_command(args: argparse.Namespace) -> list[str]:
             command.extend(["--llm-provider", args.llm_provider])
         if args.num_judges:
             command.extend(["--num-judges", str(args.num_judges)])
+        if args.db_path:
+            command.extend(["--db-path", args.db_path])
+        if args.debug:
+            command.append("--debug")
+    else:
+        command = [python, "start_server_v3.py", "--host", args.host, "--port", str(args.port)]
+        if args.fact_mode:
+            command.extend(["--fact-mode", args.fact_mode])
+        if args.llm_provider:
+            command.extend(["--llm-provider", args.llm_provider])
+        if args.num_judges:
+            command.extend(["--num-judges", str(args.num_judges)])
+        if args.db_path:
+            command.extend(["--db-path", args.db_path])
         if args.debug:
             command.append("--debug")
 
@@ -238,16 +253,23 @@ def run_server(args: argparse.Namespace) -> None:
 
 
 def run_smoke(args: argparse.Namespace) -> None:
-    """Start a temporary v2 server and run a lightweight API scenario."""
+    """Start a temporary v3 server and run a lightweight API scenario."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
     env = project_env({"PYTHONUNBUFFERED": "1"})
+    temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_smoke_{args.port}.db"
+
+    if temp_db_path.exists():
+        temp_db_path.unlink()
+
     command = [
         active_python(),
-        "start_server_v2.py",
+        "start_server_v3.py",
         "--host",
         DEFAULT_HOST,
         "--port",
         str(args.port),
+        "--db-path",
+        str(temp_db_path),
         "--fact-mode",
         "OFFLINE",
         "--llm-provider",
@@ -357,9 +379,10 @@ def build_parser() -> argparse.ArgumentParser:
         "server",
         help="Start one of the app server variants.",
     )
-    server_parser.add_argument("--version", choices=("v1", "v2", "fast"), default="v2")
+    server_parser.add_argument("--version", choices=("v1", "v2", "v3", "fast"), default=DEFAULT_SERVER_VERSION)
     server_parser.add_argument("--host", default="0.0.0.0")
     server_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    server_parser.add_argument("--db-path")
     server_parser.add_argument("--fact-mode", choices=("OFFLINE", "ONLINE_ALLOWLIST"))
     server_parser.add_argument("--llm-provider", choices=("mock", "openai", "openrouter", "openrouter-multi"))
     server_parser.add_argument("--num-judges", type=int)
@@ -369,7 +392,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     smoke_parser = subparsers.add_parser(
         "smoke",
-        help="Start a temporary v2 server and run an automated API scenario.",
+        help="Start a temporary v3 server and run an automated API scenario.",
     )
     smoke_parser.add_argument("--scenario", choices=MANUAL_COMMANDS, default="server-check")
     smoke_parser.add_argument("--port", type=int, default=DEFAULT_SMOKE_PORT)

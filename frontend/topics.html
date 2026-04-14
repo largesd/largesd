@@ -10,7 +10,9 @@
     .score-bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 4px; }
     .score-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
   </style>
-</head>
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+</HEAD>
 <body>
 <header>
   <div class="nav">
@@ -23,7 +25,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate_v3.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html" class="active" aria-current="page">Topics</a>
       <a href="audits.html">Audits</a>
@@ -37,13 +39,13 @@
 <section class="state-strip" aria-label="Current debate state">
   <div class="state-wrap">
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
-    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">0.61</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
     <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
-    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">0.61</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
 </section>
 
@@ -72,8 +74,8 @@
   
   <hr />
   <div class="row">
-    <a class="pill" href="topic_t1.html">Most contested: t1</a>
-    <a class="pill" href="topic_t3.html">Biggest verdict mover: t3</a>
+    <a class="pill" href="topic.html?id=t1">Most contested: t1</a>
+    <a class="pill" href="topic.html?id=t3">Biggest verdict mover: t3</a>
     <a class="pill" href="audits.html#topic-geometry">Open topic audit</a>
   </div>
   
@@ -142,22 +144,18 @@ const API_BASE = window.location.origin;
 
 async function loadData() {
   try {
-    // Load snapshot for header
-    const snapshotRes = await fetch(`${API_BASE}/api/debate/snapshot`);
-    const snapshotData = await snapshotRes.json();
-    
-    if (!snapshotData.error) {
-      document.getElementById('header-verdict').textContent = snapshotData.verdict;
-      document.getElementById('header-confidence').textContent = snapshotData.confidence.toFixed(2);
-      document.getElementById('header-snapshot').textContent = snapshotData.snapshot_id;
-      document.getElementById('header-updated').textContent = new Date(snapshotData.timestamp).toLocaleString();
-      document.getElementById('verdict-mobile').textContent = snapshotData.verdict;
-      document.getElementById('confidence-mobile').textContent = snapshotData.confidence.toFixed(2);
+    const debateData = await BDA.loadDebate();
+    if (!debateData.has_debate) {
+      document.getElementById('topics-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No active debate selected.</td></tr>';
+      return;
+    }
+
+    const snapshotData = await BDA.loadSnapshot();
+    if (snapshotData && snapshotData.has_snapshot) {
+      BDA.updateStateStrip(snapshotData);
     }
     
-    // Load topics
-    const topicsRes = await fetch(`${API_BASE}/api/debate/topics`);
-    const topicsData = await topicsRes.json();
+    const topicsData = await BDA.api('/api/debate/topics');
     
     if (topicsData.topics) {
       renderTopics(topicsData.topics);
@@ -173,9 +171,9 @@ function renderTopics(topics) {
   
   tbody.innerHTML = topics.map(t => `
     <tr data-testid="topic-row-${t.topic_id}">
-      <td><a class='mono' href='topic_${t.topic_id}.html'>${t.topic_id}</a></td>
+      <td><a class='mono' href='topic.html?id=${t.topic_id}'>${t.topic_id}</a></td>
       <td>
-        <a href='topic_${t.topic_id}.html'>${t.name}</a>
+        <a href='topic.html?id=${t.topic_id}'>${t.name}</a>
         <br><small>${t.scope}</small>
       </td>
       <td class='mono'>${t.relevance.toFixed(2)}</td>

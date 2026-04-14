@@ -6,6 +6,7 @@
   <title>Blind Debate Adjudicator — Home</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
   <style>
     .loading { opacity: 0.6; pointer-events: none; }
     .api-status { font-size: 11px; padding: 4px 8px; border-radius: 4px; }
@@ -27,7 +28,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html" class="active" aria-current="page">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate_v3.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html">Audits</a>
@@ -216,13 +217,7 @@ async function loadData() {
   statusEl.className = 'api-status';
   
   try {
-    // Load debate info
-    const debateRes = await fetch(`${API_BASE}/api/debate`);
-    const debateData = await debateRes.json();
-    
-    if (debateData.error) {
-      throw new Error(debateData.error);
-    }
+    const debateData = await BDA.loadDebate();
     
     // Update debate info based on whether a debate exists
     if (debateData.has_debate && debateData.resolution) {
@@ -237,13 +232,11 @@ async function loadData() {
       document.getElementById('scope-display').style.display = 'none';
     }
     
-    // Load snapshot data
-    const snapshotRes = await fetch(`${API_BASE}/api/debate/snapshot`);
-    const snapshotData = await snapshotRes.json();
+    const snapshotData = await BDA.loadSnapshot();
     
-    if (!snapshotData.error) {
+    if (snapshotData && !snapshotData.error && snapshotData.has_snapshot) {
       updateSnapshotDisplay(snapshotData);
-    } else if (snapshotData.has_debate === false) {
+    } else if (!debateData.has_debate) {
       // No debate exists - reset display to empty state
       resetToEmptyState();
     }

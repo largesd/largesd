@@ -138,7 +138,8 @@
     .allowed-list li::marker { color: var(--good); }
     .blocked-list li::marker { color: var(--bad); }
   </style>
-</head>
+  <script src="static/js/auth.js"></script>
+</HEAD>
 <body>
 <header>
   <div class="nav">
@@ -151,7 +152,7 @@
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate_v3.html">New Debate / Post Point</a>
       <a href="snapshot.html">Snapshot</a>
       <a href="topics.html">Topics</a>
       <a href="audits.html">Audits</a>
@@ -162,19 +163,6 @@
     </nav>
   </div>
 </header>
-<section class="state-strip" aria-label="Current debate state">
-  <div class="state-wrap">
-    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral">NO VERDICT</strong></div>
-    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono">0.61</strong></div>
-    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" title="snap_2026-03-02T0610Z_0007">snap_2026-03-02T0610Z_0007</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono">2026-03-02 14:10 SGT</strong></div>
-  </div>
-  <!-- Mobile compact state (visible only on small screens) -->
-  <div class="state-wrap" style="display:none;">
-    <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
-    <div class="state-compact"><strong>Confidence:</strong> 0.61</div>
-  </div>
-</section>
 
 <main>
 
@@ -186,6 +174,9 @@
       <p class="lede">Configure moderation templates and filtering criteria. Changes are versioned and visible to all users per the Visible Modulation principle.</p>
     </div>
     <span class="pill warn">Admin Access</span>
+  </div>
+  <div class="callout soft" style="margin-top:16px;">
+    This page is configuration-oriented. Current live debate state now appears on <a href="snapshot.html">Snapshot</a>, <a href="audits.html">Audits</a>, and <a href="verdict.html">Verdict</a> instead of in a shared header strip here.
   </div>
 </section>
 
