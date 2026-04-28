@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Decision Dossier - Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="verdict.html">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
+  </div>
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main>
+  <section class="card">
+    <div class="section-head">
+      <div>
+        <h2>Decision Dossier</h2>
+        <p class="lede">Expose decisive evidence gaps and selection diagnostics without leaving the product UI.</p>
+      </div>
+      <a class="button secondary" href="snapshot.html">Back to snapshot</a>
+    </div>
+
+    <div class="callout soft" id="dossier-empty" style="display:none;"></div>
+
+    <div id="dossier-content" style="display:none;">
+      <div class="row">
+        <span class="pill">Snapshot: <span class="mono" id="dossier-snapshot-id">-</span></span>
+        <span class="pill">Verdict: <span class="mono" id="dossier-verdict">-</span></span>
+        <span class="pill">Confidence: <span class="mono" id="dossier-confidence">-</span></span>
+      </div>
+
+      <hr />
+      <h3>Active Frame</h3>
+      <div class="callout soft">
+        <p style="margin-top:0;margin-bottom:8px"><strong id="frame-statement">No active frame metadata.</strong></p>
+        <small id="frame-meta">Frame version unavailable.</small>
+      </div>
+
+      <hr />
+      <h3>Evidence Gap Summary</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Topic-side</th>
+              <th>Insufficiency rate</th>
+              <th>Supported-only factuality</th>
+              <th>All-claims factuality</th>
+              <th>Tier distribution</th>
+            </tr>
+          </thead>
+          <tbody id="evidence-gaps-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading dossier evidence gaps...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Selection Diagnostics</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Topic-side</th>
+              <th>Selected facts</th>
+              <th>Selected arguments</th>
+              <th>Selection seed</th>
+            </tr>
+          </thead>
+          <tbody id="selection-diag-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading selection diagnostics...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show raw selection diagnostics</summary>
+        <div class="codebox" id="selection-diag-raw">No diagnostics loaded yet.</div>
+      </details>
+
+      <hr />
+      <h3>Decisive Outputs</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Type</th><th>Item</th><th>Side</th><th>Score</th><th>Provenance</th></tr></thead>
+          <tbody id="decisive-outputs-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading decisive outputs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Counterfactuals + priority gaps</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>D without topic</th><th>Change in D</th><th>Would flip?</th></tr></thead>
+          <tbody id="counterfactuals-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading counterfactuals...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout soft" style="margin-top:16px;">
+        <h4 style="margin-top:0">What would change this</h4>
+        <ul class="compact-list" id="priority-gaps-list"><li>Loading priority gaps...</li></ul>
+      </div>
+
+      <hr />
+      <h3>Insufficiency sensitivity + unselected tail</h3>
+      <div class="row">
+        <span class="pill">If insufficient true: <span class="mono" id="insuff-true">-</span></span>
+        <span class="pill">If insufficient false: <span class="mono" id="insuff-false">-</span></span>
+        <span class="pill">Δ true / false: <span class="mono" id="insuff-deltas">-</span></span>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show unselected tail summary</summary>
+        <div class="codebox" id="unselected-tail-raw">No unselected tail summary loaded.</div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div id="shared-help-panel" data-panel="help-panel"></div>
+
+<script>
+function showDossierEmpty(messageHtml) {
+  const empty = document.getElementById('dossier-empty');
+  document.getElementById('dossier-content').style.display = 'none';
+  empty.innerHTML = messageHtml;
+  empty.style.display = 'block';
+}
+
+function showDossierContent() {
+  document.getElementById('dossier-empty').style.display = 'none';
+  document.getElementById('dossier-content').style.display = 'block';
+}
+
+function renderEvidenceGaps(evidenceGaps) {
+  const tbody = document.getElementById('evidence-gaps-tbody');
+  const entries = Object.entries(evidenceGaps || {});
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No evidence gap data available.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = entries.map(([key, value]) => `
+    <tr>
+      <td class="mono">${BDA.escapeHtml(key)}</td>
+      <td class="mono">${BDA.formatNumber(Number(value.insufficiency_rate || 0), 3)}</td>
+      <td class="mono">${BDA.formatNumber(Number(value.f_supported_only || 0), 3)}</td>
+      <td class="mono">${BDA.formatNumber(Number(value.f_all || 0), 3)}</td>
+      <td class="mono">${BDA.escapeHtml(JSON.stringify(value.tier_distribution || {}))}</td>
+    </tr>
+  `).join('');
+}
+
+function renderSelectionDiagnostics(selectionDiagnostics) {
+  const tbody = document.getElementById('selection-diag-tbody');
+  const entries = Object.entries(selectionDiagnostics || {});
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No selection diagnostics recorded yet.</td></tr>';
+    document.getElementById('selection-diag-raw').textContent = 'No selection diagnostics available.';
+    return;
+  }
+
+  tbody.innerHTML = entries.map(([key, value]) => {
+    const selectedFacts = Number(value?.summary?.total_facts_selected ?? value?.counts?.selected_facts ?? value?.selected_fact_ids?.length ?? 0);
+    const selectedArgs = Number(value?.summary?.total_arguments_selected ?? value?.counts?.selected_arguments ?? value?.selected_arg_ids?.length ?? 0);
+    const seed = value?.selection_recipe?.seed ?? value?.seed ?? '-';
+    return `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(key)}</td>
+        <td class="mono">${selectedFacts}</td>
+        <td class="mono">${selectedArgs}</td>
+        <td class="mono">${BDA.escapeHtml(String(seed))}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('selection-diag-raw').textContent = JSON.stringify(selectionDiagnostics, null, 2);
+}
+
+function renderDecisiveOutputs(dossier) {
+  const premises = (dossier.decisive_premises || []).map((item) => ({
+    type: 'premise',
+    id: item.canon_fact_id,
+    side: item.side,
+    score: item.p_or_q_score ?? item.p_true,
+    text: item.text,
+    provenance: (item.span_ids || []).join(', '),
+  }));
+  const argumentsRows = (dossier.decisive_arguments || []).map((item) => ({
+    type: 'argument',
+    id: item.canon_arg_id,
+    side: item.side,
+    score: item.reasoning_score,
+    text: item.text,
+    provenance: (item.span_ids || []).join(', '),
+  }));
+  const rows = [...premises, ...argumentsRows].slice(0, 12);
+  const tbody = document.getElementById('decisive-outputs-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No decisive outputs published for this snapshot.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((row) => `
+    <tr>
+      <td>${BDA.escapeHtml(row.type)}</td>
+      <td><strong class="mono">${BDA.escapeHtml(row.id || '-')}</strong><br><small>${BDA.escapeHtml(row.text || '')}</small></td>
+      <td>${BDA.escapeHtml(row.side || '-')}</td>
+      <td class="mono">${BDA.formatNumber(Number(row.score || 0), 3)}</td>
+      <td class="mono">${BDA.escapeHtml(row.provenance || '-')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCounterfactuals(counterfactuals) {
+  const entries = Object.entries(counterfactuals || {});
+  const tbody = document.getElementById('counterfactuals-tbody');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No remove-topic counterfactuals available.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([topicId, item]) => `
+    <tr>
+      <td class="mono">${BDA.escapeHtml(topicId)}</td>
+      <td class="mono">${BDA.formatNumber(item.d_without_topic || 0, 4)}</td>
+      <td class="mono">${BDA.formatNumber(item.change_in_d || 0, 4)}</td>
+      <td>${item.would_flip_verdict ? 'yes' : 'no'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderPriorityGaps(priorityGaps) {
+  const empirical = priorityGaps?.insufficient_empirical_items || [];
+  const normative = priorityGaps?.high_dispersion_normative_items || [];
+  const rows = [
+    ...empirical.slice(0, 4).map((item) => `Empirical ${item.canon_fact_id}: ${item.operationalization || item.text || ''}`),
+    ...normative.slice(0, 4).map((item) => `Normative ${item.canon_fact_id}: review frame acceptability (${item.normative_provenance || 'no provenance'})`),
+  ];
+  document.getElementById('priority-gaps-list').innerHTML = rows.length
+    ? rows.map((row) => `<li>${BDA.escapeHtml(row)}</li>`).join('')
+    : '<li>No priority gaps published for this snapshot.</li>';
+}
+
+function renderSensitivityAndTail(dossier) {
+  const sensitivity = dossier.insufficiency_sensitivity || {};
+  document.getElementById('insuff-true').textContent = BDA.formatNumber(sensitivity.D_if_insufficient_true || 0, 4);
+  document.getElementById('insuff-false').textContent = BDA.formatNumber(sensitivity.D_if_insufficient_false || 0, 4);
+  document.getElementById('insuff-deltas').textContent = `${BDA.formatNumber(sensitivity.delta_D_true || 0, 4)} / ${BDA.formatNumber(sensitivity.delta_D_false || 0, 4)}`;
+  document.getElementById('unselected-tail-raw').textContent = JSON.stringify(dossier.unselected_tail_summary || {}, null, 2);
+}
+
+async function loadDossier() {
+  const debate = await BDA.loadDebate();
+  if (!debate.has_debate) {
+    showDossierEmpty('No active debate selected. Start one from <a href="new_debate.html">Post Argument</a> to unlock dossier data.');
+    return;
+  }
+
+  const snapshot = await BDA.loadSnapshot();
+  if (!snapshot || !snapshot.has_snapshot) {
+    showDossierEmpty('This debate has no snapshot yet. Generate one from <a href="new_debate.html">Post Argument</a> before opening the dossier.');
+    return;
+  }
+
+  BDA.updateStateStrip(snapshot);
+
+  try {
+    const dossier = await BDA.api('/api/debate/decision-dossier');
+    showDossierContent();
+
+    document.getElementById('dossier-snapshot-id').textContent = dossier.snapshot_id || '-';
+    document.getElementById('dossier-verdict').textContent = dossier.verdict || 'NO VERDICT';
+    document.getElementById('dossier-confidence').textContent = BDA.formatNumber(Number(dossier.confidence || 0), 3);
+
+    const frame = dossier.frame || {};
+    document.getElementById('frame-statement').textContent = frame.statement || 'No active frame metadata.';
+    document.getElementById('frame-meta').textContent = frame.version
+      ? `Frame ${frame.frame_id || '-'} • version ${frame.version}`
+      : 'Frame version unavailable.';
+
+    renderEvidenceGaps(dossier.evidence_gaps || {});
+    renderSelectionDiagnostics(dossier.selection_diagnostics || {});
+    renderDecisiveOutputs(dossier);
+    renderCounterfactuals(dossier.counterfactuals || {});
+    renderPriorityGaps(dossier.priority_gaps || {});
+    renderSensitivityAndTail(dossier);
+  } catch (error) {
+    showDossierEmpty(error.message || 'Failed to load decision dossier.');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDossier();
+});
+</script>
+</body>
+</html>

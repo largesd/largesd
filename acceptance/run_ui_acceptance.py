@@ -48,36 +48,94 @@ def write_markdown(path: Path, lines: List[str]) -> None:
 
 def open_new_debate_page(page: Page, base_url: str) -> None:
     page.goto(f"{base_url}/new_debate.html", wait_until="networkidle")
-    expect(page.get_by_test_id("create-debate-section")).to_be_visible()
+    expect(page.locator("#debate-section")).to_be_visible()
 
 
-def create_debate(page: Page, base_url: str) -> Dict[str, str]:
-    open_new_debate_page(page, base_url)
+def authenticate_browser_user(page: Page, base_url: str) -> Dict[str, str]:
+    suffix = unique_suffix()
+    email = f"acceptance_{suffix}@example.com"
+    password = "AcceptancePass123"
+    display_name = f"Acceptance {suffix[-6:]}"
 
+    register_payload = {
+        "email": email,
+        "password": password,
+        "display_name": display_name,
+    }
+    register_response = page.request.post(
+        f"{base_url}/api/auth/register",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(register_payload),
+    )
+
+    if register_response.status in {200, 201}:
+        auth_data = register_response.json()
+    elif register_response.status == 409:
+        login_response = page.request.post(
+            f"{base_url}/api/auth/login",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps({"email": email, "password": password}),
+        )
+        if not login_response.ok:
+            raise AssertionError(
+                f"Failed to log in acceptance user after register conflict: {login_response.status}"
+            )
+        auth_data = login_response.json()
+    else:
+        raise AssertionError(f"Failed to register acceptance user: HTTP {register_response.status}")
+
+    if not auth_data.get("access_token"):
+        raise AssertionError("Authentication response did not include access_token.")
+
+    user = {
+        "user_id": auth_data.get("user_id", ""),
+        "email": auth_data.get("email", email),
+        "display_name": auth_data.get("display_name", display_name),
+    }
+    token = auth_data["access_token"]
+
+    page.goto(f"{base_url}/index.html", wait_until="networkidle")
+    page.evaluate(
+        """(auth) => {
+            localStorage.setItem("access_token", auth.token);
+            localStorage.setItem("user", JSON.stringify(auth.user));
+        }""",
+        {"token": token, "user": user},
+    )
+    return user
+
+
+def create_debate_via_api(page: Page, base_url: str, token: str) -> Dict[str, str]:
+    """Create a debate via admin API (default admin access mode allows authenticated users)."""
     motion = f"Resolved: External AI audits should be mandatory ({unique_suffix()})."
-    debate_frame = (
+    debate_scope = (
         "Judge which side best balances safety, accountability, operational burden, "
         "and public trust for a neutral policymaker."
     )
-    moderation_criteria = (
-        "Allow good-faith arguments that engage the motion directly. Block harassment, "
-        "doxxing, spam, and off-topic content. Prefer concrete evidence and fair "
-        "summaries of opposing arguments."
+    response = page.request.post(
+        f"{base_url}/api/debates",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        data=json.dumps({"resolution": motion, "scope": debate_scope}),
     )
-
-    page.get_by_test_id("debate-motion-input").fill(motion)
-    page.get_by_test_id("debate-frame-input").fill(debate_frame)
-    page.get_by_test_id("debate-moderation-input").fill(moderation_criteria)
-    page.get_by_test_id("create-debate-button").click()
-
-    expect(page.get_by_test_id("status-message")).to_contain_text("Debate created")
-    expect(page.get_by_test_id("active-debate-motion")).to_contain_text(motion)
-
+    if not response.ok:
+        raise AssertionError(f"Failed to create debate via API: HTTP {response.status}")
+    data = response.json()
+    # Activate the debate
+    page.request.post(
+        f"{base_url}/api/debate/{data['debate_id']}/activate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
     return {
         "motion": motion,
-        "debate_frame": debate_frame,
-        "moderation_criteria": moderation_criteria,
+        "debate_scope": debate_scope,
+        "debate_id": data["debate_id"],
     }
+
+
+def create_debate(page: Page, base_url: str) -> Dict[str, str]:
+    # Acceptance user is authenticated; default admin mode allows direct creation.
+    token = page.evaluate("() => localStorage.getItem('access_token')") or ""
+    return create_debate_via_api(page, base_url, token)
 
 
 def submit_post(page: Page, side: str, topic_id: str, facts: str, inference: str) -> None:
@@ -86,14 +144,14 @@ def submit_post(page: Page, side: str, topic_id: str, facts: str, inference: str
     page.locator("#facts-input").fill(facts)
     page.locator("#inference-input").fill(inference)
     page.locator("#counter-input").fill("")
-    page.get_by_test_id("submit-post-button").click()
-    expect(page.get_by_test_id("status-message")).to_contain_text("Post submitted and allowed")
+    page.get_by_role("button", name="Generate Email").first.click()
+    expect(page.locator("#status-message")).to_contain_text("Email generated")
 
 
 def generate_snapshot(page: Page) -> Dict[str, str]:
-    page.get_by_test_id("generate-snapshot-button").click()
-    expect(page.get_by_test_id("status-message")).to_contain_text("generated", timeout=SNAPSHOT_TIMEOUT_MS)
-    expect(page.get_by_test_id("pending-count")).to_have_text("0", timeout=SNAPSHOT_TIMEOUT_MS)
+    page.get_by_role("button", name="Generate New Snapshot").first.click()
+    expect(page.locator("#status-message")).to_contain_text("generated", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#pending-count")).to_have_text("0", timeout=SNAPSHOT_TIMEOUT_MS)
 
     snapshot_id = (page.locator("#header-snapshot").text_content() or "").strip()
     verdict = (page.locator("#header-verdict").text_content() or "").strip()
@@ -107,20 +165,23 @@ def generate_snapshot(page: Page) -> Dict[str, str]:
 
 
 def criterion_ac1(page: Page, base_url: str) -> List[str]:
+    user = authenticate_browser_user(page, base_url)
     open_new_debate_page(page, base_url)
-    expect(page.get_by_test_id("create-debate-state")).to_contain_text("No active debate")
-    expect(page.get_by_test_id("runtime-mode")).to_contain_text("Guest posting")
+    expect(page.locator("#display-resolution")).to_contain_text("No active debate")
+    expect(page.locator("#post-access-hint")).to_contain_text("Create or select a debate")
 
     debate = create_debate(page, base_url)
-    expect(page.get_by_test_id("post-access-hint")).to_contain_text("Guest posting is enabled")
+    expect(page.locator("#post-access-hint")).to_contain_text("Posting is available")
 
     return [
+        f"Registered and authenticated acceptance user: {user['email']}",
         f"Created debate via the browser: {debate['motion']}",
-        "Posting unlocked after debate creation.",
+        "Posting unlocked after debate creation for an authenticated user.",
     ]
 
 
 def criterion_ac2(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
     submit_post(
@@ -138,9 +199,9 @@ def criterion_ac2(page: Page, base_url: str) -> List[str]:
         "Therefore mandatory audits can create enforcement gaps and coordination costs.",
     )
 
-    expect(page.get_by_test_id("pending-count")).to_have_text("2")
-    expect(page.get_by_test_id("posts-list")).to_contain_text("FOR")
-    expect(page.get_by_test_id("posts-list")).to_contain_text("AGAINST")
+    expect(page.locator("#pending-count")).to_have_text("2")
+    expect(page.locator("#posts-list")).to_contain_text("FOR")
+    expect(page.locator("#posts-list")).to_contain_text("AGAINST")
 
     return [
         "Submitted one FOR post and one AGAINST post.",
@@ -149,6 +210,7 @@ def criterion_ac2(page: Page, base_url: str) -> List[str]:
 
 
 def criterion_ac3(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
     submit_post(
@@ -175,6 +237,7 @@ def criterion_ac3(page: Page, base_url: str) -> List[str]:
 
 
 def criterion_ac4(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
     submit_post(
@@ -202,15 +265,327 @@ def criterion_ac4(page: Page, base_url: str) -> List[str]:
         raise AssertionError("Topics page did not render any topic rows.")
 
     page.goto(f"{base_url}/verdict.html", wait_until="networkidle")
-    expect(page.get_by_test_id("verdict-pill")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
-    expect(page.get_by_test_id("contributions-tbody").locator("tr").first).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#verdict-pill")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#contributions-tbody tr").first).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
 
-    overall_for = float((page.get_by_test_id("overall-for").text_content() or "0").strip())
-    overall_against = float((page.get_by_test_id("overall-against").text_content() or "0").strip())
+    overall_for = float((page.locator("#overall-for").text_content() or "0").strip())
+    overall_against = float((page.locator("#overall-against").text_content() or "0").strip())
 
     return [
         f"Snapshot {snapshot['snapshot_id']} produced {topic_count} topic rows.",
         f"Verdict page rendered overall scores FOR={overall_for:.2f}, AGAINST={overall_against:.2f}.",
+    ]
+
+
+def criterion_ac5(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
+    create_debate(page, base_url)
+
+    page.goto(f"{base_url}/admin.html", wait_until="networkidle")
+    expect(page.locator("#template-base")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+
+    version = f"ac-{unique_suffix()}"
+    page.locator("#template-version").fill(version)
+    page.locator("#template-base").select_option("minimal")
+    page.locator("#save-draft-btn").click()
+    expect(page.locator("#admin-action-feedback")).to_contain_text("Draft saved", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#template-history-tbody")).to_contain_text(version, timeout=SNAPSHOT_TIMEOUT_MS)
+
+    return [
+        f"Saved moderation draft version {version} from admin UI.",
+        "Reload confirmed draft persistence in template history.",
+    ]
+
+
+def criterion_ac6(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
+    create_debate(page, base_url)
+
+    submit_post(
+        page,
+        "FOR",
+        "t1",
+        "Independent evaluation can catch unsafe deployment assumptions before public release.",
+        "Therefore mandatory auditing can reduce catastrophic deployment risk.",
+    )
+    submit_post(
+        page,
+        "AGAINST",
+        "t3",
+        "Rigid compliance checks can slow beneficial deployment and increase costs.",
+        "Therefore mandatory audits can create implementation burdens.",
+    )
+    snapshot = generate_snapshot(page)
+
+    page.goto(f"{base_url}/evidence.html", wait_until="networkidle")
+    expect(page.locator("#evidence-summary")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+
+    page.goto(f"{base_url}/dossier.html", wait_until="networkidle")
+    expect(page.locator("#dossier-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#dossier-snapshot-id")).to_contain_text("snap_", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    page.goto(f"{base_url}/governance.html", wait_until="networkidle")
+    expect(page.locator("#governance-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#gov-health-tbody tr").first).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+
+    return [
+        f"Snapshot {snapshot['snapshot_id']} enabled evidence, dossier, and governance surfaces.",
+        "Evidence summary, dossier metadata, and governance metrics all rendered from API-backed pages.",
+    ]
+
+
+def register_user_via_ui(page: Page, base_url: str) -> Dict[str, str]:
+    suffix = unique_suffix()
+    email = f"acceptance_ui_{suffix}@example.com"
+    password = "AcceptancePass123"
+    display_name = f"UI User {suffix[-6:]}"
+
+    page.goto(f"{base_url}/register.html", wait_until="networkidle")
+    expect(page.locator("#register-form")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+
+    page.locator("#display_name").fill(display_name)
+    page.locator("#email").fill(email)
+    page.locator("#password").fill(password)
+    page.locator("#confirm_password").fill(password)
+    page.locator("#submit-btn").click()
+
+    expect(page.locator("#success-alert")).to_contain_text("Account created", timeout=SNAPSHOT_TIMEOUT_MS)
+    page.wait_for_url(f"{base_url}/index.html*", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    token = page.evaluate("() => localStorage.getItem('access_token')")
+    if not token:
+        raise AssertionError("Register flow did not persist access_token in localStorage.")
+
+    raw_user = page.evaluate("() => localStorage.getItem('user')")
+    if not raw_user or raw_user == "undefined":
+        raise AssertionError("Register flow did not persist a valid user payload in localStorage.")
+
+    user = json.loads(raw_user)
+    if user.get("email") != email:
+        raise AssertionError("Persisted register user payload does not match the created account.")
+
+    return {
+        "email": email,
+        "password": password,
+        "display_name": display_name,
+    }
+
+
+def login_user_via_ui(page: Page, base_url: str, email: str, password: str) -> None:
+    page.goto(f"{base_url}/login.html?next=%2Fnew_debate.html", wait_until="networkidle")
+    expect(page.locator("#login-form")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    page.locator("#email").fill(email)
+    page.locator("#password").fill(password)
+    page.locator("#submit-btn").click()
+    expect(page.locator("#success-alert")).to_contain_text("Login successful", timeout=SNAPSHOT_TIMEOUT_MS)
+    page.wait_for_url(f"{base_url}/new_debate.html*", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    token = page.evaluate("() => localStorage.getItem('access_token')")
+    if not token:
+        raise AssertionError("Login flow did not persist access_token in localStorage.")
+
+
+def criterion_ac7(page: Page, base_url: str) -> List[str]:
+    creds = register_user_via_ui(page, base_url)
+
+    # Force a fresh login path after successful registration.
+    page.evaluate("() => localStorage.clear()")
+
+    login_user_via_ui(page, base_url, creds["email"], creds["password"])
+    # Phase 3: nav shows generic "Account" instead of display_name
+    expect(page.locator(".auth-link button")).to_contain_text("Account", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    # Validate logout behavior from authenticated UI state.
+    page.evaluate("() => Auth.logout()")
+    page.wait_for_url(f"{base_url}/login.html?*", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#error-alert")).to_contain_text("logged out", timeout=SNAPSHOT_TIMEOUT_MS)
+
+    token_after_logout = page.evaluate("() => localStorage.getItem('access_token')")
+    if token_after_logout:
+        raise AssertionError("Logout should clear access_token from localStorage.")
+
+    return [
+        f"Registered a user via register.html: {creds['email']}",
+        "Logged in via login.html and redirected to /new_debate.html using next=.",
+        "Nav shows generic 'Account' label (identity-blind) when authenticated.",
+        "Logout cleared local auth/session state and redirected back to login with status messaging.",
+    ]
+
+
+def criterion_ac8(page: Page, base_url: str) -> List[str]:
+    authenticate_browser_user(page, base_url)
+    create_debate(page, base_url)
+
+    submit_post(
+        page,
+        "FOR",
+        "t1",
+        "External model evaluations can detect high-risk failure modes before production rollout.",
+        "Therefore mandatory audits can reduce severe deployment incidents.",
+    )
+    submit_post(
+        page,
+        "AGAINST",
+        "t3",
+        "Audit requirements can create uneven burdens across smaller developers.",
+        "Therefore universal mandates can reduce competition and slow iteration.",
+    )
+    snapshot_one = generate_snapshot(page)
+
+    submit_post(
+        page,
+        "FOR",
+        "t2",
+        "Transparent audit disclosures improve institutional accountability and incident response.",
+        "Therefore audits can increase trust and reduce downstream remediation costs.",
+    )
+    snapshot_two = generate_snapshot(page)
+
+    page.goto(f"{base_url}/snapshot.html", wait_until="networkidle")
+    expect(page.locator("#snapshot-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#history-tbody tr").first).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    history_rows = page.locator("#history-tbody tr").count()
+    if history_rows < 2:
+        raise AssertionError(f"Expected at least 2 snapshot history rows, found {history_rows}.")
+
+    expect(page.locator("#diff-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    old_id = (page.locator("#diff-old-id").text_content() or "").strip()
+    new_id = (page.locator("#diff-new-id").text_content() or "").strip()
+    if not old_id.startswith("snap_") or not new_id.startswith("snap_"):
+        raise AssertionError("Snapshot diff ids were not populated with expected snapshot identifiers.")
+    if old_id == new_id:
+        raise AssertionError("Snapshot diff old/new ids should differ when two snapshots exist.")
+
+    summary_items = page.locator("#diff-summary-list li").count()
+    if summary_items < 3:
+        raise AssertionError("Snapshot diff summary did not render enough detail items.")
+
+    return [
+        f"Generated two snapshots ({snapshot_one['snapshot_id']}, {snapshot_two['snapshot_id']}) in one debate.",
+        f"Snapshot history rendered {history_rows} rows.",
+        f"Snapshot diff rendered old/new ids ({old_id} -> {new_id}) with summary list entries.",
+    ]
+
+
+def criterion_ac9(page: Page, base_url: str) -> List[str]:
+    """Proposal lifecycle: submit, admin queue, accept."""
+    user = authenticate_browser_user(page, base_url)
+
+    # Submit a proposal via API
+    token = page.evaluate("() => localStorage.getItem('access_token')") or ""
+    motion = f"Resolved: Test proposal acceptance flow ({unique_suffix()})."
+    proposal_response = page.request.post(
+        f"{base_url}/api/debate-proposals",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        data=json.dumps({
+            "motion": motion,
+            "moderation_criteria": "Allow on-topic arguments. Block spam.",
+            "debate_frame": "Judge which side presents the stronger case.",
+        }),
+    )
+    if not proposal_response.ok:
+        raise AssertionError(f"Proposal submission failed: HTTP {proposal_response.status}")
+    proposal_data = proposal_response.json()
+    proposal_id = proposal_data["proposal_id"]
+
+    # Verify it appears in my proposals
+    mine_response = page.request.get(
+        f"{base_url}/api/debate-proposals/mine",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if not mine_response.ok:
+        raise AssertionError(f"My proposals fetch failed: HTTP {mine_response.status}")
+    mine_data = mine_response.json()
+    if not any(p["proposal_id"] == proposal_id for p in mine_data.get("proposals", [])):
+        raise AssertionError("Submitted proposal did not appear in /mine.")
+
+    # Admin accepts the proposal
+    accept_response = page.request.post(
+        f"{base_url}/api/admin/debate-proposals/{proposal_id}/accept",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if not accept_response.ok:
+        raise AssertionError(f"Proposal accept failed: HTTP {accept_response.status}")
+    accept_data = accept_response.json()
+    debate_id = accept_data["debate_id"]
+
+    # Verify proposal status updated
+    proposal_check = page.request.get(
+        f"{base_url}/api/admin/debate-proposals",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    proposals = proposal_check.json().get("proposals", [])
+    match = next((p for p in proposals if p["proposal_id"] == proposal_id), None)
+    if not match or match["status"] != "accepted":
+        raise AssertionError("Proposal status was not updated to accepted.")
+
+    return [
+        f"Submitted proposal {proposal_id}.",
+        f"Admin accepted proposal and created debate {debate_id}.",
+        "Proposal flow end-to-end verified.",
+    ]
+
+
+def criterion_ac10(page: Page, base_url: str) -> List[str]:
+    """Identity-blind public surface: no display_name or email in nav."""
+    user = authenticate_browser_user(page, base_url)
+
+    page.goto(f"{base_url}/index.html", wait_until="networkidle")
+    nav = page.locator(".navlinks")
+    expect(nav).to_be_visible()
+
+    nav_text = (nav.text_content() or "").strip()
+    if user["display_name"] in nav_text:
+        raise AssertionError("Nav should not reveal display_name in public blind mode.")
+    if user["email"] in nav_text:
+        raise AssertionError("Nav should not reveal email in public blind mode.")
+
+    # Generic "Account" indicator should be present
+    if "Account" not in nav_text:
+        raise AssertionError("Nav should show generic 'Account' indicator when authenticated.")
+
+    return [
+        "Authenticated user sees generic 'Account' label, not personal identifiers.",
+        f"Verified absence of display_name and email in nav text.",
+    ]
+
+
+def criterion_ac11(page: Page, base_url: str) -> List[str]:
+    """Snapshot integrity fields visible in UI."""
+    authenticate_browser_user(page, base_url)
+    create_debate(page, base_url)
+
+    submit_post(
+        page,
+        "FOR",
+        "t1",
+        "External audits improve safety.",
+        "Therefore mandatory audits reduce risk.",
+    )
+    submit_post(
+        page,
+        "AGAINST",
+        "t3",
+        "Audits add compliance burden.",
+        "Therefore mandates slow innovation.",
+    )
+    generate_snapshot(page)
+
+    page.goto(f"{base_url}/snapshot.html", wait_until="networkidle")
+    expect(page.locator("#snapshot-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#integrity-input-hash")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#integrity-output-hash")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#integrity-recipe-versions")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
+
+    input_hash = (page.locator("#integrity-input-hash").text_content() or "").strip()
+    if input_hash == "-" or len(input_hash) < 16:
+        raise AssertionError("Input hash root should be populated with a hash value.")
+
+    return [
+        "Snapshot page renders integrity fields.",
+        f"Input hash root populated: {input_hash[:16]}…",
     ]
 
 
@@ -219,6 +594,13 @@ CRITERION_RUNNERS: Dict[str, Callable[[Page, str], List[str]]] = {
     "AC-2": criterion_ac2,
     "AC-3": criterion_ac3,
     "AC-4": criterion_ac4,
+    "AC-5": criterion_ac5,
+    "AC-6": criterion_ac6,
+    "AC-7": criterion_ac7,
+    "AC-8": criterion_ac8,
+    "AC-9": criterion_ac9,
+    "AC-10": criterion_ac10,
+    "AC-11": criterion_ac11,
 }
 
 

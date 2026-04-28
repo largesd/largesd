@@ -43,6 +43,10 @@ class ExtractedFact:
     p_true: float = 0.5
     fact_check_job_id: Optional[str] = None  # For async fact checking
     fact_check_status: str = "pending"  # pending, completed, failed
+    fact_type: str = "empirical"  # empirical, normative, definitional
+    normative_provenance: str = ""
+    operationalization: str = ""
+    evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -94,6 +98,10 @@ class CanonicalFact:
     member_fact_ids: List[str]
     provenance_spans: List[ExtractedSpan] = field(default_factory=list)
     p_true: float = 0.5
+    fact_type: str = "empirical"
+    normative_provenance: str = ""
+    operationalization: str = ""
+    evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -173,6 +181,7 @@ class ExtractionEngine:
         """
         facts = []
         for i, span in enumerate(fact_spans):
+            fact_type = self._classify_fact_type(span.span_text)
             fact = ExtractedFact(
                 fact_id=f"fact_{span.post_id}_{i}",
                 fact_text=span.span_text,
@@ -180,11 +189,17 @@ class ExtractionEngine:
                 side=side,
                 provenance_spans=[span],
                 p_true=0.5,  # Default, will be updated by fact checker
-                fact_check_status="pending"
+                fact_check_status="pending",
+                fact_type=fact_type,
+                normative_provenance=(
+                    f"source_post_id={post_id or span.post_id}; side={side}; topic_id={topic_id}"
+                    if fact_type == "normative" else ""
+                ),
+                operationalization=self._build_operationalization(span.span_text, fact_type),
             )
             
             # Submit to fact checker if available
-            if self.fact_checker:
+            if self.fact_checker and fact_type == "empirical":
                 try:
                     request_context = RequestContext(
                         post_id=post_id or span.post_id,
@@ -210,14 +225,40 @@ class ExtractionEngine:
                             )
                         fact.p_true = result.factuality_score
                         fact.fact_check_status = "completed"
+                        fact.operationalization = result.operationalization or fact.operationalization
+                        fact.evidence_tier_counts = getattr(result, "evidence_tier_counts", {})
                         
                 except Exception as e:
                     # Fact check failed, use default
                     fact.fact_check_status = "failed"
+            elif fact_type != "empirical":
+                fact.fact_check_status = "completed"
             
             facts.append(fact)
         
         return facts
+
+    @staticmethod
+    def _classify_fact_type(text: str) -> str:
+        lowered = (text or "").lower()
+        normative_markers = (
+            "should", "ought", "unjust", "fair", "unfair", "priority", "right",
+            "wrong", "moral", "ethical", "deserve", "must", "value",
+        )
+        definitional_markers = ("means", "defined as", "refers to", "definition")
+        if any(marker in lowered for marker in definitional_markers):
+            return "definitional"
+        if any(marker in lowered for marker in normative_markers):
+            return "normative"
+        return "empirical"
+
+    @staticmethod
+    def _build_operationalization(text: str, fact_type: str) -> str:
+        if fact_type == "normative":
+            return "Assess acceptability against the active frame values and comparable cases."
+        if fact_type == "definitional":
+            return "Confirm whether the active frame definitions or ordinary usage support this definition."
+        return f"Identify primary or reputable secondary evidence that would confirm or refute: {text[:160]}"
     
     def update_fact_check_results(self, facts: List[ExtractedFact]) -> List[ExtractedFact]:
         """
@@ -236,6 +277,8 @@ class ExtractionEngine:
                     if result:
                         fact.p_true = result.factuality_score
                         fact.fact_check_status = "completed"
+                        fact.operationalization = result.operationalization or fact.operationalization
+                        fact.evidence_tier_counts = getattr(result, "evidence_tier_counts", {})
                 except Exception:
                     pass  # Still pending or failed
             
@@ -316,7 +359,7 @@ class ExtractionEngine:
         
         # Prepare facts for LLM
         facts_data = [
-            {"id": f.fact_id, "text": f.fact_text, "side": f.side, "p_true": f.p_true}
+            {"id": f.fact_id, "text": f.fact_text, "side": f.side, "p_true": f.p_true, "fact_type": f.fact_type}
             for f in facts
         ]
         
@@ -342,6 +385,12 @@ class ExtractionEngine:
             # Calculate aggregate p_true from member facts
             # Use mean of P(true) values
             avg_p = sum(mf.p_true for mf in member_facts) / len(member_facts)
+            fact_types = [getattr(mf, "fact_type", "empirical") for mf in member_facts]
+            fact_type = "normative" if "normative" in fact_types else "definitional" if "definitional" in fact_types else "empirical"
+            tier_counts: Dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
+            for mf in member_facts:
+                for tier, count in getattr(mf, "evidence_tier_counts", {}).items():
+                    tier_counts[tier] = tier_counts.get(tier, 0) + int(count)
             
             cf = CanonicalFact(
                 canon_fact_id=f"cf_{facts[0].topic_id}_{i}",
@@ -350,7 +399,11 @@ class ExtractionEngine:
                 canon_fact_text=cluster.get("canonical_text", member_facts[0].fact_text),
                 member_fact_ids=member_ids,
                 provenance_spans=all_spans,
-                p_true=round(avg_p, 2)
+                p_true=round(avg_p, 2),
+                fact_type=fact_type,
+                normative_provenance="; ".join(mf.normative_provenance for mf in member_facts if mf.normative_provenance),
+                operationalization=member_facts[0].operationalization,
+                evidence_tier_counts=tier_counts,
             )
             canonical_facts.append(cf)
         
@@ -370,7 +423,11 @@ class ExtractionEngine:
                     canon_fact_text=f.fact_text,
                     member_fact_ids=[uid],
                     provenance_spans=f.provenance_spans,
-                    p_true=f.p_true
+                    p_true=f.p_true,
+                    fact_type=f.fact_type,
+                    normative_provenance=f.normative_provenance,
+                    operationalization=f.operationalization,
+                    evidence_tier_counts=getattr(f, "evidence_tier_counts", {}),
                 )
                 canonical_facts.append(cf)
         

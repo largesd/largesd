@@ -3,40 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>New Debate — Blind Debate Adjudicator</title>
+  <title>New Debate - Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
-  <style>
-    .post-success { background: rgba(142,240,180,.1); border-color: rgba(142,240,180,.3); }
-    .post-error { background: rgba(255,107,107,.1); border-color: rgba(255,107,107,.3); }
-    .status-message { padding: 12px; border-radius: 8px; margin: 12px 0; }
-    .debate-list { max-height: 200px; overflow-y: auto; }
-    .debate-item { padding: 10px; border-radius: 8px; background: rgba(0,0,0,.15); margin: 8px 0; cursor: pointer; }
-    .debate-item:hover { background: rgba(109,214,255,.1); }
-    .debate-item.active { border: 1px solid var(--accent); }
-  </style>
+  <script src="static/js/data_bridge.js"></script>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html" class="active" aria-current="page">New Debate / Post Point</a>
+      <a href="new_debate.html" class="active" aria-current="page">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="BDA.toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -46,7 +44,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
@@ -54,126 +51,90 @@
   </div>
 </section>
 
-<main>
+<main class="new-debate-main">
 
 <!-- Moderation Template (Always Visible) -->
-<section class="card" id="moderation-panel">
-  <h3>Visible Modulation Template</h3>
-  <p class="lede">All posts are evaluated against this template before being Allowed or Blocked.</p>
-  
-  <div class="row" style="margin-bottom: 12px;">
+<section class="card new-debate-section moderation-panel" id="moderation-panel">
+  <div class="section-head">
+    <div>
+      <h2>Visible Modulation Template</h2>
+      <p class="lede">All posts are evaluated against this template before being Allowed or Blocked.</p>
+    </div>
+  </div>
+
+  <div class="row moderation-meta-row">
     <span class="pill">Template: <span class="mono">Standard Civility + PII Guard v3</span></span>
     <span class="pill">Version: <span class="mono">3.2.1</span></span>
   </div>
-  
-  <div class="grid cols2">
-    <div class="card" style="box-shadow:none;margin:0;background:rgba(0,0,0,.15);">
-      <h4>Allowed Content</h4>
+
+  <div class="grid cols2 moderation-columns">
+    <section class="moderation-column">
+      <h3>Allowed Content</h3>
       <ul class="compact-list">
         <li>Factual claims with supporting evidence</li>
         <li>Logical inferences from stated facts</li>
         <li>Direct engagement with opposing arguments</li>
         <li>On-topic discussion within scope</li>
       </ul>
-    </div>
-    <div class="card" style="box-shadow:none;margin:0;background:rgba(0,0,0,.15);">
-      <h4>Blocked Content</h4>
+    </section>
+    <section class="moderation-column">
+      <h3>Blocked Content</h3>
       <ul class="compact-list">
         <li>Personal attacks or harassment</li>
         <li>Personally identifiable information (PII)</li>
         <li>Off-topic or spam content</li>
         <li>Hate speech or discriminatory content</li>
       </ul>
-    </div>
+    </section>
   </div>
-  <small>Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict.</small>
+  <small class="moderation-note">Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict.</small>
 </section>
 
-<!-- Debate Selection/Create -->
-<section class="card" id="debate-section">
+<!-- Active Debate Info -->
+<section class="card new-debate-section debate-section" id="debate-section">
   <div class="section-head">
     <div>
       <h2>Active Debate</h2>
-      <p class="lede">Select an existing debate or create a new one.</p>
+      <p class="lede">Select or activate a debate to post arguments.</p>
     </div>
     <span class="pill" id="debate-status">No active debate</span>
   </div>
 
-  <!-- My Debates -->
-  <div id="my-debates-container" style="display:none;margin-bottom:16px;">
-    <h3>My Debates</h3>
-    <div id="debate-list" class="debate-list">
-      <small style="color:var(--muted)">Loading...</small>
-    </div>
-    <hr />
+  <div id="debate-selector" style="margin-bottom: var(--space-md);"></div>
+
+  <div id="current-debate-info" class="callout soft current-debate-callout">
+    <strong>Active:</strong> <span id="current-resolution">Loading...</span>
   </div>
 
-  <!-- Create New Debate -->
-  <div id="create-debate-form">
-    <h3>Create New Debate</h3>
-    <div class="grid cols2">
-      <div class="form-group">
-        <label for="debate-resolution">Resolution *</label>
-        <textarea id="debate-resolution" rows="3" placeholder="Resolved: AI should be banned."></textarea>
-        <small>Use a clear, contestable statement.</small>
-      </div>
-      <div class="form-group">
-        <label for="debate-scope">Scope *</label>
-        <textarea id="debate-scope" rows="3" placeholder="Describe what the debate covers..."></textarea>
-        <small>Scope helps keep posts relevant and bounded.</small>
-      </div>
-    </div>
-    <button class="button" onclick="createDebate()">Create Debate</button>
-  </div>
-
-  <!-- Current Debate Info -->
-  <div id="current-debate-info" class="callout soft" style="display:none;margin-top:16px;">
-    <strong>Active:</strong> <span id="current-resolution"></span>
-    <div style="margin-top:8px;">
-      <button class="button secondary" onclick="showCreateForm()">Create New</button>
-      <button class="button secondary" onclick="loadMyDebates()">Switch Debate</button>
-    </div>
-  </div>
-</section>
-
-<!-- Login Required Notice -->
-<section class="card" id="login-required" style="display: none; border-color: var(--warn);">
-  <div class="row" style="justify-content: space-between; align-items: center;">
-    <div>
-      <h2 style="margin: 0 0 8px 0; color: var(--warn);">🔒 Login Required</h2>
-      <p class="lede" style="margin: 0;">You must be logged in to create debates and post arguments.</p>
-    </div>
-    <div>
-      <a href="login.html" class="button" style="margin-right: 10px;">Sign In</a>
-      <a href="register.html" class="button secondary">Create Account</a>
-    </div>
+  <div class="callout soft" id="email-mode-notice">
+    <strong>Email submission mode active.</strong> When you submit a post, a pre-filled email will be generated for you to send.
   </div>
 </section>
 
 <!-- Post Arguments -->
-<section class="card" id="post-section">
+<section class="card new-debate-section post-section" id="post-section">
   <h2>Post Your Argument</h2>
   
-  <div class="callout soft" style="margin-bottom: 16px;">
+  <div class="callout soft post-active-debate">
     <strong>Active Debate:</strong> <span id="display-resolution">Loading...</span>
-    <div style="margin-top: 8px;">
+    <div class="post-access-wrap">
       <small id="post-access-hint">Checking whether posting is available...</small>
     </div>
   </div>
   
   <div id="status-message" class="status-message" style="display:none;"></div>
   
-  <div class="grid cols2">
+  <div class="grid cols2 post-meta-grid">
     <div class="form-group">
       <label>Your Position *</label>
-      <div class="row">
-        <label class="pill" style="cursor: pointer; padding: 10px 16px;">
-          <input type="radio" name="side" value="FOR" style="width: auto; margin-right: 8px;" />
-          <span class="side-label for" style="margin: 0;">FOR</span>
+      <div class="row position-choice-row">
+        <label class="pill position-choice">
+          <input type="radio" name="side" value="FOR" />
+          <span class="side-label for">FOR</span>
         </label>
-        <label class="pill" style="cursor: pointer; padding: 10px 16px;">
-          <input type="radio" name="side" value="AGAINST" style="width: auto; margin-right: 8px;" />
-          <span class="side-label against" style="margin: 0;">AGAINST</span>
+        <label class="pill position-choice">
+          <input type="radio" name="side" value="AGAINST" />
+          <span class="side-label against">AGAINST</span>
         </label>
       </div>
     </div>
@@ -193,52 +154,61 @@
   <hr />
   
   <h3>Argument Structure: Facts → Inference</h3>
-  
-  <div class="form-group" style="margin-top: 16px;">
-    <label for="facts-input">Factual Premises *</label>
-    <textarea id="facts-input" rows="4" placeholder="• List atomic facts that can be empirically verified&#10;• Each fact should be a declarative statement"></textarea>
+
+  <div class="post-field-stack">
+    <div class="form-group">
+      <label for="facts-input">Factual Premises *</label>
+      <textarea id="facts-input" rows="4" placeholder="• List atomic facts that can be empirically verified&#10;• Each fact should be a declarative statement"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="inference-input">Inference / Conclusion *</label>
+      <textarea id="inference-input" rows="3" placeholder="State the conclusion that follows from your factual premises..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="counter-input">Counter-arguments Addressed (Optional)</label>
+      <textarea id="counter-input" rows="2" placeholder="Identify any opposing arguments you are directly rebutting..."></textarea>
+    </div>
   </div>
 
-  <div class="form-group" style="margin-top: 16px;">
-    <label for="inference-input">Inference / Conclusion *</label>
-    <textarea id="inference-input" rows="3" placeholder="State the conclusion that follows from your factual premises..."></textarea>
-  </div>
-
-  <div class="form-group" style="margin-top: 16px;">
-    <label for="counter-input">Counter-arguments Addressed (Optional)</label>
-    <textarea id="counter-input" rows="2" placeholder="Identify any opposing arguments you are directly rebutting..."></textarea>
-  </div>
-
-  <div class="row" style="margin-top: 20px; justify-content: space-between;">
-    <div>
-      <button class="button" onclick="submitPost()">Submit Post</button>
+  <div class="row post-action-row">
+    <div class="row post-submit-actions">
+      <button class="button" onclick="submitPost()">Generate Email</button>
       <button class="button secondary" onclick="previewPost()">Preview</button>
     </div>
-    <span class="pill">Posts pending snapshot: <span class="mono" id="pending-count">0</span></span>
+    <span class="pill">Posts pending: <span class="mono" id="pending-count">0</span></span>
   </div>
 
-  <div id="preview-panel" class="callout" style="margin-top: 16px; display: none;">
+  <div id="email-preview-panel" class="callout post-preview-panel" style="display: none;">
+    <h4>Email Preview</h4>
+    <p>Click the link below to open your email client with a pre-filled submission.</p>
+    <a id="mailto-link" class="button" href="#">Open Email Client</a>
+    <button class="button secondary" onclick="copyEmailBody()">Copy Body</button>
+    <pre id="email-body-preview" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:0.8125rem;white-space:pre-wrap;"></pre>
+  </div>
+
+  <div id="preview-panel" class="callout post-preview-panel" style="display: none;">
     <h4>Post Preview</h4>
     <div id="preview-content"></div>
   </div>
 </section>
 
 <!-- Pending Posts -->
-<section class="card" id="pending-posts">
+<section class="card new-debate-section pending-posts-section" id="pending-posts">
   <div class="section-head">
     <h2>Pending Posts</h2>
-    <span class="pill">Next snapshot trigger: <span class="mono">Activity</span></span>
+    <span class="pill">Stored locally</span>
   </div>
-  <p class="lede">Your submissions since the last snapshot. These are stored locally in your browser.</p>
+  <p class="lede">Your email submissions tracked locally. They will appear in the next published snapshot after the server processes your emails.</p>
   
   <div id="posts-list">
-    <div class="callout soft" style="text-align: center; padding: 24px;">
-      <p>No posts submitted yet in this session.</p>
+    <div class="callout soft pending-empty-state">
+      <p>No email submissions generated yet.</p>
     </div>
   </div>
   
-  <div class="row" style="margin-top: 16px;">
-    <button class="button" onclick="generateSnapshot()">Generate New Snapshot</button>
+  <div class="row pending-actions-row">
     <button class="button secondary" onclick="clearPending()">Clear Pending</button>
     <a class="pill" href="snapshot.html">View Current Snapshot →</a>
   </div>
@@ -248,21 +218,21 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a></div>
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
 
-<div class="help-overlay" onclick="BDA.toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="BDA.toggleHelp()" aria-label="Close help">×</button>
+    <button type="button" class="close-help" aria-label="Close help">x</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms for posting and debate structure.</p>
+    <p class="help-panel-note help-panel-note-top">Key terms for posting and debate structure.</p>
     
     <div class="glossary-term">Debate Topic</div>
     <div class="glossary-def">The central resolution being debated.</div>
@@ -279,42 +249,52 @@
 </div>
 
 <script>
-let authEnabled = true;
 let hasActiveDebate = false;
+let currentDebateId = null;
+let currentResolution = '';
 
 async function init() {
-  await loadRuntimeConfig();
+  DataBridge.loadConfig();
+  if (!DataBridge.isConfigured()) {
+    window.location.href = 'setup.html';
+    return;
+  }
   await loadDebate();
-  await loadMyDebates();
+  await loadTopics();
   updatePostSectionState();
   updatePendingPostsList();
-}
-
-async function loadRuntimeConfig() {
-  try {
-    const data = await BDA.api('/api/health');
-    authEnabled = data.auth_enabled !== false;
-  } catch (error) {
-    authEnabled = true;
+  if (typeof DebateSelector !== 'undefined') {
+    await DebateSelector.init('debate-selector', {
+      onSelect: async (debateId) => {
+        await loadDebate();
+        updatePostSectionState();
+      }
+    });
   }
 }
 
 async function loadDebate() {
   try {
-    const data = await BDA.loadDebate();
-    hasActiveDebate = data.has_debate;
-    
+    await DataBridge.ensureData();
+    const data = DataBridge.getDebate();
+    currentDebateId = data.debate_id || null;
+    currentResolution = data.resolution || '';
+    hasActiveDebate = !!(
+      data.has_debate &&
+      currentDebateId &&
+      currentDebateId !== 'null' &&
+      currentDebateId !== 'undefined' &&
+      currentResolution &&
+      currentResolution.toLowerCase() !== 'untitled'
+    );
+
     if (hasActiveDebate) {
       document.getElementById('display-resolution').textContent = data.resolution;
       document.getElementById('current-resolution').textContent = data.resolution;
       document.getElementById('debate-status').textContent = 'Active debate';
-      document.getElementById('current-debate-info').style.display = 'block';
-      document.getElementById('create-debate-form').style.display = 'none';
-      
-      // Load snapshot for header
-      const snapshotData = await BDA.loadSnapshot();
-      if (snapshotData) {
-        BDA.updateStateStrip(snapshotData);
+      const snap = DataBridge.getSnapshot();
+      if (snap && snap.has_snapshot) {
+        BDA.updateStateStrip(snap);
       }
     } else {
       document.getElementById('display-resolution').textContent = 'No active debate';
@@ -327,123 +307,58 @@ async function loadDebate() {
   }
 }
 
-async function loadMyDebates() {
-  if (!Auth.isLoggedIn()) {
-    document.getElementById('my-debates-container').style.display = 'none';
-    return;
-  }
-  
-  try {
-    const data = await BDA.api('/api/debates');
-    const debates = data.debates || [];
-    
-    const container = document.getElementById('debate-list');
-    if (debates.length === 0) {
-      container.innerHTML = '<small style="color:var(--muted)">No debates yet. Create one below.</small>';
-    } else {
-      container.innerHTML = debates.map(d => `
-        <div class="debate-item ${d.debate_id === BDA.state.currentDebate?.debate_id ? 'active' : ''}" 
-             onclick="activateDebate('${d.debate_id}')">
-          <div style="font-weight:600">${BDA.escapeHtml(d.resolution)}</div>
-          <div class="row" style="margin:4px 0 0 0;font-size:11px">
-            <span style="color:var(--muted)">${new Date(d.created_at).toLocaleDateString()}</span>
-            ${d.has_snapshot ? '<span class="pill good">Has snapshot</span>' : '<span class="pill">New</span>'}
-          </div>
-        </div>
-      `).join('');
-    }
-    
-    document.getElementById('my-debates-container').style.display = 'block';
-  } catch (error) {
-    console.error('Error loading debates:', error);
-  }
-}
-
-async function activateDebate(debateId) {
-  try {
-    await BDA.api(`/api/debate/${debateId}/activate`, { method: 'POST' });
-    BDA.setActiveDebateId(debateId);
-    await loadDebate();
-    updatePostSectionState();
-  } catch (error) {
-    BDA.showStatus('Failed to activate debate', true);
-  }
-}
-
-function showCreateForm() {
-  document.getElementById('create-debate-form').style.display = 'block';
-  document.getElementById('current-debate-info').style.display = 'none';
-}
-
 function resetStateStrip() {
   document.getElementById('header-verdict').textContent = 'NO VERDICT';
   document.getElementById('header-confidence').textContent = '-';
   document.getElementById('header-snapshot').textContent = '-';
-  document.getElementById('header-updated').textContent = '-';
+}
+
+async function loadTopics() {
+  const select = document.getElementById('argument-topic');
+  if (!select) return;
+
+  // Try to populate from cached data first
+  let topics = [];
+  try {
+    await DataBridge.ensureData();
+    const topicData = DataBridge.getTopics();
+    if (topicData && topicData.topics && topicData.topics.length > 0) {
+      topics = topicData.topics;
+    }
+  } catch (e) {
+    console.warn('Could not load topics from cache:', e);
+  }
+
+  // Fall back to hardcoded topics if none available
+  if (topics.length === 0) {
+    topics = [
+      { topic_id: 't1', label: 'Safety & misuse risk' },
+      { topic_id: 't2', label: 'Economic & social impact' },
+      { topic_id: 't3', label: 'Enforceability & geopolitics' },
+      { topic_id: 't4', label: 'Rights, freedom & innovation' },
+    ];
+  }
+
+  // Build options
+  const currentValue = select.value;
+  select.innerHTML = '<option value="">Select topic area...</option>' +
+    topics.map(t => `<option value="${BDA.escapeHtml(t.topic_id || t.id || '')}">${BDA.escapeHtml(t.label || t.name || t.topic_id || t.id || '')}</option>`).join('');
+  if (currentValue) select.value = currentValue;
 }
 
 function updatePostSectionState() {
-  const isLoggedIn = Auth.isLoggedIn();
-  const loginRequiredSection = document.getElementById('login-required');
   const postSection = document.getElementById('post-section');
   const postAccessHint = document.getElementById('post-access-hint');
-  const canPost = isLoggedIn && hasActiveDebate;
-
-  if (loginRequiredSection) {
-    loginRequiredSection.style.display = !isLoggedIn ? 'block' : 'none';
-  }
 
   if (postSection) {
-    postSection.style.opacity = canPost ? '1' : '0.5';
-    postSection.style.pointerEvents = canPost ? 'auto' : 'none';
+    postSection.style.opacity = hasActiveDebate ? '1' : '0.5';
+    postSection.style.pointerEvents = hasActiveDebate ? 'auto' : 'none';
   }
 
   if (postAccessHint) {
-    if (!hasActiveDebate) {
-      postAccessHint.textContent = 'Create or select a debate before posting arguments.';
-    } else if (!isLoggedIn) {
-      postAccessHint.textContent = 'Sign in to post arguments.';
-    } else {
-      postAccessHint.textContent = 'Posting is available for the active debate.';
-    }
-  }
-}
-
-async function createDebate() {
-  const resolution = document.getElementById('debate-resolution').value.trim();
-  const scope = document.getElementById('debate-scope').value.trim();
-
-  if (!resolution || !scope) {
-    BDA.showStatus('Please provide both a resolution and a scope.', true);
-    return;
-  }
-
-  if (!Auth.isLoggedIn()) {
-    updatePostSectionState();
-    BDA.showStatus('Please log in to create a debate.', true);
-    return;
-  }
-
-  try {
-    const data = await BDA.api('/api/debates', {
-      method: 'POST',
-      body: JSON.stringify({ resolution, scope })
-    });
-
-    BDA.setActiveDebateId(data.debate_id);
-    await loadDebate();
-    hasActiveDebate = true;
-    document.getElementById('display-resolution').textContent = data.resolution;
-    document.getElementById('current-resolution').textContent = data.resolution;
-    document.getElementById('debate-status').textContent = 'Active debate';
-    document.getElementById('current-debate-info').style.display = 'block';
-    document.getElementById('create-debate-form').style.display = 'none';
-    
-    BDA.showStatus(`Debate created: ${data.resolution}`);
-    updatePostSectionState();
-    loadMyDebates();
-  } catch (error) {
-    BDA.showStatus('Error creating debate. Please try again.', true);
+    postAccessHint.textContent = hasActiveDebate
+      ? 'Posting is available for the active debate via email.'
+      : 'No active debate loaded from GitHub.';
   }
 }
 
@@ -453,135 +368,154 @@ function previewPost() {
   const facts = document.getElementById('facts-input').value.trim();
   const inference = document.getElementById('inference-input').value.trim();
   const counter = document.getElementById('counter-input').value.trim();
-  
+
   if (!side || !facts || !inference) {
     BDA.showStatus('Please fill in all required fields.', true);
     return;
   }
-  
+
   const previewPanel = document.getElementById('preview-panel');
   const previewContent = document.getElementById('preview-content');
-  
+
   previewContent.innerHTML = `
-    <div class="row" style="margin-bottom: 8px;">
+    <div class="row preview-meta-row">
       <span class="side-label ${side.value.toLowerCase()}">${side.value}</span>
       <span class="pill">Topic: ${topic.options[topic.selectedIndex].text || 'New topic area'}</span>
     </div>
-    <div style="margin: 12px 0;">
+    <div class="preview-block">
       <strong>Facts:</strong>
-      <div style="background: rgba(0,0,0,.15); padding: 10px; border-radius: 8px; margin-top: 6px; white-space: pre-wrap;">${BDA.escapeHtml(facts)}</div>
+      <div class="preview-block-body prewrap">${BDA.escapeHtml(facts)}</div>
     </div>
-    <div style="margin: 12px 0;">
+    <div class="preview-block">
       <strong>Inference:</strong>
-      <div style="background: rgba(0,0,0,.15); padding: 10px; border-radius: 8px; margin-top: 6px;">${BDA.escapeHtml(inference)}</div>
+      <div class="preview-block-body">${BDA.escapeHtml(inference)}</div>
     </div>
-    ${counter ? `<div style="margin: 12px 0;"><strong>Counter-arguments addressed:</strong> ${BDA.escapeHtml(counter)}</div>` : ''}
+    ${counter ? `<div class="preview-block"><strong>Counter-arguments addressed:</strong> <div class="preview-inline-copy">${BDA.escapeHtml(counter)}</div></div>` : ''}
   `;
-  
-  previewPanel.style.display = 'block';
+
+  previewPanel.style.display = 'grid';
 }
 
-async function submitPost() {
-  if (!Auth.isLoggedIn() || !hasActiveDebate) {
-    BDA.showStatus(hasActiveDebate ? 'Please log in to submit posts.' : 'Create a debate before submitting posts.', true);
+function submitPost() {
+  if (!hasActiveDebate) {
+    BDA.showStatus('No active debate loaded. Please configure GitHub source.', true);
     return;
   }
-  
+
+  if (!currentDebateId || currentDebateId === 'null' || currentDebateId === 'undefined') {
+    BDA.showStatus('No valid debate ID loaded. Refresh from GitHub and try again.', true);
+    return;
+  }
+
+  if (!currentResolution || currentResolution.toLowerCase() === 'untitled') {
+    BDA.showStatus('No valid debate resolution loaded. Refresh from GitHub and try again.', true);
+    return;
+  }
+
   const side = document.querySelector('input[name="side"]:checked');
   const topic = document.getElementById('argument-topic');
-  const facts = document.getElementById('facts-input');
-  const inference = document.getElementById('inference-input');
-  const counter = document.getElementById('counter-input');
-  
+  const factsEl = document.getElementById('facts-input');
+  const inferenceEl = document.getElementById('inference-input');
+  const counterEl = document.getElementById('counter-input');
+
   if (!side) {
     BDA.showStatus('Please select a side (FOR or AGAINST).', true);
     return;
   }
-  
+
   if (!topic.value) {
     BDA.showStatus('Please select a topic area.', true);
     return;
   }
-  
-  if (!facts.value.trim() || !inference.value.trim()) {
+
+  if (!factsEl.value.trim() || !inferenceEl.value.trim()) {
     BDA.showStatus('Please provide both factual premises and an inference.', true);
     return;
   }
-  
-  try {
-    const data = await BDA.api('/api/debate/posts', {
-      method: 'POST',
-      body: JSON.stringify({
-        side: side.value,
-        topic_id: topic.value,
-        facts: facts.value.trim(),
-        inference: inference.value.trim(),
-        counter_arguments: counter.value.trim()
-      })
-    });
-    
-    // Add to pending posts (persisted to localStorage via BDA)
-    BDA.addPendingPost({
-      id: data.post_id,
-      side: data.side,
-      topic: topic.options[topic.selectedIndex].text,
-      facts: facts.value.trim(),
-      inference: inference.value.trim(),
-      modulation_outcome: data.modulation_outcome
-    });
-    
-    // Update UI
-    updatePendingPostsList();
-    
-    // Clear form
-    facts.value = '';
-    inference.value = '';
-    counter.value = '';
-    document.querySelectorAll('input[name="side"]').forEach(r => r.checked = false);
-    topic.value = '';
-    document.getElementById('preview-panel').style.display = 'none';
-    
-    const statusMsg = data.modulation_outcome === 'allowed' 
-      ? 'Post submitted and allowed. It will be included in the next snapshot.'
-      : `Post blocked: ${data.block_reason || 'content policy violation'}`;
-    BDA.showStatus(statusMsg, data.modulation_outcome !== 'allowed');
-    
-  } catch (error) {
-    BDA.showStatus('Error submitting post. Please try again.', true);
+
+  const facts = factsEl.value.trim();
+  const inference = inferenceEl.value.trim();
+  const counter = counterEl.value.trim();
+
+  // Generate mailto link
+  const mailto = DataBridge.buildMailtoLink(
+    currentDebateId,
+    currentResolution,
+    side.value,
+    topic.value,
+    facts,
+    inference,
+    counter || undefined
+  );
+
+  if (!mailto) {
+    BDA.showStatus('Could not generate email. Destination email not configured.', true);
+    return;
   }
+
+  // Show email preview panel
+  const emailPanel = document.getElementById('email-preview-panel');
+  const mailtoLink = document.getElementById('mailto-link');
+  const bodyPreview = document.getElementById('email-body-preview');
+
+  mailtoLink.href = mailto;
+  bodyPreview.textContent = decodeURIComponent(mailto.split('body=')[1] || '');
+  emailPanel.style.display = 'grid';
+
+  // Add to pending
+  BDA.addPendingPost({
+    id: 'email-' + Date.now(),
+    side: side.value,
+    topic: topic.options[topic.selectedIndex].text,
+    facts: facts,
+    inference: inference,
+    modulation_outcome: 'pending'
+  });
+  updatePendingPostsList();
+
+  BDA.showStatus('Email generated. Open your email client to send the submission.');
+}
+
+function copyEmailBody() {
+  const body = document.getElementById('email-body-preview').textContent;
+  navigator.clipboard.writeText(body).then(() => {
+    BDA.showStatus('Email body copied to clipboard.');
+  }).catch(() => {
+    BDA.showStatus('Failed to copy.', true);
+  });
 }
 
 function updatePendingPostsList() {
   const container = document.getElementById('posts-list');
   const posts = BDA.state.pendingPosts;
-  
+
   document.getElementById('pending-count').textContent = posts.length;
-  
+
   if (posts.length === 0) {
     container.innerHTML = `
-      <div class="callout soft" style="text-align: center; padding: 24px;">
-        <p>No posts submitted yet in this session.</p>
-        <small>Posts are stored locally and will be included when you generate a snapshot.</small>
+      <div class="callout soft pending-empty-state">
+        <p>No email submissions generated yet.</p>
+        <small>Emails are generated locally and sent via your email client.</small>
       </div>
     `;
     return;
   }
-  
+
   container.innerHTML = posts.map((post, index) => `
-    <div class="card" style="margin: 12px 0; background: rgba(0,0,0,.15);">
-      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+    <article class="pending-post-item">
+      <div class="row pending-post-head">
         <div class="row">
           <span class="side-label ${post.side.toLowerCase()}">${post.side}</span>
           <span class="pill">${BDA.escapeHtml(post.topic)}</span>
         </div>
-        <span class="pill ${post.modulation_outcome === 'allowed' ? 'good' : 'bad'}">${post.modulation_outcome}</span>
+        <span class="pill">${post.modulation_outcome}</span>
       </div>
-      <div style="margin: 8px 0;">
-        <small style="color: var(--muted);">Facts:</small>
-        <div style="white-space: pre-wrap; margin-top: 4px;">${BDA.escapeHtml(post.facts.substring(0, 100))}${post.facts.length > 100 ? '...' : ''}</div>
+      <div class="pending-post-body">
+        <small>Facts:</small>
+        <div class="pending-post-facts">${BDA.escapeHtml(post.facts.substring(0, 100))}${post.facts.length > 100 ? '...' : ''}</div>
       </div>
-      <button class="button secondary" style="font-size:11px;padding:4px 8px" onclick="removePendingPost(${index})">Remove</button>
-    </div>
+      <button class="button secondary pending-remove-btn" onclick="removePendingPost(${index})">Remove</button>
+    </article>
   `).join('');
 }
 
@@ -593,38 +527,9 @@ function removePendingPost(index) {
 
 function clearPending() {
   if (BDA.state.pendingPosts.length === 0) return;
-  
   if (confirm('Clear all pending posts? This cannot be undone.')) {
     BDA.clearPendingPosts();
     updatePendingPostsList();
-  }
-}
-
-async function generateSnapshot() {
-  if (!hasActiveDebate) {
-    BDA.showStatus('Create a debate before generating a snapshot.', true);
-    return;
-  }
-
-  try {
-    BDA.showStatus('Generating new snapshot...', false, 0);
-    
-    const data = await BDA.api('/api/debate/snapshot', {
-      method: 'POST',
-      body: JSON.stringify({ trigger_type: 'manual' })
-    });
-    
-    BDA.showStatus(`Snapshot ${data.snapshot_id} generated. Verdict: ${data.verdict}`);
-    
-    // Clear pending posts after successful snapshot
-    BDA.clearPendingPosts();
-    updatePendingPostsList();
-    
-    // Reload header
-    BDA.updateStateStrip(data);
-    
-  } catch (error) {
-    BDA.showStatus('Error generating snapshot. Please try again.', true);
   }
 }
 

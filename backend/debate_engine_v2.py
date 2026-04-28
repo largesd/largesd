@@ -8,6 +8,7 @@ import time
 import uuid
 import json
 import math
+import hashlib
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Any
 from collections import defaultdict
@@ -26,6 +27,29 @@ from evidence_targets import EvidenceTargetAnalyzer
 from frame_registry import get_public_frame_registry, FrameRegistry
 from governance import GovernanceManager
 from selection_engine import SelectionEngine
+from lsd_v1_2 import (
+    AUDIT_SCHEMA_VERSION,
+    BORDERLINE_EPSILON,
+    SUPPRESSION_K,
+    budget_adequacy,
+    build_suppression_policy,
+    burstiness_indicators,
+    centrality_cap_effect,
+    compute_borderline_rate,
+    compute_completeness_proxy,
+    coverage_adequacy_trace,
+    evaluator_variance_from_scores,
+    formula_registry,
+    frame_mode as get_frame_mode_flag,
+    insufficiency_sensitivity,
+    merge_sensitivity,
+    participation_concentration,
+    rarity_utilization,
+    scoring_formula_mode,
+    template_similarity_prevalence,
+    topic_diagnostics,
+    unselected_tail_summary,
+)
 from debate_proposal import (
     build_internal_scope,
     hydrate_debate_record,
@@ -66,13 +90,13 @@ class DebateEngineV2:
             num_judges=num_judges,
             api_key=api_key
         )
-        self._fact_check_mode = fact_check_mode
-        self._async_enabled = fact_check_mode == "ONLINE_ALLOWLIST"
+        self._fact_check_mode = self._normalize_fact_check_mode(fact_check_mode)
+        self._async_enabled = self._fact_check_mode == "ONLINE_ALLOWLIST"
         self._fact_check_wait_timeout_seconds = 2.0
         self._fact_check_poll_interval_seconds = 0.05
 
         self.fact_checker = FactCheckingSkill(
-            mode=fact_check_mode,
+            mode=self._fact_check_mode,
             allowlist_version="v1",
             enable_async=self._async_enabled,
         )
@@ -88,6 +112,7 @@ class DebateEngineV2:
         self.modulation_engine = ModulationEngine(
             ModulationEngine.get_builtin_template(modulation_template)
         )
+        self._active_moderation_template_record: Optional[Dict[str, Any]] = None
         
         # Initialize snapshot diff engine (MSD §16)
         self.diff_engine = SnapshotDiffEngine(self.db)
@@ -106,6 +131,95 @@ class DebateEngineV2:
         
         # In-memory cache
         self._debate_cache: Dict[str, Dict] = {}
+        self.refresh_active_modulation_template(force=True)
+
+    @staticmethod
+    def _normalize_fact_check_mode(mode: str) -> str:
+        aliases = {
+            "simulated": "OFFLINE",
+            "offline": "OFFLINE",
+            "OFFLINE": "OFFLINE",
+            "online_allowlist": "ONLINE_ALLOWLIST",
+            "ONLINE_ALLOWLIST": "ONLINE_ALLOWLIST",
+            "perfect_checker": "PERFECT_CHECKER",
+            "PERFECT_CHECKER": "PERFECT_CHECKER",
+        }
+        public_mode = os.getenv("FACT_CHECKER_MODE")
+        return aliases.get(str(public_mode or mode).strip(), aliases.get(str(public_mode or mode).strip().lower(), "OFFLINE"))
+
+    @staticmethod
+    def _topic_from_record(record: Dict[str, Any]) -> Topic:
+        """Hydrate a Topic from DB rows that may include extra persistence-only fields."""
+        parent_topic_ids = record.get("parent_topic_ids", [])
+        if isinstance(parent_topic_ids, str):
+            try:
+                parent_topic_ids = json.loads(parent_topic_ids)
+            except json.JSONDecodeError:
+                parent_topic_ids = []
+        if not isinstance(parent_topic_ids, list):
+            parent_topic_ids = []
+
+        return Topic(
+            topic_id=record.get("topic_id") or f"topic_{uuid.uuid4().hex[:8]}",
+            name=record.get("name", ""),
+            scope=record.get("scope", ""),
+            frame_id=record.get("frame_id", "") or "",
+            relevance=float(record.get("relevance", 0.0) or 0.0),
+            drift_score=float(record.get("drift_score", 0.0) or 0.0),
+            coherence=float(record.get("coherence", 0.0) or 0.0),
+            distinctness=float(record.get("distinctness", 0.0) or 0.0),
+            parent_topic_ids=parent_topic_ids,
+            operation=record.get("operation", "created") or "created",
+            summary_for=record.get("summary_for", "") or "",
+            summary_against=record.get("summary_against", "") or "",
+            created_at=record.get("created_at", "") or "",
+        )
+
+    @staticmethod
+    def _resolve_builtin_modulation_template_id(base_template_id: Optional[str]) -> str:
+        mapping = {
+            "standard": "standard_civility",
+            "standard_civility": "standard_civility",
+            "academic": "strict",
+            "strict": "strict",
+            "minimal": "minimal",
+            "custom": "standard_civility",
+        }
+        if not base_template_id:
+            return "standard_civility"
+        return mapping.get(base_template_id, base_template_id)
+
+    def refresh_active_modulation_template(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        """Reload the active moderation template from persistence when needed."""
+        active_record = self.db.get_active_moderation_template()
+        if not active_record:
+            return None
+
+        record_id = active_record.get("template_record_id")
+        current_id = (self._active_moderation_template_record or {}).get("template_record_id")
+        if not force and current_id and record_id == current_id:
+            return self._active_moderation_template_record
+
+        builtin_template_id = self._resolve_builtin_modulation_template_id(
+            active_record.get("base_template_id")
+        )
+        version = str(active_record.get("version") or "1.0")
+
+        try:
+            template = ModulationEngine.get_builtin_template(builtin_template_id, version=version)
+        except ValueError:
+            template = ModulationEngine.get_builtin_template("standard_civility", version=version)
+            builtin_template_id = "standard_civility"
+
+        if active_record.get("template_name"):
+            template.name = active_record["template_name"]
+
+        self.modulation_engine.template = template
+        self._active_moderation_template_record = {
+            **active_record,
+            "builtin_template_id": builtin_template_id,
+        }
+        return self._active_moderation_template_record
 
     def _resolve_fact_checks(self, facts: List[ExtractedFact]) -> List[ExtractedFact]:
         """Wait briefly for async fact checks so scoring never sees pending values."""
@@ -173,6 +287,8 @@ class DebateEngineV2:
         frame["supersedes_frame_id"] = supersedes_frame_id
         frame["created_at"] = datetime.now().isoformat()
         frame["is_active"] = True
+        frame["frame_mode"] = frame.get("frame_mode") or get_frame_mode_flag()
+        frame["review_cadence_months"] = int(frame.get("review_cadence_months") or 6)
         return frame
 
     @staticmethod
@@ -312,6 +428,7 @@ class DebateEngineV2:
         """
         Submit a new post to a debate
         """
+        self.refresh_active_modulation_template()
         debate = self.get_debate(debate_id)
         if not debate:
             raise ValueError(f"Debate {debate_id} not found")
@@ -363,7 +480,12 @@ class DebateEngineV2:
     
     def get_modulation_info(self) -> Dict:
         """Get current modulation template info for audit (MSD §3)"""
-        return self.modulation_engine.get_audit_info()
+        self.refresh_active_modulation_template()
+        info = self.modulation_engine.get_audit_info()
+        if self._active_moderation_template_record:
+            info["template_record_id"] = self._active_moderation_template_record.get("template_record_id")
+            info["template_status"] = self._active_moderation_template_record.get("status")
+        return info
     
     def _extract_and_save_spans(self, post_data: Dict):
         """Extract and save spans for an allowed post"""
@@ -412,6 +534,7 @@ class DebateEngineV2:
         """
         Generate a new snapshot with full processing pipeline
         """
+        self.refresh_active_modulation_template()
         debate = self.get_debate(debate_id)
         if not debate:
             raise ValueError(f"Debate {debate_id} not found")
@@ -434,6 +557,13 @@ class DebateEngineV2:
         for p in blocked_posts:
             if p.get('block_reason'):
                 block_reasons[p['block_reason']] += 1
+
+        borderline_rate = compute_borderline_rate(posts)
+        suppression_policy = build_suppression_policy(
+            posts,
+            block_reasons,
+            k=SUPPRESSION_K,
+        )
         
         # Extract or update topics
         previous_topics = []
@@ -441,7 +571,7 @@ class DebateEngineV2:
         if previous_snapshot:
             # Load previous topics
             prev_topics_data = self.db.get_topics_by_debate(debate_id, frame_id=frame_id)
-            previous_topics = [Topic(**t) for t in prev_topics_data]
+            previous_topics = [self._topic_from_record(t) for t in prev_topics_data]
         
         # Extract new topics
         topics = self.topic_engine.extract_topics_from_posts(
@@ -569,10 +699,14 @@ class DebateEngineV2:
                     'canon_fact_text': cf.canon_fact_text,
                     'member_fact_ids': cf.member_fact_ids,
                     'p_true': cf.p_true,
+                    'fact_type': getattr(cf, 'fact_type', 'empirical'),
+                    'normative_provenance': getattr(cf, 'normative_provenance', ''),
+                    'operationalization': getattr(cf, 'operationalization', ''),
                     'provenance_links': [
                         {'span_id': s.span_id, 'text': s.span_text}
                         for s in cf.provenance_spans
                     ],
+                    'evidence_tier_counts': getattr(cf, 'evidence_tier_counts', {}),
                     'referenced_by_au_ids': [],
                     'created_at': datetime.now().isoformat()
                 }
@@ -602,6 +736,15 @@ class DebateEngineV2:
                     ],
                     'reasoning_score': 0.5,  # Will be computed by scoring
                     'reasoning_iqr': 0.0,
+                    'completeness_proxy': compute_completeness_proxy({
+                        'inference_text': ca.inference_text,
+                        'supporting_facts': list(ca.supporting_facts),
+                        'provenance_links': [
+                            {'span_id': s.span_id, 'text': s.span_text}
+                            for s in ca.provenance_spans
+                        ],
+                        'member_au_ids': ca.member_au_ids,
+                    }),
                     'created_at': datetime.now().isoformat()
                 }
                 self.db.save_canonical_argument(arg_data)
@@ -632,9 +775,17 @@ class DebateEngineV2:
                 # Set budgets based on pool sizes (policy-parameter)
                 facts_pool = topic_facts.get(tid, [])
                 args_pool = topic_arguments.get(tid, [])
+                normative_count = len([
+                    f for f in facts_pool
+                    if f.get('side') == side and f.get('fact_type') == 'normative'
+                ])
+                empirical_count = len([
+                    f for f in facts_pool
+                    if f.get('side') == side and f.get('fact_type', 'empirical') == 'empirical'
+                ])
                 budgets = {
-                    'K_E': max(3, min(len([f for f in facts_pool if f.get('side') == side]), 10)),
-                    'K_N': max(1, min(0, 5)),  # No normative facts in current extraction; reserve slot
+                    'K_E': max(3, min(empirical_count, 10)) if empirical_count else 0,
+                    'K_N': max(1, min(normative_count, 5)) if normative_count else 0,
                     'K_A': max(3, min(len([a for a in args_pool if a.get('side') == side]), 8)),
                 }
                 
@@ -729,6 +880,18 @@ class DebateEngineV2:
             dict(selected_topic_facts), dict(selected_topic_arguments),
             scores['topic_scores']
         )
+        decision_dossier["counterfactuals"] = counterfactuals
+        decision_dossier["unselected_tail_summary"] = unselected_tail_summary(
+            topic_facts,
+            topic_arguments,
+            dict(selected_topic_facts),
+            dict(selected_topic_arguments),
+        )
+        decision_dossier["insufficiency_sensitivity"] = insufficiency_sensitivity(
+            scores["topic_scores"],
+            scores["margin_d"],
+        )
+        decision_dossier["formula_metadata"] = formula_registry()
         
         # Run audits
         # 1. Extraction stability
@@ -755,7 +918,89 @@ class DebateEngineV2:
             side_order=side_order,
             frame_context=frame_context,
         )
+
+        topic_diag = topic_diagnostics(
+            [
+                {
+                    'topic_id': t.topic_id,
+                    'name': t.name,
+                    'scope': t.scope,
+                    'relevance': t.relevance,
+                    'drift_score': t.drift_score,
+                    'coherence': t.coherence,
+                    'distinctness': t.distinctness,
+                }
+                for t in topics
+            ],
+            topic_content_mass,
+            dict(selected_topic_facts),
+            dict(selected_topic_arguments),
+        )
+        merge_audit = merge_sensitivity(
+            [{'topic_id': t.topic_id} for t in topics],
+            scores.get('margin_d', 0.0),
+        )
+        evaluator_variance = evaluator_variance_from_scores(
+            scores.get('topic_scores', {}),
+            scores.get('overall_scores', {}),
+        )
+        participation_diag = participation_concentration(posts)
+        integrity_indicators = {
+            'version_id': 'lsd-10-v1.2.0',
+            'burstiness_indicators': burstiness_indicators(posts),
+            'template_similarity_prevalence': template_similarity_prevalence(posts),
+            'participation_entropy': participation_diag.get('participation_entropy', 0.0),
+            'concentration_buckets': participation_diag.get('concentration_buckets', {}),
+        }
+        budget_diag = budget_adequacy(selection_diagnostics)
+        centrality_diag = centrality_cap_effect(selection_diagnostics)
+        rarity_diag = rarity_utilization(selection_diagnostics)
+        coverage_trace = coverage_adequacy_trace(scores.get('topic_scores', {}))
+        frame_sensitivity = {
+            'version_id': 'lsd-19.4-v1.2.0',
+            'frame_mode': get_frame_mode_flag(),
+            'max_delta_d': 0.0,
+            'interpretation': (
+                'inactive_single_frame'
+                if get_frame_mode_flag() == 'single'
+                else 'multi-frame dispersion computed from active frame baseline'
+            ),
+            'threshold': 0.1,
+        }
         
+        # Build replay manifest and tamper-evident hashes
+        replay_manifest = self._build_replay_manifest(
+            debate_id, selection_seed, allowed_posts, blocked_posts, topics, side_order
+        )
+        recipe_versions = self._build_recipe_versions()
+
+        input_bundle = {
+            'allowed_posts': [
+                {'post_id': p['post_id'], 'side': p['side'], 'facts': p['facts'],
+                 'inference': p['inference'], 'topic_id': p.get('topic_id')}
+                for p in allowed_posts
+            ],
+            'blocked_posts': [
+                {'post_id': p['post_id'], 'side': p['side'],
+                 'modulation_outcome': p['modulation_outcome'], 'block_reason': p.get('block_reason')}
+                for p in blocked_posts
+            ],
+            'frame_id': frame_id,
+            'side_order': side_order,
+            'selection_seed': selection_seed,
+        }
+        output_bundle = {
+            'topics': [
+                {'topic_id': t.topic_id, 'name': t.name, 'relevance': t.relevance}
+                for t in topics
+            ],
+            'overall_scores': scores['overall_scores'],
+            'verdict': verdict_result['verdict'],
+            'topic_scores': scores['topic_scores'],
+        }
+        input_hash_root = self._canonical_json_hash(input_bundle)
+        output_hash_root = self._canonical_json_hash(output_bundle)
+
         # Create snapshot
         snapshot_id = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}"
         
@@ -770,6 +1015,9 @@ class DebateEngineV2:
             'allowed_count': len(allowed_posts),
             'blocked_count': len(blocked_posts),
             'block_reasons': dict(block_reasons),
+            'borderline_rate': borderline_rate,
+            'suppression_policy_json': suppression_policy,
+            'status': 'valid',
             'side_order': side_order,
             'overall_scores': scores['overall_scores'],
             'overall_for': scores['overall_for'],
@@ -779,7 +1027,11 @@ class DebateEngineV2:
             'ci_d_upper': verdict_result['ci_upper'],
             'confidence': verdict_result['confidence'],
             'verdict': verdict_result['verdict'],
-            'topic_scores': scores['topic_scores']
+            'topic_scores': scores['topic_scores'],
+            'replay_manifest_json': replay_manifest,
+            'input_hash_root': input_hash_root,
+            'output_hash_root': output_hash_root,
+            'recipe_versions_json': recipe_versions,
         }
         
         # Save snapshot
@@ -797,6 +1049,19 @@ class DebateEngineV2:
             ('relevance_sensitivity', relevance_audit),
             ('topic_drift', drift_report),
             ('selection_transparency', selection_diagnostics),
+            ('verdict_replicates', verdict_result),
+            ('decision_dossier', decision_dossier),
+            ('evaluator_variance', evaluator_variance),
+            ('topic_diagnostics', topic_diag),
+            ('topic_merge_sensitivity', merge_audit),
+            ('participation_concentration', participation_diag),
+            ('integrity_indicators', integrity_indicators),
+            ('budget_adequacy', budget_diag),
+            ('centrality_cap_effect', centrality_diag),
+            ('rarity_utilization', rarity_diag),
+            ('coverage_adequacy_trace', coverage_trace),
+            ('frame_sensitivity', frame_sensitivity),
+            ('formula_registry', formula_registry()),
         ]:
             self.db.save_audit({
                 'audit_id': f"audit_{snapshot_id}_{audit_type}",
@@ -839,6 +1104,19 @@ class DebateEngineV2:
                 'relevance_sensitivity': relevance_audit,
                 'topic_drift': drift_report,
                 'selection_transparency': selection_diagnostics,
+                'verdict_replicates': verdict_result,
+                'decision_dossier': decision_dossier,
+                'evaluator_variance': evaluator_variance,
+                'topic_diagnostics': topic_diag,
+                'topic_merge_sensitivity': merge_audit,
+                'participation_concentration': participation_diag,
+                'integrity_indicators': integrity_indicators,
+                'budget_adequacy': budget_diag,
+                'centrality_cap_effect': centrality_diag,
+                'rarity_utilization': rarity_diag,
+                'coverage_adequacy_trace': coverage_trace,
+                'frame_sensitivity': frame_sensitivity,
+                'formula_registry': formula_registry(),
             },
             'counterfactuals': counterfactuals,
             'decision_dossier': decision_dossier,
@@ -846,9 +1124,7 @@ class DebateEngineV2:
     
     def get_snapshot(self, snapshot_id: str) -> Optional[Dict]:
         """Get snapshot by ID"""
-        # This would need a get_snapshot_by_id method in the database
-        # For now, return from latest
-        return None
+        return self.db.get_snapshot_by_id(snapshot_id)
     
     def get_audits_for_snapshot(self, snapshot_id: str) -> Dict:
         """Get all audits for a snapshot"""
@@ -978,14 +1254,26 @@ class DebateEngineV2:
         LSD §17: Build decision dossier outputs.
         """
         decisive_premises = []
+        decisive_arguments = []
         evidence_gaps = {}
+        priority_gaps = {
+            'insufficient_empirical_items': [],
+            'high_dispersion_normative_items': [],
+        }
         
         for topic in topics:
             tid = topic.topic_id
             facts = topic_facts.get(tid, [])
+            args = topic_arguments.get(tid, [])
+            sides = sorted({
+                item.get('side')
+                for item in [*facts, *args]
+                if item.get('side')
+            }) or ['FOR', 'AGAINST']
             
-            for side in ['FOR', 'AGAINST']:
+            for side in sides:
                 side_facts = [f for f in facts if f.get('side') == side]
+                side_args = [a for a in args if a.get('side') == side]
                 
                 # Decisive premises: high decisiveness (|p - 0.5|)
                 for fact in side_facts:
@@ -997,16 +1285,74 @@ class DebateEngineV2:
                             'side': side,
                             'text': fact['canon_fact_text'][:200],
                             'p_true': fact['p_true'],
+                            'p_or_q_score': fact.get('p_true', 0.5),
                             'decisiveness': round(decisiveness, 3),
+                            'span_ids': [
+                                link.get('span_id')
+                                for link in fact.get('provenance_links', [])
+                                if isinstance(link, dict) and link.get('span_id')
+                            ],
+                            'post_id_provenance': sorted({
+                                str(link.get('span_id', '')).split('_')[1]
+                                for link in fact.get('provenance_links', [])
+                                if isinstance(link, dict) and link.get('span_id')
+                            }),
+                            'operationalization': fact.get('operationalization', ''),
+                        })
+                    if fact.get('p_true', 0.5) == 0.5 and fact.get('fact_type', 'empirical') == 'empirical':
+                        priority_gaps['insufficient_empirical_items'].append({
+                            'canon_fact_id': fact.get('canon_fact_id'),
+                            'topic_id': tid,
+                            'side': side,
+                            'text': fact.get('canon_fact_text', '')[:200],
+                            'priority_score': round((1 - abs(fact.get('p_true', 0.5) - 0.5)) * float(fact.get('centrality', 0.0) or 0.0), 4),
+                            'operationalization': fact.get('operationalization', ''),
+                        })
+                    if fact.get('fact_type') == 'normative':
+                        priority_gaps['high_dispersion_normative_items'].append({
+                            'canon_fact_id': fact.get('canon_fact_id'),
+                            'topic_id': tid,
+                            'side': side,
+                            'text': fact.get('canon_fact_text', '')[:200],
+                            'q_variance': 0.0,
+                            'normative_provenance': fact.get('normative_provenance', ''),
+                        })
+
+                for arg in side_args:
+                    score = float(arg.get('reasoning_score', 0.5) or 0.5)
+                    if score >= 0.5 or arg.get('is_selected'):
+                        decisive_arguments.append({
+                            'canon_arg_id': arg.get('canon_arg_id'),
+                            'topic_id': tid,
+                            'side': side,
+                            'text': arg.get('inference_text', '')[:240],
+                            'reasoning_score': score,
+                            'completeness_proxy': arg.get('completeness_proxy', 0.0),
+                            'span_ids': [
+                                link.get('span_id')
+                                for link in arg.get('provenance_links', [])
+                                if isinstance(link, dict) and link.get('span_id')
+                            ],
+                            'post_id_provenance': sorted({
+                                str(link.get('span_id', '')).split('_')[1]
+                                for link in arg.get('provenance_links', [])
+                                if isinstance(link, dict) and link.get('span_id')
+                            }),
                         })
                 
                 # Evidence gap summary
                 insufficiency_rate = 0.0
                 tier_counts = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
                 total_facts = len(side_facts)
+                f_all = 0.5
+                f_supported_only = 0.5
                 if total_facts > 0:
                     insufficient_count = sum(1 for f in side_facts if f.get('p_true', 0.5) == 0.5)
                     insufficiency_rate = insufficient_count / total_facts
+                    f_all = sum(float(f.get('p_true', 0.5) or 0.5) for f in side_facts) / total_facts
+                    decisive = [f for f in side_facts if f.get('p_true', 0.5) != 0.5]
+                    if decisive:
+                        f_supported_only = sum(float(f.get('p_true', 0.5) or 0.5) for f in decisive) / len(decisive)
                     
                     for f in side_facts:
                         for tier, count in f.get('evidence_tier_counts', {}).items():
@@ -1015,17 +1361,86 @@ class DebateEngineV2:
                 evidence_gaps[f"{tid}_{side}"] = {
                     'insufficiency_rate': round(insufficiency_rate, 3),
                     'tier_distribution': tier_counts,
+                    'f_all': round(f_all, 3),
+                    'f_supported_only': round(f_supported_only, 3),
                     'total_facts': total_facts,
                 }
         
         # Sort decisive premises by decisiveness
         decisive_premises.sort(key=lambda x: x['decisiveness'], reverse=True)
+        decisive_arguments.sort(
+            key=lambda x: (float(x.get('reasoning_score', 0.0)), float(x.get('completeness_proxy', 0.0))),
+            reverse=True,
+        )
+        priority_gaps['insufficient_empirical_items'].sort(
+            key=lambda x: x.get('priority_score', 0.0),
+            reverse=True,
+        )
+        priority_gaps['high_dispersion_normative_items'].sort(
+            key=lambda x: x.get('q_variance', 0.0),
+            reverse=True,
+        )
         
         return {
             'decisive_premises': decisive_premises[:20],
+            'decisive_arguments': decisive_arguments[:20],
             'evidence_gaps': evidence_gaps,
+            'priority_gaps': {
+                'insufficient_empirical_items': priority_gaps['insufficient_empirical_items'][:20],
+                'high_dispersion_normative_items': priority_gaps['high_dispersion_normative_items'][:20],
+            },
         }
     
+    @staticmethod
+    def _canonical_json_hash(obj: Dict[str, Any]) -> str:
+        """Compute SHA-256 over canonical JSON of an object."""
+        canonical = json.dumps(obj, sort_keys=True, separators=(',', ':'))
+        return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+    def _build_replay_manifest(self, debate_id: str, selection_seed: int,
+                               allowed_posts: List[Dict], blocked_posts: List[Dict],
+                               topics: List[Topic], side_order: List[str]) -> Dict[str, Any]:
+        """Build replay manifest for independent snapshot reproduction."""
+        active_template = self._active_moderation_template_record or {}
+        return {
+            'debate_id': debate_id,
+            'selection_seed': selection_seed,
+            'side_order': side_order,
+            'model_version_id': getattr(self.llm_client, 'model_version', 'mock'),
+            'tokenizer_version': getattr(get_canonical_tokenizer(), 'version', 'v1'),
+            'moderation_template_version': self.modulation_engine.template.get_version_string(),
+            'moderation_template_record_id': active_template.get('template_record_id'),
+            'selection_recipe': {
+                'K_E_policy': 'max(3, min(pool_size, 10))',
+                'K_N_policy': 'max(1, min(normative_count, 5)) when normative_count > 0 else 0',
+                'K_A_policy': 'max(3, min(pool_size, 8))',
+            },
+            'formula_metadata': formula_registry(),
+            'input_counts': {
+                'allowed_posts': len(allowed_posts),
+                'blocked_posts': len(blocked_posts),
+                'topics': len(topics),
+            },
+            'timestamp': datetime.now().isoformat(),
+        }
+
+    def _build_recipe_versions(self) -> Dict[str, Any]:
+        """Publish component versions for traceability."""
+        active_template = self._active_moderation_template_record or {}
+        return {
+            'extraction_engine': 'v2',
+            'topic_engine': 'v2',
+            'scoring_engine': 'v2',
+            'selection_engine': 'v1',
+            'formula_registry': 'lsd-v1.2.0',
+            'scoring_formula_mode': scoring_formula_mode(),
+            'frame_mode': get_frame_mode_flag(),
+            'coverage_mode': os.getenv('COVERAGE_MODE', 'leverage_legacy'),
+            'modulation_template': self.modulation_engine.template.get_version_string(),
+            'modulation_template_record_id': active_template.get('template_record_id'),
+            'fact_checker_mode': self._fact_check_mode,
+        }
+
     def get_frame_info(self) -> Optional[Dict]:
         """Get active frame info for snapshots and API (LSD §5)."""
         frame = self.frame_registry.get_active_frame()

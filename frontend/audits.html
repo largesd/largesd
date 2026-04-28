@@ -3,38 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Audits — Blind Debate Adjudicator</title>
+  <title>Evidence & Audits — Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
   <style>
     .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .audit-grid { display: grid; gap: 16px; }
+    .analysis-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+    .analysis-tab {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-muted);
+      color: var(--ink-default);
+      cursor: pointer;
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 7px 11px;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+    .analysis-tab:hover {
+      background: var(--surface-accent);
+      border-color: var(--line-strong);
+      color: var(--ink-strong);
+    }
+    .analysis-tab.active {
+      border-color: color-mix(in oklch, var(--accent), white 45%);
+      background: color-mix(in oklch, var(--surface-accent), white 42%);
+      color: var(--ink-strong);
+      font-weight: 600;
+    }
+    .analysis-panel { display: block; }
+    .analysis-panel[hidden] { display: none; }
     @media(min-width:900px) {
       .audit-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html" class="active" aria-current="page">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -44,7 +75,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -53,126 +83,226 @@
 </section>
 
 <main>
-
-<section class="card" id="topic-geometry">
+<section class="card" id="analysis-shell">
   <div class="section-head">
     <div>
-      <h2>Audits</h2>
-      <p class="lede">Stress tests that explain why the current decision is or is not robust.</p>
+      <h2>Evidence & Audits</h2>
+      <p class="lede">Inspect high-impact evidence targets and stress-test robustness from a single review surface.</p>
     </div>
-    <a class="button secondary" href="verdict.html">Jump to verdict math</a>
+    <a class="button secondary" href="verdict.html">Jump to verdict</a>
   </div>
 
-  <div class="callout soft" id="audits-empty" style="display:none;"></div>
+  <div class="callout soft" id="analysis-empty" style="display:none;"></div>
 
-  <div id="audits-content" style="display:none;">
-    <p><small>Audit outputs are live calculations tied to the current snapshot rather than canned examples.</small></p>
-
-    <hr />
-    <h3>Topic geometry audit</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
-
-    <h4>Lineage map</h4>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Topic</th><th>Parent topic ids</th><th>Operation</th><th>Drift</th></tr></thead>
-        <tbody id="lineage-tbody">
-          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
-        </tbody>
-      </table>
+  <div id="analysis-content" style="display:none;">
+    <div class="analysis-tabs" role="tablist" aria-label="Evidence and audits views">
+      <button type="button" class="analysis-tab" id="analysis-tab-evidence" data-tab="evidence" role="tab" aria-controls="analysis-panel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
+      <button type="button" class="analysis-tab" id="analysis-tab-audits" data-tab="audits" role="tab" aria-controls="analysis-panel-audits" aria-selected="false" tabindex="-1">Audits</button>
     </div>
 
-    <h4>Content mass share + geometry quality</h4>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
-        <tbody id="geometry-tbody">
-          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="row" id="geometry-summary-row"></div>
+    <section class="analysis-panel" id="analysis-panel-evidence" data-tab-panel="evidence" role="tabpanel" aria-labelledby="analysis-tab-evidence" hidden>
+      <div class="callout soft" id="evidence-panel-error" style="display:none;"></div>
 
-    <hr />
-    <h3>Side-label symmetry audit</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Tests whether the verdict changes when FOR and AGAINST labels are swapped.</p>
-    <div class="audit-grid">
       <div class="callout soft">
         <div class="row">
-          <span class="pill">median ΔD: <span class="mono" id="symmetry-median-delta">-</span></span>
-          <span class="pill">|ΔD|: <span class="mono" id="symmetry-abs-delta">-</span></span>
+          <span class="pill">Verdict: <span class="mono" id="evidence-verdict">-</span></span>
+          <span class="pill">Confidence: <span class="mono" id="evidence-confidence">-</span></span>
+          <span class="pill">Margin D: <span class="mono" id="evidence-margin">-</span></span>
+          <span class="pill">Margin needed for flip: <span class="mono" id="evidence-flip-margin">-</span></span>
         </div>
-        <p style="margin-bottom:0" id="symmetry-interpretation">Loading symmetry audit...</p>
+        <p style="margin-bottom:0" id="evidence-summary">Loading evidence targets...</p>
       </div>
-      <div class="callout soft">
-        <div class="row">
-          <span class="pill">Original D: <span class="mono" id="symmetry-original-d">-</span></span>
-          <span class="pill">Swapped D: <span class="mono" id="symmetry-swapped-d">-</span></span>
-        </div>
-        <small>Swapped D is reflected back into the original orientation to show how far the label flip moves the margin.</small>
-      </div>
-    </div>
-    <div class="table-wrap" style="margin-top:16px;">
-      <table class="table">
-        <thead><tr><th>Topic</th><th>ΔQ FOR</th><th>ΔQ AGAINST</th><th>Asymmetry</th></tr></thead>
-        <tbody id="symmetry-topics-tbody">
-          <tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic-level symmetry deltas available.</td></tr>
-        </tbody>
-      </table>
-    </div>
 
-    <hr />
-    <h3>Extraction stability</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Measures consistency of FACT and ARGUMENT extraction across reruns.</p>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Layer</th><th>Jaccard</th><th>Precision</th><th>Recall</th><th>Set sizes</th></tr></thead>
-        <tbody id="stability-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="row">
-      <span class="pill">Runs: <span class="mono" id="stability-runs">-</span></span>
-      <span class="pill">Stability score: <span class="mono" id="stability-score">-</span></span>
-    </div>
-    <details class="trace" style="margin-top:16px;">
-      <summary>Mismatch report</summary>
-      <div class="codebox" id="mismatch-report">No mismatch report yet.</div>
-    </details>
+      <hr />
+      <h3>High-impact targets</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Target</th><th>Side</th><th>Current state</th><th>Impact on D</th><th>Evidence needed</th></tr></thead>
+          <tbody id="high-impact-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-    <hr />
-    <h3>Evaluator disagreement</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Shows how much judge scores diverge in the current run.</p>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Quantity</th><th>Median / IQR</th><th>Interpretation</th></tr></thead>
-        <tbody id="disagreement-tbody"></tbody>
-      </table>
-    </div>
+      <hr />
+      <h3>Medium-impact targets</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Target</th><th>Side</th><th>Leverage</th><th>Impact on D</th><th>Evidence type</th></tr></thead>
+          <tbody id="medium-impact-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-    <hr />
-    <h3>Relevance sensitivity</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Tests how perturbing topic relevance weights affects the verdict.</p>
-    <div class="audit-grid">
+      <hr />
+      <h3>Update triggers</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">These are the live threshold statements most likely to change the current outcome.</p>
       <div class="callout soft">
-        <div class="row">
-          <span class="pill">mean D: <span class="mono" id="rel-d-mean">-</span></span>
-          <span class="pill">std D: <span class="mono" id="rel-d-std">-</span></span>
-          <span class="pill">range: <span class="mono" id="rel-d-range">-</span></span>
+        <ul class="compact-list" id="trigger-list">
+          <li>Loading update triggers...</li>
+        </ul>
+      </div>
+
+      <hr />
+      <div class="row">
+        <a class="pill" href="verdict.html">← Back to Verdict</a>
+        <button class="pill" type="button" onclick="setAnalysisTab('audits')">View audit stress tests →</button>
+      </div>
+    </section>
+
+    <section class="analysis-panel" id="analysis-panel-audits" data-tab-panel="audits" role="tabpanel" aria-labelledby="analysis-tab-audits" hidden>
+      <div class="callout soft" id="audits-panel-error" style="display:none;"></div>
+
+      <p><small>Audit outputs are live calculations tied to the current snapshot rather than canned examples.</small></p>
+
+      <hr />
+      <h3>Topic geometry audit</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
+
+      <h4>Lineage map</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>Parent topic ids</th><th>Operation</th><th>Drift</th></tr></thead>
+          <tbody id="lineage-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Content mass share + geometry quality</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
+          <tbody id="geometry-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row" id="geometry-summary-row"></div>
+
+      <hr />
+      <h3>Side-label symmetry audit</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests whether the verdict changes when FOR and AGAINST labels are swapped.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">median ΔD: <span class="mono" id="symmetry-median-delta">-</span></span>
+            <span class="pill">|ΔD|: <span class="mono" id="symmetry-abs-delta">-</span></span>
+          </div>
+          <p style="margin-bottom:0" id="symmetry-interpretation">Loading symmetry audit...</p>
+        </div>
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">Original D: <span class="mono" id="symmetry-original-d">-</span></span>
+            <span class="pill">Swapped D: <span class="mono" id="symmetry-swapped-d">-</span></span>
+          </div>
+          <small>Swapped D is reflected back into the original orientation to show how far the label flip moves the margin.</small>
         </div>
       </div>
-      <div class="callout soft">
-        <div class="row">
-          <span class="pill">Stability ratio: <span class="mono" id="rel-stability-ratio">-</span></span>
-          <span class="pill">Interpretation: <span class="mono" id="rel-interpretation">-</span></span>
-        </div>
-        <div class="row" id="rel-verdict-distribution" style="margin-top:12px;"></div>
+      <div class="table-wrap" style="margin-top:16px;">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>ΔQ FOR</th><th>ΔQ AGAINST</th><th>Asymmetry</th></tr></thead>
+          <tbody id="symmetry-topics-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic-level symmetry deltas available.</td></tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      <hr />
+      <h3>Extraction stability</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Measures consistency of FACT and ARGUMENT extraction across reruns.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Layer</th><th>Jaccard</th><th>Precision</th><th>Recall</th><th>Set sizes</th></tr></thead>
+          <tbody id="stability-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row">
+        <span class="pill">Runs: <span class="mono" id="stability-runs">-</span></span>
+        <span class="pill">Stability score: <span class="mono" id="stability-score">-</span></span>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Mismatch report</summary>
+        <div class="codebox" id="mismatch-report">No mismatch report yet.</div>
+      </details>
+
+      <hr />
+      <h3>Evaluator disagreement</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Shows how much judge scores diverge in the current run.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Quantity</th><th>Median / IQR</th><th>Interpretation</th></tr></thead>
+          <tbody id="disagreement-tbody"></tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Relevance sensitivity</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests how perturbing topic relevance weights affects the verdict.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">mean D: <span class="mono" id="rel-d-mean">-</span></span>
+            <span class="pill">std D: <span class="mono" id="rel-d-std">-</span></span>
+            <span class="pill">range: <span class="mono" id="rel-d-range">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">Stability ratio: <span class="mono" id="rel-stability-ratio">-</span></span>
+            <span class="pill">Interpretation: <span class="mono" id="rel-interpretation">-</span></span>
+          </div>
+          <div class="row" id="rel-verdict-distribution" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <hr />
+      <h3>v1.2 audit matrix</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">High-leverage LSD v1.2 channels: dominance, merge sensitivity, integrity, rarity, budget adequacy, and cap effects.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <h4>Topic dominance + merge sensitivity</h4>
+          <div class="row">
+            <span class="pill">Top-3 canonical: <span class="mono" id="audit-top3-pre">-</span></span>
+            <span class="pill">Top-3 selected: <span class="mono" id="audit-top3-sel">-</span></span>
+            <span class="pill">Mapping stability: <span class="mono" id="audit-merge-stability">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Integrity indicators</h4>
+          <div class="row">
+            <span class="pill">Entropy: <span class="mono" id="audit-participation-entropy">-</span></span>
+            <span class="pill">Top 10% share: <span class="mono" id="audit-top10-share">-</span></span>
+            <span class="pill">Template similarity: <span class="mono" id="audit-template-sim">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Budget and centrality cap</h4>
+          <div class="row">
+            <span class="pill">Items capped: <span class="mono" id="audit-items-capped">-</span></span>
+            <span class="pill">Cap value: <span class="mono" id="audit-cap-value">-</span></span>
+            <span class="pill">Pool capped: <span class="mono" id="audit-pool-capped">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Coverage + frame sensitivity</h4>
+          <div class="row">
+            <span class="pill">Coverage mode: <span class="mono" id="audit-coverage-mode">-</span></span>
+            <span class="pill">Frame ΔD max: <span class="mono" id="audit-frame-delta">-</span></span>
+            <span class="pill">Audit schema: <span class="mono" id="audit-schema-version">-</span></span>
+          </div>
+        </div>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show raw v1.2 audit channels</summary>
+        <div class="codebox" id="audit-v12-raw">No v1.2 audit channels loaded.</div>
+      </details>
+    </section>
   </div>
 </section>
-
 </main>
 
 <footer>
@@ -184,23 +314,26 @@
 
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+    <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms used in evidence-target analysis and robustness audits.</p>
+
+    <div class="glossary-term">Impact on D</div>
+    <div class="glossary-def">Estimated movement in the verdict margin if the target changes substantially.</div>
+
+    <div class="glossary-term">Update trigger</div>
+    <div class="glossary-def">A threshold statement describing what evidence would materially change the verdict.</div>
 
     <div class="glossary-term">Side-label symmetry</div>
     <div class="glossary-def">Audit that swaps FOR and AGAINST labels to detect evaluator bias. Smaller movement in D means better symmetry.</div>
 
     <div class="glossary-term">Extraction stability</div>
     <div class="glossary-def">Consistency of FACT and ARGUMENT extraction across reruns of the pipeline.</div>
-
-    <div class="glossary-term">Topic drift</div>
-    <div class="glossary-def">How much a topic changed from its prior form. Higher drift can mean more topic instability.</div>
 
     <div class="glossary-term">Relevance sensitivity</div>
     <div class="glossary-def">How much the verdict changes when topic relevance weights are perturbed.</div>
@@ -211,32 +344,73 @@
 </div>
 
 <script>
+const ANALYSIS_TABS = ['evidence', 'audits'];
+
 function toggleHelp() {
   BDA.toggleHelp();
 }
 
-function quantiles(values) {
-  if (!values.length) return ['-', '-', '-'];
-  const sorted = values.slice().sort((a, b) => a - b);
-  const pick = (ratio) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * ratio))];
-  return [pick(0.1), pick(0.5), pick(0.9)].map((value) => BDA.formatNumber(value, 2));
+function getRequestedTab() {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return ANALYSIS_TABS.includes(tab) ? tab : 'audits';
 }
 
-function showAuditsEmpty(messageHtml) {
-  const empty = document.getElementById('audits-empty');
-  document.getElementById('audits-content').style.display = 'none';
+function setAnalysisTab(tab, options = {}) {
+  const { updateUrl = true } = options;
+  const safeTab = ANALYSIS_TABS.includes(tab) ? tab : 'audits';
+
+  document.querySelectorAll('.analysis-tab').forEach((button) => {
+    const active = button.dataset.tab === safeTab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.setAttribute('tabindex', active ? '0' : '-1');
+  });
+
+  document.querySelectorAll('.analysis-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== safeTab;
+  });
+
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', safeTab);
+    const query = url.searchParams.toString();
+    const next = `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+    window.history.replaceState({}, '', next);
+  }
+}
+
+function bindTabEvents() {
+  document.querySelectorAll('.analysis-tab').forEach((button) => {
+    button.addEventListener('click', () => setAnalysisTab(button.dataset.tab));
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      const currentIndex = ANALYSIS_TABS.indexOf(button.dataset.tab);
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      const nextIndex = (currentIndex + direction + ANALYSIS_TABS.length) % ANALYSIS_TABS.length;
+      const nextTab = ANALYSIS_TABS[nextIndex];
+      setAnalysisTab(nextTab);
+      const nextButton = document.querySelector(`.analysis-tab[data-tab="${nextTab}"]`);
+      if (nextButton) nextButton.focus();
+    });
+  });
+}
+
+function showAnalysisEmpty(messageHtml) {
+  const empty = document.getElementById('analysis-empty');
+  document.getElementById('analysis-content').style.display = 'none';
   empty.innerHTML = messageHtml;
   empty.style.display = 'block';
 }
 
-function showAuditsContent() {
-  document.getElementById('audits-empty').style.display = 'none';
-  document.getElementById('audits-content').style.display = 'block';
+function showAnalysisContent() {
+  document.getElementById('analysis-empty').style.display = 'none';
+  document.getElementById('analysis-content').style.display = 'block';
 }
 
 function renderDebateChoices(debates) {
   if (!debates.length) {
-    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to unlock live audits.';
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to unlock evidence and audits.';
   }
 
   const buttons = debates.map((debate) => `
@@ -244,9 +418,77 @@ function renderDebateChoices(debates) {
   `).join('');
 
   return `
-    <strong>No active debate selected.</strong> Choose a public debate to inspect its live audits.
+    <strong>No active debate selected.</strong> Choose a public debate to inspect evidence targets and audit stress tests.
     <div class="choice-list">${buttons}</div>
   `;
+}
+
+function currentStateText(target) {
+  if (target.type === 'fact' && target.current_p !== null && target.current_p !== undefined) {
+    return `p=${BDA.formatNumber(target.current_p, 2)}, leverage=${BDA.formatNumber(target.leverage_score, 2)}`;
+  }
+  return `leverage=${BDA.formatNumber(target.leverage_score, 2)}`;
+}
+
+function renderTargets(tbodyId, targets, includeEvidenceNeeded) {
+  const tbody = document.getElementById(tbodyId);
+  if (!targets.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No targets in this bucket.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = targets.map((target) => {
+    if (includeEvidenceNeeded) {
+      return `
+        <tr>
+          <td><strong>${BDA.escapeHtml(target.title)}</strong><br><small>${BDA.escapeHtml(target.type)}</small></td>
+          <td>${BDA.escapeHtml(target.side || '—')}</td>
+          <td class="mono">${BDA.escapeHtml(currentStateText(target))}</td>
+          <td class="mono">${BDA.formatNumber(target.impact_on_margin, 4)}</td>
+          <td>${BDA.escapeHtml(target.evidence_needed || '—')}</td>
+        </tr>
+      `;
+    }
+
+    return `
+      <tr>
+        <td><strong>${BDA.escapeHtml(target.title)}</strong><br><small>${BDA.escapeHtml(target.type)}</small></td>
+        <td>${BDA.escapeHtml(target.side || '—')}</td>
+        <td class="mono">${BDA.formatNumber(target.leverage_score, 2)}</td>
+        <td class="mono">${BDA.formatNumber(target.impact_on_margin, 4)}</td>
+        <td>${BDA.escapeHtml(target.evidence_type || 'mixed')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderEvidence(data) {
+  document.getElementById('evidence-verdict').textContent = data.verdict || '-';
+  document.getElementById('evidence-confidence').textContent = BDA.formatNumber(data.confidence, 2);
+  document.getElementById('evidence-margin').textContent = BDA.formatNumber(data.margin_d, 4);
+  document.getElementById('evidence-flip-margin').textContent = BDA.formatNumber(data.margin_needed_for_flip, 4);
+  document.getElementById('evidence-summary').textContent = data.summary || 'No evidence-target summary available.';
+
+  renderTargets('high-impact-tbody', data.high_impact_targets || [], true);
+  renderTargets('medium-impact-tbody', data.medium_impact_targets || [], false);
+
+  const allTargets = [...(data.high_impact_targets || []), ...(data.medium_impact_targets || [])];
+  const triggerList = document.getElementById('trigger-list');
+  if (!allTargets.length) {
+    triggerList.innerHTML = '<li>No update triggers available for the current snapshot.</li>';
+    return;
+  }
+
+  triggerList.innerHTML = allTargets.slice(0, 6).map((target) => `
+    <li><strong>${BDA.escapeHtml(target.title)}:</strong> ${BDA.escapeHtml(target.update_trigger || 'No trigger available.')}</li>
+  `).join('');
+}
+
+function quantiles(values) {
+  if (!values.length) return ['-', '-', '-'];
+  const sorted = values.slice().sort((a, b) => a - b);
+  const pick = (ratio) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * ratio))];
+  return [pick(0.1), pick(0.5), pick(0.9)].map((value) => BDA.formatNumber(value, 2));
 }
 
 function renderTopicGeometry(items) {
@@ -359,12 +601,52 @@ function renderRelevanceSensitivity(data) {
     : '<small style="color:var(--muted)">No verdict distribution available.</small>';
 }
 
-async function initAuditsPage() {
+function renderV12AuditMatrix(audits) {
+  const dominance = audits.topic_dominance || {};
+  const merge = audits.merge_sensitivity || {};
+  const participation = audits.participation_concentration || {};
+  const concentration = participation.concentration_buckets || {};
+  const integrity = audits.integrity_indicators || {};
+  const template = integrity.template_similarity_prevalence || {};
+  const cap = audits.centrality_cap_effect || {};
+  const coverage = audits.coverage_adequacy_trace || {};
+  const frame = audits.frame_sensitivity || {};
+
+  document.getElementById('audit-schema-version').textContent = audits.audit_schema_version || '-';
+  document.getElementById('audit-top3-pre').textContent = BDA.formatNumber(dominance.top_3_canonical_mass_share || 0, 4);
+  document.getElementById('audit-top3-sel').textContent = BDA.formatNumber(dominance.top_3_selected_mass_share || 0, 4);
+  document.getElementById('audit-merge-stability').textContent = BDA.formatNumber(merge.mapping_stability || 0, 4);
+  document.getElementById('audit-participation-entropy').textContent = BDA.formatNumber(participation.participation_entropy || 0, 4);
+  document.getElementById('audit-top10-share').textContent = BDA.formatNumber(concentration.top_10pct_share || 0, 4);
+  document.getElementById('audit-template-sim').textContent = BDA.formatNumber(template.template_similarity_rate || 0, 4);
+  document.getElementById('audit-items-capped').textContent = cap.items_affected_by_cap ?? 0;
+  document.getElementById('audit-cap-value').textContent = BDA.formatNumber(cap.cap_value || 0, 4);
+  document.getElementById('audit-pool-capped').textContent = BDA.formatNumber(cap.fraction_of_pool_capped || 0, 4);
+  document.getElementById('audit-coverage-mode').textContent = audits.formula_registry?.feature_flags?.COVERAGE_MODE || 'leverage_legacy';
+  document.getElementById('audit-frame-delta').textContent = BDA.formatNumber(frame.max_delta_d || 0, 4);
+  document.getElementById('audit-v12-raw').textContent = JSON.stringify({
+    topic_dominance: audits.topic_dominance,
+    topic_concentration: audits.topic_concentration,
+    merge_sensitivity: audits.merge_sensitivity,
+    integrity_indicators: audits.integrity_indicators,
+    participation_concentration: audits.participation_concentration,
+    budget_adequacy: audits.budget_adequacy,
+    centrality_cap_effect: audits.centrality_cap_effect,
+    rarity_utilization: audits.rarity_utilization,
+    coverage_adequacy_trace: audits.coverage_adequacy_trace,
+    frame_sensitivity: audits.frame_sensitivity,
+  }, null, 2);
+}
+
+async function initAnalysisPage() {
+  bindTabEvents();
+  setAnalysisTab(getRequestedTab(), { updateUrl: false });
+
   const debate = await BDA.loadDebate();
   if (!debate.has_debate) {
     const debates = await BDA.loadDebates();
-    showAuditsEmpty(renderDebateChoices(debates));
-    document.querySelectorAll('#audits-empty [data-debate-id]').forEach((button) => {
+    showAnalysisEmpty(renderDebateChoices(debates));
+    document.querySelectorAll('#analysis-empty [data-debate-id]').forEach((button) => {
       button.addEventListener('click', () => {
         BDA.setActiveDebateId(button.getAttribute('data-debate-id'));
         window.location.reload();
@@ -375,11 +657,24 @@ async function initAuditsPage() {
 
   const snapshot = await BDA.loadSnapshot();
   if (!snapshot || !snapshot.has_snapshot) {
-    showAuditsEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate.html">New Debate / Post Point</a> first.');
+    showAnalysisEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate.html">New Debate / Post Point</a> first.');
     return;
   }
 
   BDA.updateStateStrip(snapshot);
+
+  let evidenceOk = false;
+  let auditsOk = false;
+
+  try {
+    const evidence = await BDA.api('/api/debate/evidence-targets');
+    renderEvidence(evidence);
+    evidenceOk = true;
+  } catch (error) {
+    const callout = document.getElementById('evidence-panel-error');
+    callout.innerHTML = `Unable to load live evidence targets right now: ${BDA.escapeHtml(error.message)}`;
+    callout.style.display = 'block';
+  }
 
   try {
     const audits = await BDA.api('/api/debate/audits');
@@ -388,15 +683,25 @@ async function initAuditsPage() {
     renderStability(audits.extraction_stability || {});
     renderDisagreement(audits.evaluator_disagreement || {});
     renderRelevanceSensitivity(audits.relevance_sensitivity || {});
-    showAuditsContent();
-    BDA.setupTableScroll();
-    BDA.setupTooltips();
+    renderV12AuditMatrix(audits);
+    auditsOk = true;
   } catch (error) {
-    showAuditsEmpty(`Unable to load live audits right now: ${BDA.escapeHtml(error.message)}`);
+    const callout = document.getElementById('audits-panel-error');
+    callout.innerHTML = `Unable to load live audits right now: ${BDA.escapeHtml(error.message)}`;
+    callout.style.display = 'block';
   }
+
+  if (!evidenceOk && !auditsOk) {
+    showAnalysisEmpty('Unable to load live evidence or audits right now. Please try again.');
+    return;
+  }
+
+  showAnalysisContent();
+  BDA.setupTableScroll();
+  BDA.setupTooltips();
 }
 
-document.addEventListener('DOMContentLoaded', initAuditsPage);
+document.addEventListener('DOMContentLoaded', initAnalysisPage);
 </script>
 </body>
 </html>

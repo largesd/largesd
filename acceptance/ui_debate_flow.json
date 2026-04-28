@@ -43,6 +43,67 @@
         "The Topics page renders at least one topic row after a snapshot.",
         "The Verdict page renders overall scores and topic contributions after a snapshot."
       ]
+    },
+    {
+      "id": "AC-5",
+      "title": "Persist moderation template changes through the Admin UI",
+      "checks": [
+        "An authenticated user can save a moderation template draft from admin.html.",
+        "Reloading admin.html preserves the saved draft in template history."
+      ]
+    },
+    {
+      "id": "AC-6",
+      "title": "Render evidence, dossier, and governance trust surfaces from live APIs",
+      "checks": [
+        "Evidence page loads summary content from /api/debate/evidence-targets.",
+        "Decision dossier page renders snapshot-linked diagnostics from /api/debate/decision-dossier.",
+        "Governance page renders frame and health summary data from governance endpoints."
+      ]
+    },
+    {
+      "id": "AC-7",
+      "title": "Complete register, login, and logout flows through UI forms",
+      "checks": [
+        "register.html creates an account and persists token plus user metadata in localStorage.",
+        "login.html authenticates the same account and respects the next= redirect target.",
+        "Logout clears local auth/session state and redirects back to login with user feedback."
+      ]
+    },
+    {
+      "id": "AC-8",
+      "title": "Render snapshot history and latest snapshot diff after multiple runs",
+      "checks": [
+        "snapshot.html history table shows at least two rows after two snapshots are generated.",
+        "Latest diff view renders old/new snapshot ids and summary bullets from /api/debate/snapshot-diff.",
+        "History and diff surfaces stay available through the normal UI (not raw JSON)."
+      ]
+    },
+    {
+      "id": "AC-9",
+      "title": "Debate proposal lifecycle: submit, queue, accept",
+      "checks": [
+        "A regular user can submit a debate proposal via /api/debate-proposals.",
+        "The proposal appears in the admin review queue and the user's own proposals list.",
+        "An admin can accept the proposal, which creates a debate and updates the proposal status."
+      ]
+    },
+    {
+      "id": "AC-10",
+      "title": "Identity-blind public surface hardening",
+      "checks": [
+        "Authenticated nav shows a generic 'Account' indicator instead of display_name or email.",
+        "No personal identity strings appear in the public debate surfaces."
+      ]
+    },
+    {
+      "id": "AC-11",
+      "title": "Snapshot integrity and reproducibility fields",
+      "checks": [
+        "snapshot.html renders input_hash_root and output_hash_root.",
+        "Recipe versions are visible for component traceability.",
+        "Replay manifest is available in a collapsible detail view."
+      ]
     }
   ]
 }

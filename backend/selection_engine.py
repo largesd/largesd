@@ -21,6 +21,13 @@ from datetime import datetime
 
 import numpy as np
 
+from lsd_v1_2 import (
+    SELECTION_FORMULA_VERSION,
+    SELECTION_WEIGHTS,
+    compute_selection_score,
+    selection_formula_metadata,
+)
+
 
 @dataclass
 class SelectionRecipe:
@@ -31,12 +38,16 @@ class SelectionRecipe:
     rho: float = 0.20
     low_centrality_quantile: float = 0.60
     centrality_cap_percentile: float = 95.0
-    version: str = "lsd-11-v1.2"
+    version: str = SELECTION_FORMULA_VERSION
+    version_id: str = SELECTION_FORMULA_VERSION
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
-    score_formula: str = "centrality_capped + 0.1 * distinct_support + quality_proxy"
+    score_formula: str = "S_i = w1 * centrality_i_capped + w2 * log(1 + distinct_support_i_internal) + w3 * AU_quality_proxy_i"
+    weights: Dict[str, float] = field(default_factory=lambda: dict(SELECTION_WEIGHTS))
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["formula_metadata"] = selection_formula_metadata()
+        return data
 
 
 @dataclass
@@ -107,10 +118,12 @@ class SelectionEngine:
     def _quality_proxy(cls, item: Any) -> float:
         """
         Quality proxy:
-        - Arguments -> reasoning_score
+        - Arguments -> completeness_proxy, then reasoning_score
         - Facts     -> p_true
         - Fallback  -> 1.0
         """
+        if cls._get_field(item, "completeness_proxy") is not None:
+            return float(cls._get_field(item, "completeness_proxy"))
         if cls._get_field(item, "reasoning_score") is not None:
             return float(cls._get_field(item, "reasoning_score"))
         if cls._get_field(item, "p_true") is not None:
@@ -130,9 +143,9 @@ class SelectionEngine:
         """
         Published selection score.
 
-        S(canon_id) = centrality_capped
-                    + 0.1 * distinct_support
-                    + quality_proxy
+        S(canon_id) = w1 * centrality_capped
+                    + w2 * log(1 + distinct_support)
+                    + w3 * quality_proxy
 
         All terms are monotone; the function is simple and fully auditable.
         """
@@ -140,7 +153,22 @@ class SelectionEngine:
         cent = centrality_map.get(cid, 0.0)
         sup = cls._distinct_support(item)
         qual = cls._quality_proxy(item)
-        return cent + 0.1 * sup + qual
+        return compute_selection_score(cent, sup, qual)
+
+    @classmethod
+    def _score_breakdown(cls, item: Any, centrality_map: Dict[str, float]) -> Dict[str, Any]:
+        cid = cls._canon_id(item)
+        cent = centrality_map.get(cid, 0.0)
+        sup = cls._distinct_support(item)
+        qual = cls._quality_proxy(item)
+        return {
+            "canon_id": cid,
+            "centrality_i_capped": round(float(cent), 4),
+            "distinct_support_i_internal": sup,
+            "AU_quality_proxy_i": round(float(qual), 4),
+            "score": round(compute_selection_score(cent, sup, qual), 4),
+            "weights": dict(SELECTION_WEIGHTS),
+        }
 
     @staticmethod
     def _hash_tiebreak(seed: int, canon_id: str) -> int:
@@ -169,19 +197,23 @@ class SelectionEngine:
             Diagnostics about the pool and cap applied.
         """
         raw_cents: List[float] = []
+        raw_map: Dict[str, float] = {}
         centrality_map: Dict[str, float] = {}
 
         for item in items:
             cid = cls._canon_id(item)
             raw = cls._raw_centrality(item)
+            raw_map[cid] = raw
             centrality_map[cid] = raw
             raw_cents.append(raw)
 
         cap_value: Optional[float] = None
+        affected = 0
         if raw_cents:
             cap_value = float(np.percentile(raw_cents, cap_percentile))
             for cid in centrality_map:
                 if centrality_map[cid] > cap_value:
+                    affected += 1
                     centrality_map[cid] = cap_value
 
         meta = {
@@ -190,6 +222,10 @@ class SelectionEngine:
             "p95_cap": cap_value,
             "raw_centrality_mean": float(np.mean(raw_cents)) if raw_cents else 0.0,
             "raw_centrality_max": max(raw_cents) if raw_cents else 0.0,
+            "items_affected_by_cap": affected,
+            "fraction_of_pool_capped": (affected / len(items)) if items else 0.0,
+            "raw_centrality_by_id": {cid: round(value, 4) for cid, value in raw_map.items()},
+            "capped_centrality_by_id": {cid: round(value, 4) for cid, value in centrality_map.items()},
         }
         return centrality_map, meta
 
@@ -362,6 +398,8 @@ class SelectionEngine:
             selected_facts.extend(rare)
 
             sel_mass = sum(self._raw_centrality(item) for item in maj + rare)
+            majority_cent = [cent_map.get(self._canon_id(item), 0.0) for item in maj]
+            rarity_cent = [cent_map.get(self._canon_id(item), 0.0) for item in rare]
             meta.update({
                 "sel_mass": sel_mass,
                 "mass_ratio": sel_mass / meta["pre_mass"] if meta["pre_mass"] > 0 else 0.0,
@@ -370,6 +408,19 @@ class SelectionEngine:
                 "rarity_count": len(rare),
                 "majority_ids": [self._canon_id(m) for m in maj],
                 "rarity_ids": [self._canon_id(r) for r in rare],
+                "selected_score_breakdown": [
+                    self._score_breakdown(item, cent_map) for item in (maj + rare)
+                ],
+                "rarity_avg_quality_proxy": (
+                    float(np.mean([self._quality_proxy(item) for item in rare])) if rare else 0.0
+                ),
+                "rarity_mass_contribution": (
+                    sum(rarity_cent) / sel_mass if sel_mass > 0 else 0.0
+                ),
+                "majority_vs_rarity_centrality_comparison": {
+                    "majority_avg_centrality": float(np.mean(majority_cent)) if majority_cent else 0.0,
+                    "rarity_avg_centrality": float(np.mean(rarity_cent)) if rarity_cent else 0.0,
+                },
             })
             diagnostics["pools"]["empirical_facts"] = meta
 
@@ -398,6 +449,8 @@ class SelectionEngine:
             selected_facts.extend(rare)
 
             sel_mass = sum(self._raw_centrality(item) for item in maj + rare)
+            majority_cent = [cent_map.get(self._canon_id(item), 0.0) for item in maj]
+            rarity_cent = [cent_map.get(self._canon_id(item), 0.0) for item in rare]
             meta.update({
                 "sel_mass": sel_mass,
                 "mass_ratio": sel_mass / meta["pre_mass"] if meta["pre_mass"] > 0 else 0.0,
@@ -406,6 +459,19 @@ class SelectionEngine:
                 "rarity_count": len(rare),
                 "majority_ids": [self._canon_id(m) for m in maj],
                 "rarity_ids": [self._canon_id(r) for r in rare],
+                "selected_score_breakdown": [
+                    self._score_breakdown(item, cent_map) for item in (maj + rare)
+                ],
+                "rarity_avg_quality_proxy": (
+                    float(np.mean([self._quality_proxy(item) for item in rare])) if rare else 0.0
+                ),
+                "rarity_mass_contribution": (
+                    sum(rarity_cent) / sel_mass if sel_mass > 0 else 0.0
+                ),
+                "majority_vs_rarity_centrality_comparison": {
+                    "majority_avg_centrality": float(np.mean(majority_cent)) if majority_cent else 0.0,
+                    "rarity_avg_centrality": float(np.mean(rarity_cent)) if rarity_cent else 0.0,
+                },
             })
             diagnostics["pools"]["normative_facts"] = meta
 
@@ -434,6 +500,8 @@ class SelectionEngine:
             selected_args.extend(rare)
 
             sel_mass = sum(self._raw_centrality(item) for item in maj + rare)
+            majority_cent = [cent_map.get(self._canon_id(item), 0.0) for item in maj]
+            rarity_cent = [cent_map.get(self._canon_id(item), 0.0) for item in rare]
             meta.update({
                 "sel_mass": sel_mass,
                 "mass_ratio": sel_mass / meta["pre_mass"] if meta["pre_mass"] > 0 else 0.0,
@@ -442,6 +510,19 @@ class SelectionEngine:
                 "rarity_count": len(rare),
                 "majority_ids": [self._canon_id(m) for m in maj],
                 "rarity_ids": [self._canon_id(r) for r in rare],
+                "selected_score_breakdown": [
+                    self._score_breakdown(item, cent_map) for item in (maj + rare)
+                ],
+                "rarity_avg_quality_proxy": (
+                    float(np.mean([self._quality_proxy(item) for item in rare])) if rare else 0.0
+                ),
+                "rarity_mass_contribution": (
+                    sum(rarity_cent) / sel_mass if sel_mass > 0 else 0.0
+                ),
+                "majority_vs_rarity_centrality_comparison": {
+                    "majority_avg_centrality": float(np.mean(majority_cent)) if majority_cent else 0.0,
+                    "rarity_avg_centrality": float(np.mean(rarity_cent)) if rarity_cent else 0.0,
+                },
             })
             diagnostics["pools"]["arguments"] = meta
 
@@ -468,6 +549,7 @@ class SelectionEngine:
 
         report: Dict[str, Any] = {
             "selection_recipe": selected_set.recipe.to_dict(),
+            "formula_metadata": selection_formula_metadata(),
             "topic_id": selected_set.topic_id,
             "side": selected_set.side,
             "summary": {
@@ -484,11 +566,39 @@ class SelectionEngine:
                 "selected": meta.get("selected_count", 0),
                 "majority_slice": meta.get("majority_count", 0),
                 "rarity_slice": meta.get("rarity_count", 0),
-                "centrality_p95_cap": round(meta.get("p95_cap", 0.0), 4),
-                "centrality_mean": round(meta.get("raw_centrality_mean", 0.0), 4),
-                "pre_mass": round(meta.get("pre_mass", 0.0), 4),
-                "sel_mass": round(meta.get("sel_mass", 0.0), 4),
-                "mass_ratio": round(meta.get("mass_ratio", 0.0), 4),
+                "centrality_p95_cap": round(float(meta.get("p95_cap") or 0.0), 4),
+                "centrality_mean": round(float(meta.get("raw_centrality_mean", 0.0) or 0.0), 4),
+                "raw_centrality_max": round(float(meta.get("raw_centrality_max", 0.0) or 0.0), 4),
+                "items_affected_by_cap": int(meta.get("items_affected_by_cap", 0) or 0),
+                "fraction_of_pool_capped": round(meta.get("fraction_of_pool_capped", 0.0), 4),
+                "pre_mass": round(float(meta.get("pre_mass", 0.0) or 0.0), 4),
+                "sel_mass": round(float(meta.get("sel_mass", 0.0) or 0.0), 4),
+                "mass_ratio": round(float(meta.get("mass_ratio", 0.0) or 0.0), 4),
+                "majority_ids": meta.get("majority_ids", []),
+                "rarity_ids": meta.get("rarity_ids", []),
+                "selected_score_breakdown": meta.get("selected_score_breakdown", []),
+                "raw_centrality_by_id": meta.get("raw_centrality_by_id", {}),
+                "capped_centrality_by_id": meta.get("capped_centrality_by_id", {}),
             }
+
+        rarity_quality = []
+        rarity_mass = []
+        majority_cent = []
+        rarity_cent = []
+        for meta in pools.values():
+            if meta.get("rarity_avg_quality_proxy"):
+                rarity_quality.append(float(meta.get("rarity_avg_quality_proxy", 0.0)))
+            if meta.get("rarity_mass_contribution"):
+                rarity_mass.append(float(meta.get("rarity_mass_contribution", 0.0)))
+            comparison = meta.get("majority_vs_rarity_centrality_comparison", {})
+            majority_cent.append(float(comparison.get("majority_avg_centrality", 0.0) or 0.0))
+            rarity_cent.append(float(comparison.get("rarity_avg_centrality", 0.0) or 0.0))
+
+        report["rarity_avg_quality_proxy"] = round(float(np.mean(rarity_quality)), 4) if rarity_quality else 0.0
+        report["rarity_mass_contribution"] = round(float(np.mean(rarity_mass)), 4) if rarity_mass else 0.0
+        report["majority_vs_rarity_centrality_comparison"] = {
+            "majority_avg_centrality": round(float(np.mean(majority_cent)), 4) if majority_cent else 0.0,
+            "rarity_avg_centrality": round(float(np.mean(rarity_cent)), 4) if rarity_cent else 0.0,
+        }
 
         return report

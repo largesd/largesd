@@ -24,12 +24,115 @@ const BDA = {
   init() {
     this.hydrateDebateContext();
     this.loadPendingPosts();
+    this.injectSharedHelpPanel().finally(() => this.setupHelpPanel());
     this.setupBackToTop();
     this.setupTooltips();
-    this.setupHelpPanel();
     this.setupMobileState();
     this.setupTableScroll();
+    this.normalizeNavigation();
+    this.setupNavigationDismiss();
+    this.setupNavigationResize();
     Auth.updateNavigation();
+  },
+
+  /**
+   * Inject shared help panel markup for pages using a placeholder
+   */
+  async injectSharedHelpPanel() {
+    const placeholder = document.getElementById('shared-help-panel');
+    const existingPanel = document.getElementById('helpPanel');
+    if (!placeholder || existingPanel) return;
+
+    const panelName = placeholder.dataset.panel || 'help-panel';
+    const safePanelName = panelName.replace(/[^a-z0-9-]/gi, '');
+
+    try {
+      const response = await fetch(`components/${safePanelName}.html`);
+      if (!response.ok) {
+        placeholder.outerHTML = this.getFallbackHelpPanelMarkup(safePanelName);
+        return;
+      }
+      placeholder.outerHTML = await response.text();
+    } catch (error) {
+      console.warn('Failed to load shared help panel from components folder; using fallback markup.', error);
+      placeholder.outerHTML = this.getFallbackHelpPanelMarkup(safePanelName);
+    }
+  },
+
+  /**
+   * Generic shared component injector.
+   * Usage: <div id="shared-footer" data-component="site-footer"></div>
+   */
+  async injectSharedComponent(placeholderId) {
+    const placeholder = document.getElementById(placeholderId);
+    if (!placeholder) return;
+    const componentName = placeholder.dataset.component;
+    if (!componentName) return;
+    const safeName = componentName.replace(/[^a-z0-9-]/gi, '');
+    try {
+      const response = await fetch(`components/${safeName}.html`);
+      if (response.ok) {
+        placeholder.outerHTML = await response.text();
+      }
+    } catch (error) {
+      console.warn(`Failed to load shared component ${safeName}:`, error);
+    }
+  },
+
+  /**
+   * Fallback help panel markup for file:// previews where fetch() can fail
+   */
+  getFallbackHelpPanelMarkup(panelName) {
+    const commonHeader = `
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button class="close-help" aria-label="Close help">x</button>
+  </div>
+  <div class="help-panel-body">
+`;
+    const commonFooter = `
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>`;
+
+    if (panelName === 'help-panel-admin') {
+      return `${commonHeader}
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Administrative terms for moderation configuration.</p>
+    <div class="glossary-term">Modulation Template</div>
+    <div class="glossary-def">Versioned moderation rule set for allow or block decisions.</div>
+    <div class="glossary-term">PII</div>
+    <div class="glossary-def">Personally identifiable information such as emails, phone numbers, and addresses.</div>
+    <div class="glossary-term">Snapshot Audit</div>
+    <div class="glossary-def">Immutable record of moderation outcomes, including block reason counts.</div>
+${commonFooter}`;
+    }
+
+    if (panelName === 'help-panel-posting') {
+      return `${commonHeader}
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms for posting and debate structure.</p>
+    <div class="glossary-term">Argument Unit</div>
+    <div class="glossary-def">Structured contribution made from factual premises and inference.</div>
+    <div class="glossary-term">Canonical FACT</div>
+    <div class="glossary-def">Deduplicated atomic fact used in scoring and auditing.</div>
+    <div class="glossary-term">Coverage</div>
+    <div class="glossary-def">How effectively one side addresses opposing arguments.</div>
+${commonFooter}`;
+    }
+
+    return `${commonHeader}
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    <div class="glossary-term">CI(D)</div>
+    <div class="glossary-def">Confidence interval of D (FOR minus AGAINST). If it crosses zero, verdict remains NO VERDICT.</div>
+    <div class="glossary-term">D = FOR - AGAINST</div>
+    <div class="glossary-def">Margin between overall FOR and AGAINST scores.</div>
+    <div class="glossary-term">Q_t,s</div>
+    <div class="glossary-def">Geometric mean of factuality, reasoning, and coverage.</div>
+    <div class="glossary-term">Rel_t</div>
+    <div class="glossary-def">Topic relevance weight from claim-producing content mass.</div>
+${commonFooter}`;
   },
 
   /**
@@ -131,10 +234,14 @@ const BDA = {
    * API Request helper with error handling
    */
   async api(endpoint, options = {}) {
+    const {
+      suppressAuthRedirect = false,
+      ...fetchOptions
+    } = options;
     const url = `${this.API_BASE}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',
-      ...options.headers
+      ...fetchOptions.headers
     };
     
     // Add auth token if available
@@ -151,22 +258,44 @@ const BDA = {
     try {
       this.state.isLoading = true;
       const response = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers
       });
-      
-      // Handle auth errors
+
+      const contentType = response.headers.get('content-type') || '';
+      let data = {};
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const textBody = await response.text();
+        data = textBody ? { error: textBody } : {};
+      }
+
       if (response.status === 401) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = 'login.html';
-        return null;
+        if (typeof Auth.clearSession === 'function') {
+          Auth.clearSession();
+        } else {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('bda_active_debate_id');
+          localStorage.removeItem('bda_pending_posts');
+        }
+        if (!suppressAuthRedirect) {
+          if (typeof Auth.redirectToLogin === 'function') {
+            Auth.redirectToLogin('session-expired');
+          } else {
+            window.location.href = 'login.html';
+          }
+          return null;
+        }
       }
       
-      const data = await response.json();
-      
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
+        const error = new Error(data.error || `HTTP ${response.status}`);
+        error.status = response.status;
+        error.code = data.code || null;
+        error.payload = data;
+        throw error;
       }
       
       return data;
@@ -233,15 +362,11 @@ const BDA = {
       ? data.confidence.toFixed(2) 
       : '-';
     const snapshotId = data?.snapshot_id || '-';
-    const timestamp = data?.timestamp 
-      ? new Date(data.timestamp).toLocaleString() 
-      : '-';
     
     // Desktop
     const verdictEl = document.getElementById('header-verdict') || document.getElementById('verdict-display');
     const confidenceEl = document.getElementById('header-confidence') || document.getElementById('confidence-display');
     const snapshotEl = document.getElementById('header-snapshot') || document.getElementById('snapshot-display');
-    const updatedEl = document.getElementById('header-updated') || document.getElementById('updated-display');
     
     if (verdictEl) {
       verdictEl.textContent = verdict;
@@ -253,7 +378,6 @@ const BDA = {
       snapshotEl.textContent = snapshotId;
       snapshotEl.title = snapshotId;
     }
-    if (updatedEl) updatedEl.textContent = timestamp;
     
     // Mobile
     const verdictMobile = document.getElementById('verdict-mobile');
@@ -342,19 +466,24 @@ const BDA = {
    * Setup help panel
    */
   setupHelpPanel() {
-    const helpBtn = document.querySelector('.help-btn');
+    const helpBtns = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
     const helpOverlay = document.querySelector('.help-overlay');
-    const closeHelpBtn = document.querySelector('.close-help');
+    const closeHelpBtns = document.querySelectorAll('.close-help');
     
-    if (helpBtn) {
+    helpBtns.forEach((helpBtn) => {
+      if (helpBtn.dataset.helpBound === 'true') return;
       helpBtn.addEventListener('click', () => this.toggleHelp());
-    }
-    if (helpOverlay) {
+      helpBtn.dataset.helpBound = 'true';
+    });
+    if (helpOverlay && helpOverlay.dataset.helpBound !== 'true') {
       helpOverlay.addEventListener('click', () => this.toggleHelp());
+      helpOverlay.dataset.helpBound = 'true';
     }
-    if (closeHelpBtn) {
+    closeHelpBtns.forEach((closeHelpBtn) => {
+      if (closeHelpBtn.dataset.helpBound === 'true') return;
       closeHelpBtn.addEventListener('click', () => this.toggleHelp());
-    }
+      closeHelpBtn.dataset.helpBound = 'true';
+    });
   },
   
   /**
@@ -363,22 +492,92 @@ const BDA = {
   toggleHelp() {
     const panel = document.getElementById('helpPanel');
     const overlay = document.querySelector('.help-overlay');
+    const helpButtons = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
+    if (!panel || !overlay) return;
     
-    if (panel) panel.classList.toggle('open');
-    if (overlay) overlay.classList.toggle('visible');
+    const shouldOpen = !panel.classList.contains('open');
+    panel.classList.toggle('open', shouldOpen);
+    overlay.classList.toggle('visible', shouldOpen);
+    panel.setAttribute('aria-hidden', String(!shouldOpen));
+    overlay.setAttribute('aria-hidden', String(!shouldOpen));
+
+    if (shouldOpen) {
+      panel.removeAttribute('inert');
+      this._helpTrigger = document.activeElement;
+      this._trapFocus(panel);
+      const firstFocusable = panel.querySelector('button, a, input, textarea, select, [tabindex]:not([tabindex="-1"])');
+      if (firstFocusable) firstFocusable.focus();
+    } else {
+      panel.setAttribute('inert', '');
+      if (this._helpTrigger && this._helpTrigger.focus) {
+        this._helpTrigger.focus();
+      }
+      this._untrapFocus();
+    }
+
+    helpButtons.forEach((button) => {
+      button.setAttribute('aria-expanded', String(shouldOpen));
+    });
+  },
+
+  _trapFocus(container) {
+    this._focusTrapHandler = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(container.querySelectorAll('button, a, input, textarea, select, [tabindex]:not([tabindex="-1"])'))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    container.addEventListener('keydown', this._focusTrapHandler);
+  },
+
+  _untrapFocus() {
+    const panel = document.getElementById('helpPanel');
+    if (panel && this._focusTrapHandler) {
+      panel.removeEventListener('keydown', this._focusTrapHandler);
+      this._focusTrapHandler = null;
+    }
   },
   
   /**
    * Setup mobile state strip
    */
   setupMobileState() {
-    if (window.innerWidth <= 640) {
-      const stateWraps = document.querySelectorAll('.state-wrap');
-      if (stateWraps.length >= 2) {
-        stateWraps[0].style.display = 'none';
-        stateWraps[1].style.display = 'grid';
+    const desktop = document.getElementById('state-wrap-desktop');
+    const mobile = document.getElementById('state-wrap-mobile');
+    const stateWraps = document.querySelectorAll('.state-wrap');
+
+    if (!desktop && !mobile && stateWraps.length < 2) return;
+
+    const applyLayout = () => {
+      const isMobile = window.innerWidth <= 640;
+
+      if (desktop && mobile) {
+        desktop.style.display = isMobile ? 'none' : 'grid';
+        mobile.style.display = isMobile ? 'grid' : 'none';
+        return;
       }
-    }
+
+      if (stateWraps.length >= 2) {
+        stateWraps[0].style.display = isMobile ? 'none' : 'grid';
+        stateWraps[1].style.display = isMobile ? 'grid' : 'none';
+      }
+    };
+
+    applyLayout();
+    window.addEventListener('resize', this.debounce(applyLayout, 120));
   },
   
   /**
@@ -397,6 +596,172 @@ const BDA = {
       wrap.addEventListener('scroll', updateFade);
       updateFade(); // Initial check
     });
+  },
+
+  /**
+   * Normalize nav links and keep a fixed overflow set in the More menu.
+   */
+  normalizeNavigation() {
+    const nav = document.querySelector('.navlinks');
+    if (!nav) return;
+
+    // Flatten any existing More menu so we can rebuild it in a consistent position.
+    Array.from(nav.querySelectorAll('.nav-more')).forEach((details) => {
+      const menuLinks = Array.from(details.querySelectorAll('.nav-more-menu > a'));
+      menuLinks.forEach((link) => nav.insertBefore(link, details));
+      details.remove();
+    });
+
+    let allLinks = Array.from(nav.children).filter((element) => {
+      return element.tagName === 'A' && !element.classList.contains('auth-link');
+    });
+
+    const navOrder = [
+      'index.html',
+      'propose.html',
+      'new_debate.html',
+      'snapshot.html',
+      'verdict.html',
+      'topics.html',
+      'audits.html',
+      'dossier.html',
+      'governance.html',
+      'appeals.html',
+      'admin.html',
+      'about.html'
+    ];
+    const alwaysInMore = new Set(['governance.html', 'appeals.html', 'admin.html', 'about.html']);
+    const navLabels = {
+      'index.html': 'Home',
+      'propose.html': 'Propose',
+      'new_debate.html': 'Post Argument',
+      'snapshot.html': 'Snapshot',
+      'verdict.html': 'Verdict',
+      'topics.html': 'Topics',
+      'audits.html': 'Audits',
+      'dossier.html': 'Dossier',
+      'governance.html': 'Governance',
+      'appeals.html': 'Appeals',
+      'admin.html': 'Admin',
+      'about.html': 'About'
+    };
+    const rankMap = new Map(navOrder.map((item, index) => [item, index]));
+    const hrefKey = (link) => {
+      const href = link.getAttribute('href') || '';
+      return href.split('?')[0].split('#')[0].split('/').pop();
+    };
+    const currentPage = (window.location.pathname.split('/').pop() || 'index.html');
+
+    const existingHrefs = new Set(allLinks.map((link) => hrefKey(link)));
+    const insertionPointForMissing = nav.querySelector('.help-btn, [data-help-toggle="true"], .auth-link');
+    navOrder.forEach((href) => {
+      if (existingHrefs.has(href)) return;
+      const link = document.createElement('a');
+      link.href = href;
+      link.textContent = navLabels[href] || href;
+      if (href === currentPage) {
+        link.classList.add('active');
+        link.setAttribute('aria-current', 'page');
+      }
+      nav.insertBefore(link, insertionPointForMissing || null);
+      existingHrefs.add(href);
+    });
+    allLinks = Array.from(nav.children).filter((element) => {
+      return element.tagName === 'A' && !element.classList.contains('auth-link');
+    });
+
+    // Evidence is now a tab within Audits; drop standalone nav links.
+    allLinks.forEach((link) => {
+      if (hrefKey(link) === 'evidence.html') {
+        link.remove();
+      }
+    });
+    allLinks = Array.from(nav.children).filter((element) => {
+      return element.tagName === 'A' && !element.classList.contains('auth-link');
+    });
+
+    // Keep nav order consistent with index across all pages.
+    allLinks.sort((a, b) => {
+      const aRank = rankMap.has(hrefKey(a)) ? rankMap.get(hrefKey(a)) : 999;
+      const bRank = rankMap.has(hrefKey(b)) ? rankMap.get(hrefKey(b)) : 999;
+      return aRank - bRank;
+    });
+
+    const insertionPoint = nav.querySelector('.help-btn, [data-help-toggle="true"], .auth-link');
+    allLinks.forEach((link) => nav.insertBefore(link, insertionPoint || null));
+
+    // Keep top-level label consistent with index.
+    allLinks.forEach((link) => {
+      if (hrefKey(link) === 'new_debate.html') {
+        link.textContent = 'Post Argument';
+      }
+    });
+
+    if (allLinks.length === 0) return;
+
+    const details = document.createElement('details');
+    details.className = 'nav-more';
+    details.dataset.generated = 'true';
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'More';
+
+    const menu = document.createElement('div');
+    menu.className = 'nav-more-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Additional pages');
+
+    details.appendChild(summary);
+    details.appendChild(menu);
+
+    const menuInsertionPoint = nav.querySelector('.help-btn, [data-help-toggle="true"], .auth-link');
+    nav.insertBefore(details, menuInsertionPoint || null);
+
+    const overflowLinks = [];
+    allLinks.forEach((link) => {
+      if (alwaysInMore.has(hrefKey(link))) {
+        overflowLinks.push(link);
+        menu.appendChild(link);
+      }
+    });
+
+    if (overflowLinks.length === 0) {
+      details.remove();
+      return;
+    }
+
+    const hasActiveOverflowLink = overflowLinks.some((link) => {
+      return link.classList.contains('active') || link.getAttribute('aria-current') === 'page';
+    });
+    summary.classList.toggle('active', hasActiveOverflowLink);
+  },
+
+  /**
+   * Close More menu when clicking outside nav
+   */
+  setupNavigationDismiss() {
+    if (this._dismissNavBound) return;
+
+    document.addEventListener('click', (event) => {
+      document.querySelectorAll('.nav-more').forEach((menu) => {
+        if (!menu.contains(event.target)) {
+          menu.removeAttribute('open');
+        }
+      });
+    });
+
+    this._dismissNavBound = true;
+  },
+
+  /**
+   * Rebalance visible nav links as viewport size changes.
+   */
+  setupNavigationResize() {
+    if (this._navResizeBound) return;
+
+    const rebalance = this.debounce(() => this.normalizeNavigation(), 120);
+    window.addEventListener('resize', rebalance);
+    this._navResizeBound = true;
   },
   
   /**
@@ -450,3 +815,105 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Make available globally
 window.BDA = BDA;
+
+/**
+ * DebateSelector — shared component for explicit debate selection
+ * Works in both API mode and DataBridge/GitHub mode.
+ */
+const DebateSelector = {
+  async init(containerId, options = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    this.container = container;
+    this.onSelect = options.onSelect || (() => {});
+    this.allowActivate = options.allowActivate !== false;
+    await this.render();
+  },
+
+  async fetchDebates() {
+    // Try API first
+    try {
+      const data = await BDA.api('/api/debates', { suppressAuthRedirect: true });
+      if (data && data.debates && data.debates.length > 0) {
+        return data.debates.map(d => ({
+          debate_id: d.debate_id,
+          motion: d.resolution || d.motion || 'Untitled',
+          debate_frame: d.debate_frame || '',
+        }));
+      }
+    } catch (e) {
+      // Fall through to DataBridge
+    }
+    // DataBridge fallback
+    if (typeof DataBridge !== 'undefined') {
+      DataBridge.loadConfig();
+      if (DataBridge.isConfigured()) {
+        await DataBridge.ensureData();
+        const d = DataBridge.getDebate();
+        if (d && d.has_debate) {
+          return [{
+            debate_id: d.debate_id,
+            motion: d.resolution || d.motion || 'Untitled',
+            debate_frame: d.debate_frame || '',
+          }];
+        }
+      }
+    }
+    return [];
+  },
+
+  async render() {
+    const debates = await this.fetchDebates();
+    const activeId = BDA.getActiveDebateId();
+
+    if (debates.length === 0) {
+      this.container.innerHTML = `
+        <div class="callout soft">
+          <p>No debates available. <a href="propose.html">Propose a debate</a> or ask an admin to create one.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const optionsHtml = debates.map(d => {
+      const selected = d.debate_id === activeId ? ' selected' : '';
+      return `<option value="${BDA.escapeHtml(d.debate_id)}"${selected}>${BDA.escapeHtml(d.motion)}</option>`;
+    }).join('');
+
+    this.container.innerHTML = `
+      <div class="form-group" style="margin-bottom:0">
+        <label for="debate-selector-select">Select Active Debate</label>
+        <div class="row" style="gap:var(--space-sm);align-items:flex-end">
+          <select id="debate-selector-select" class="debate-selector-select" style="min-width:220px;flex:1">
+            ${optionsHtml}
+          </select>
+          ${this.allowActivate ? `<button class="button" id="debate-selector-activate" onclick="DebateSelector.activate()">Activate</button>` : ''}
+        </div>
+      </div>
+    `;
+  },
+
+  async activate() {
+    const select = document.getElementById('debate-selector-select');
+    if (!select) return;
+    const debateId = select.value;
+    if (!debateId) return;
+
+    try {
+      await BDA.api(`/api/debate/${encodeURIComponent(debateId)}/activate`, {
+        method: 'POST',
+        suppressAuthRedirect: true,
+      });
+      BDA.setActiveDebateId(debateId);
+      BDA.showStatus('Debate activated.');
+      this.onSelect(debateId);
+    } catch (error) {
+      // If API fails (e.g., no auth in GitHub mode), just set locally
+      BDA.setActiveDebateId(debateId);
+      BDA.showStatus('Debate selected.');
+      this.onSelect(debateId);
+    }
+  },
+};
+
+window.DebateSelector = DebateSelector;

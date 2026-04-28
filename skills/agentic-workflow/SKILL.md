@@ -7,11 +7,11 @@ description: Use this skill when the user wants to run the debate_system repo's 
 
 Use this skill for requests about the repo's `wf` workflow.
 
-This is the Codex-facing wrapper around the repository's platform-independent workflow contract in `WORKFLOW.md`.
+This is the Codex-facing wrapper around the repository's platform-independent workflow contract in `docs/workflow/WORKFLOW.md`.
 
 ## Start Here
 
-1. Read `WORKFLOW.md`.
+1. Read `docs/workflow/WORKFLOW.md`.
 2. If `workflow_state/state.json` exists, read it plus:
    - `workflow_state/current/next_prompt.md`
    - `workflow_state/current/checkpoint.md`

@@ -6,18 +6,23 @@ This document provides comprehensive testing strategies for the Blind LLM-Adjudi
 
 ```bash
 cd debate_system
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m playwright install chromium
 
 # 1. Run unit tests (no server needed)
 python test_debate_system.py
 
 # 2. Start server and run manual tests
-./start.sh --v2
+python start_server.py --host 127.0.0.1 --port 5000
 # In another terminal:
-python test_manual.py server-check
-python test_manual.py scenario-ai
+source venv/bin/activate
+python test_manual.py server-check --base-url http://127.0.0.1:5000
+python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
 
-# 3. Run browser acceptance checks against a temporary v2 server
-python -m playwright install chromium
+# 3. Run browser acceptance checks against a temporary v3 server
 python scripts/dev_workflow.py acceptance
 ```
 
@@ -41,6 +46,8 @@ Tests individual components against MSD requirements:
 | `test_identity_blindness` | §2.A | No identity fields in models |
 | `test_snapshot_immutability` | §2.C | Snapshot preservation |
 | `test_visible_modulation` | §2.B | Template versioning |
+| `test_admin_template_persistence_and_engine_sync` | Step 2 hardening | Persisted admin draft/apply syncs into runtime moderation |
+| `test_api_auth_session_and_admin_access_consistency` | Step 5 hardening | Verifies 401/403 behavior, active debate session isolation, and restricted admin access |
 
 **Run:**
 ```bash
@@ -61,7 +68,7 @@ Tests the system through the REST API with realistic scenarios:
 **Run:**
 ```bash
 # Terminal 1: Start server
-./start.sh --v2
+python start_server.py
 
 # Terminal 2: Run tests
 python test_manual.py scenario-ai
@@ -92,6 +99,10 @@ Tests the system end to end through the browser UI against named acceptance crit
 - `AC-2`: Submit opposing posts from the UI
 - `AC-3`: Generate a snapshot from the UI
 - `AC-4`: Inspect topics and verdict pages after snapshot generation
+- `AC-5`: Save and reload admin moderation template draft persistence
+- `AC-6`: Verify evidence, dossier, and governance pages render from live APIs
+- `AC-7`: Verify register/login/logout UI flows and session persistence behavior
+- `AC-8`: Verify snapshot history + latest diff rendering after multiple snapshots
 
 The source of truth for the criteria lives in `acceptance/ui_debate_flow.json`.
 
@@ -371,7 +382,7 @@ test:
 |-------|----------|
 | Import errors | Run from `debate_system` directory, check `sys.path` |
 | Database locked | Stop server, delete `data/debate_system.db`, restart |
-| Server not responding | Check port 5000, check `./start.sh --v2` output |
+| Server not responding | Check port 5000, check `python start_server.py` output |
 | API connection refused | Verify server is running: `python test_manual.py server-check` |
 | Mock LLM returns weird results | Expected - mock is deterministic but simplified |
 
@@ -380,7 +391,7 @@ test:
 Before deploying:
 
 - [ ] All unit tests pass: `python test_debate_system.py`
-- [ ] Server starts without errors: `./start.sh --v2`
+- [ ] Server starts without errors: `python start_server.py`
 - [ ] API responds: `python test_manual.py server-check`
 - [ ] Scenario completes: `python test_manual.py scenario-ai`
 - [ ] UI acceptance passes: `python scripts/dev_workflow.py acceptance`

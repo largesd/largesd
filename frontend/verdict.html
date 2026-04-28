@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
   <style>
     .verdict-for { color: var(--good); }
     .verdict-against { color: var(--bad); }
@@ -15,7 +16,7 @@
     .range-track {
       position: relative;
       height: 10px;
-      background: rgba(255,255,255,.08);
+      background: color-mix(in oklch, var(--surface-muted), white 26%);
       border-radius: 999px;
       overflow: hidden;
       margin: 24px 0 10px 0;
@@ -24,7 +25,7 @@
       position: absolute;
       top: 0;
       height: 100%;
-      background: rgba(109,214,255,.45);
+      background: color-mix(in oklch, var(--accent), white 56%);
       border-radius: 999px;
     }
     .range-zero,
@@ -33,7 +34,7 @@
       top: -6px;
       width: 2px;
       height: 22px;
-      background: rgba(255,255,255,.5);
+      background: color-mix(in oklch, var(--ink-soft), white 18%);
     }
     .range-point {
       background: var(--accent);
@@ -42,30 +43,36 @@
       display: flex;
       justify-content: space-between;
       font-size: 12px;
-      color: var(--muted);
+      color: var(--ink-soft);
     }
   </style>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html" class="active" aria-current="page">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -75,7 +82,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -161,6 +167,21 @@
     </div>
 
     <hr />
+    <h3>Replicate + formula metadata</h3>
+    <div class="callout soft">
+      <div class="row">
+        <span class="pill">D samples: <span class="mono" id="d-sample-count">-</span></span>
+        <span class="pill">Judges: <span class="mono" id="replicate-judges">-</span></span>
+        <span class="pill">Rel formula: <span class="mono" id="verdict-rel-formula">-</span></span>
+        <span class="pill">Coverage mode: <span class="mono" id="verdict-coverage-mode">-</span></span>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show formula metadata</summary>
+        <div class="codebox" id="verdict-formula-raw">No formula metadata loaded.</div>
+      </details>
+    </div>
+
+    <hr />
     <div class="row">
       <a class="pill" href="evidence.html">What evidence would change this →</a>
       <a class="pill" href="audits.html">Back to Audits</a>
@@ -179,11 +200,11 @@
 
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+    <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
@@ -308,8 +329,19 @@ function renderVerdict(snapshot, verdictData) {
 
   const contributions = verdictData.topic_contributions || [];
   document.getElementById('plain-readout').innerHTML = `<strong>Plain-language readout:</strong> ${BDA.escapeHtml(buildReadout(verdict, contributions, [ciLow, ciHigh]))}`;
+  renderVerdictMetadata(verdictData);
 
   renderContributions(contributions);
+}
+
+function renderVerdictMetadata(verdictData) {
+  const replicate = verdictData.replicate_composition_metadata || {};
+  const formulas = verdictData.formula_metadata || {};
+  document.getElementById('d-sample-count').textContent = (verdictData.d_distribution || []).length;
+  document.getElementById('replicate-judges').textContent = replicate.judge_count ?? '-';
+  document.getElementById('verdict-rel-formula').textContent = formulas.relevance?.active_mode || '-';
+  document.getElementById('verdict-coverage-mode').textContent = formulas.feature_flags?.COVERAGE_MODE || '-';
+  document.getElementById('verdict-formula-raw').textContent = JSON.stringify(formulas, null, 2);
 }
 
 function renderContributions(contributions) {

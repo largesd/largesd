@@ -7,36 +7,43 @@
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
   <style>
     .topic-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0; }
-    .topic-meta-item { background: rgba(0,0,0,.15); padding: 10px; border-radius: 8px; text-align: center; }
+    .topic-meta-item { background: var(--surface-muted); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid var(--line); }
     .topic-meta-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
     .topic-meta-item .value { font-size: 18px; font-weight: 600; font-family: var(--mono); margin-top: 4px; }
-    .steelman { background: rgba(255,255,255,.03); border-left: 3px solid var(--accent); padding: 12px 16px; margin: 8px 0; }
-    .steelman.for { border-left-color: var(--good); }
-    .steelman.against { border-left-color: var(--warn); }
+    .steelman { background: var(--surface-muted); border: 1px solid var(--line); padding: 12px 16px; margin: 8px 0; border-radius: 12px; }
+    .steelman.for { background: color-mix(in oklch, var(--good), white 90%); }
+    .steelman.against { background: color-mix(in oklch, var(--warn), white 90%); }
   </style>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html" class="active" aria-current="page">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="BDA.toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -46,7 +53,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -166,11 +172,11 @@
 
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<div class="help-overlay" onclick="BDA.toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="BDA.toggleHelp()" aria-label="Close help">×</button>
+    <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Topic geometry metrics and terms.</p>
@@ -298,10 +304,10 @@ function renderFactList(elementId, facts, colorVar) {
   }
   
   container.innerHTML = facts.map(f => `
-    <div style="background:rgba(0,0,0,.15);padding:10px;border-radius:8px;margin:8px 0;border-left:3px solid ${colorVar}">
+    <div style="background:var(--surface-muted);padding:10px;border-radius:8px;margin:8px 0;border:1px solid var(--line)">
       <div style="font-size:13px">${BDA.escapeHtml(f.canon_fact_text)}</div>
       <div class="row" style="margin:8px 0 0 0;font-size:11px">
-        <span class="pill">p=${BDA.formatNumber(f.p_true, 2)}</span>
+        <span class="pill" style="border-color:${colorVar};color:${colorVar}">p=${BDA.formatNumber(f.p_true, 2)}</span>
         <span style="color:var(--muted)">${f.member_count} source${f.member_count !== 1 ? 's' : ''}</span>
       </div>
     </div>

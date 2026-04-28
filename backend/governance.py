@@ -90,6 +90,10 @@ class Incident:
     additive_snapshot_id: Optional[str]
     status: str  # 'open', 'investigating', 'resolved'
     resolution_notes: Optional[str]
+    snapshot_id: Optional[str] = None
+    affected_outputs_json: Optional[str] = None
+    remediation_plan: Optional[str] = None
+    resolved_at: Optional[str] = None
 
 
 class GovernanceManager:
@@ -190,6 +194,11 @@ class GovernanceManager:
                 resolution_notes TEXT
             )
         """)
+        self._ensure_column(cursor, "incidents", "snapshot_id", "TEXT")
+        self._ensure_column(cursor, "incidents", "affected_outputs_json", "TEXT")
+        self._ensure_column(cursor, "incidents", "remediation_plan", "TEXT")
+        self._ensure_column(cursor, "incidents", "created_at", "TEXT")
+        self._ensure_column(cursor, "incidents", "resolved_at", "TEXT")
         
         # Fairness audit log
         cursor.execute("""
@@ -206,6 +215,15 @@ class GovernanceManager:
         """)
         
         self._commit_close(conn)
+
+    @staticmethod
+    def _ensure_column(cursor, table_name: str, column_name: str, column_definition: str):
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing = {row[1] for row in cursor.fetchall()}
+        if column_name not in existing:
+            cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+            )
     
     # === Changelog Operations ===
     
@@ -592,20 +610,26 @@ class GovernanceManager:
         reported_by: str,
         description: str,
         affected_debates: List[str],
-        trigger_snapshot_ids: List[str]
+        trigger_snapshot_ids: List[str],
+        snapshot_id: Optional[str] = None,
+        affected_outputs: Optional[Dict[str, Any]] = None,
+        remediation_plan: Optional[str] = None,
     ) -> str:
         """Report a new incident."""
         incident_id = f"inc_{uuid.uuid4().hex[:12]}"
+        now = datetime.utcnow().isoformat()
         
         conn, cursor = self._get_conn_cursor()
         cursor.execute(
             """INSERT INTO incidents
                (incident_id, severity, reported_at, reported_by, description,
-                affected_debates, trigger_snapshot_ids, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (incident_id, severity.value, datetime.utcnow().isoformat(),
+                affected_debates, trigger_snapshot_ids, status, snapshot_id,
+                affected_outputs_json, remediation_plan, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (incident_id, severity.value, now,
              reported_by, description, json.dumps(affected_debates),
-             json.dumps(trigger_snapshot_ids), 'open')
+             json.dumps(trigger_snapshot_ids), 'open', snapshot_id,
+             json.dumps(affected_outputs or {}), remediation_plan, now)
         )
         self._commit_close(conn)
         
@@ -629,9 +653,9 @@ class GovernanceManager:
         conn, cursor = self._get_conn_cursor()
         cursor.execute(
             """UPDATE incidents SET
-                status = ?, resolution_notes = ?, additive_snapshot_id = ?
+                status = ?, resolution_notes = ?, additive_snapshot_id = ?, resolved_at = ?
                WHERE incident_id = ?""",
-            ('resolved', resolution_notes, additive_snapshot_id, incident_id)
+            ('resolved', resolution_notes, additive_snapshot_id, datetime.utcnow().isoformat(), incident_id)
         )
         self._commit_close(conn)
     
@@ -674,8 +698,13 @@ class GovernanceManager:
             'affected_debates': json.loads(row['affected_debates'] or '[]'),
             'trigger_snapshot_ids': json.loads(row['trigger_snapshot_ids'] or '[]'),
             'additive_snapshot_id': row['additive_snapshot_id'],
+            'snapshot_id': row['snapshot_id'] if 'snapshot_id' in row.keys() else None,
+            'affected_outputs': json.loads((row['affected_outputs_json'] if 'affected_outputs_json' in row.keys() else None) or '{}'),
+            'remediation_plan': row['remediation_plan'] if 'remediation_plan' in row.keys() else None,
             'status': row['status'],
-            'resolution_notes': row['resolution_notes']
+            'resolution_notes': row['resolution_notes'],
+            'created_at': (row['created_at'] if 'created_at' in row.keys() else None) or row['reported_at'],
+            'resolved_at': row['resolved_at'] if 'resolved_at' in row.keys() else None,
         }
     
     # === Governance Summary ===
@@ -706,6 +735,11 @@ class GovernanceManager:
             conn.close()
         
         return {
+            'total_changes_count': total_changes,
+            'pending_appeals_count': pending_appeals,
+            'total_appeals_count': total_appeals,
+            'open_incidents_count': open_incidents,
+            'fairness_audits_count': self.get_fairness_audit_summary(limit=1).get('total_audits', 0),
             'changelog_summary': {
                 'recent_changes': self.get_changelog(limit=5),
                 'total_changes': total_changes

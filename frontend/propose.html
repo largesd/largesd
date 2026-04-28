@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Propose Debate - Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="propose.html" class="active" aria-current="page">Propose</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="verdict.html" role="menuitem">Verdict</a>
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<main class="propose-main">
+
+<section class="card propose-section" id="propose-form-section">
+  <div class="section-head">
+    <div>
+      <h2>Propose a New Debate</h2>
+      <p class="lede">Submit a motion, moderation criteria, and debate frame for admin review. If accepted, the debate will be created and you can start posting arguments.</p>
+    </div>
+  </div>
+
+  <div id="status-message" class="status-message" style="display:none;"></div>
+
+  <div class="form-group">
+    <label for="proposal-motion">Motion *</label>
+    <textarea id="proposal-motion" rows="2" placeholder="e.g., Resolved: External AI audits should be mandatory."></textarea>
+    <small>The central statement being debated.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="proposal-moderation-criteria">Moderation Criteria *</label>
+    <textarea id="proposal-moderation-criteria" rows="3" placeholder="What should be allowed or blocked in this debate?"></textarea>
+    <small>Describe the content boundaries for participants.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="proposal-debate-frame">Debate Frame *</label>
+    <textarea id="proposal-debate-frame" rows="3" placeholder="What question should the judge answer?"></textarea>
+    <small>The evaluative lens or summary that guides adjudication.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="proposal-frame-sides">Sides (optional)</label>
+    <textarea id="proposal-frame-sides" rows="2" placeholder="FOR | Supports the motion.&#10;AGAINST | Opposes the motion."></textarea>
+    <small>One per line, using label | description format. Defaults to FOR/AGAINST.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="proposal-evaluation-criteria">Evaluation Criteria (optional)</label>
+    <textarea id="proposal-evaluation-criteria" rows="2" placeholder="Logical coherence&#10;Strength of evidence"></textarea>
+    <small>One criterion per line.</small>
+  </div>
+
+  <div class="row propose-action-row">
+    <button class="button" onclick="submitProposal()">Submit Proposal</button>
+  </div>
+</section>
+
+<section class="card propose-section" id="my-proposals-section">
+  <div class="section-head">
+    <h2>My Proposals</h2>
+    <span class="pill">Submission history</span>
+  </div>
+  <div id="my-proposals-list">
+    <div class="callout soft">
+      <p>Loading your proposals...</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
+
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel">
+  <div class="help-panel-header">
+    <h3>Glossary & Help</h3>
+    <button type="button" class="close-help" aria-label="Close help">x</button>
+  </div>
+  <div class="help-panel-body">
+    <p class="help-panel-note help-panel-note-top">Key terms for proposing debates.</p>
+    <div class="glossary-term">Motion</div>
+    <div class="glossary-def">The central resolution or claim being debated.</div>
+    <div class="glossary-term">Debate Frame</div>
+    <div class="glossary-def">The evaluative lens that guides adjudication and scoring.</div>
+    <div class="glossary-term">Moderation Criteria</div>
+    <div class="glossary-def">Content boundaries: what is allowed, blocked, or flagged.</div>
+  </div>
+</div>
+
+<script>
+async function init() {
+  if (!Auth.isLoggedIn()) {
+    Auth.redirectToLogin('auth-required');
+    return;
+  }
+  await loadMyProposals();
+}
+
+async function submitProposal() {
+  const motion = document.getElementById('proposal-motion').value.trim();
+  const moderationCriteria = document.getElementById('proposal-moderation-criteria').value.trim();
+  const debateFrame = document.getElementById('proposal-debate-frame').value.trim();
+  const sidesRaw = document.getElementById('proposal-frame-sides').value.trim();
+  const evaluationCriteriaRaw = document.getElementById('proposal-evaluation-criteria').value.trim();
+
+  if (!motion || !moderationCriteria || !debateFrame) {
+    BDA.showStatus('Please fill in all required fields (Motion, Moderation Criteria, Debate Frame).', true);
+    return;
+  }
+
+  const payload = {
+    motion,
+    moderation_criteria: moderationCriteria,
+    debate_frame: debateFrame,
+  };
+
+  if (sidesRaw) {
+    payload.frame_sides = sidesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+  if (evaluationCriteriaRaw) {
+    payload.frame_evaluation_criteria = evaluationCriteriaRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
+  try {
+    const response = await BDA.api('/api/debate-proposals', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    BDA.showStatus(`Proposal submitted: ${response.proposal_id}. Status: ${response.status}`);
+    document.getElementById('proposal-motion').value = '';
+    document.getElementById('proposal-moderation-criteria').value = '';
+    document.getElementById('proposal-debate-frame').value = '';
+    document.getElementById('proposal-frame-sides').value = '';
+    document.getElementById('proposal-evaluation-criteria').value = '';
+    await loadMyProposals();
+  } catch (error) {
+    BDA.showStatus(error.message || 'Failed to submit proposal.', true);
+  }
+}
+
+async function loadMyProposals() {
+  const container = document.getElementById('my-proposals-list');
+  try {
+    const data = await BDA.api('/api/debate-proposals/mine');
+    const proposals = data.proposals || [];
+    if (proposals.length === 0) {
+      container.innerHTML = `
+        <div class="callout soft">
+          <p>You have not submitted any proposals yet.</p>
+        </div>
+      `;
+      return;
+    }
+    container.innerHTML = proposals.map(p => `
+      <article class="proposal-item">
+        <div class="row proposal-head">
+          <strong>${BDA.escapeHtml(p.motion)}</strong>
+          <span class="pill ${p.status === 'accepted' ? 'good' : p.status === 'rejected' ? 'bad' : 'warn'}">${p.status}</span>
+        </div>
+        <div class="proposal-meta">
+          <small>Created: ${BDA.formatDateTime(p.created_at)}</small>
+          ${p.reviewed_at ? `<small>Reviewed: ${BDA.formatDateTime(p.reviewed_at)}</small>` : ''}
+          ${p.decision_reason ? `<small>Reason: ${BDA.escapeHtml(p.decision_reason)}</small>` : ''}
+          ${p.accepted_debate_id ? `<small>Debate: <a href="new_debate.html?debate_id=${encodeURIComponent(p.accepted_debate_id)}">${p.accepted_debate_id}</a></small>` : ''}
+        </div>
+      </article>
+    `).join('');
+  } catch (error) {
+    container.innerHTML = `
+      <div class="callout soft">
+        <p>Could not load your proposals. ${BDA.escapeHtml(error.message || '')}</p>
+      </div>
+    `;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

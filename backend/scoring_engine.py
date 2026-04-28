@@ -11,6 +11,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from llm_client import LLMClient
+from lsd_v1_2 import (
+    Q_EPSILON,
+    component_sensitivity,
+    compute_topic_relevance_from_masses,
+    coverage_mode,
+    formula_registry,
+    scoring_formula_mode,
+)
 
 
 @dataclass
@@ -157,6 +165,14 @@ class ScoringEngine:
         if not opposing_arguments:
             return 1.0, 0.0
 
+        if coverage_mode() == "binary_v1_2":
+            return self._compute_binary_coverage(
+                own_arguments,
+                opposing_arguments,
+                side=side,
+                frame_context=frame_context,
+            )
+
         fact_p = {
             f.get("canon_fact_id", f.get("fact_id", "")): f.get("p_true", 0.5)
             for f in all_facts
@@ -208,6 +224,56 @@ class ScoringEngine:
 
         return float(median_coverage), float(iqr)
 
+    def _compute_binary_coverage(self, own_arguments: List[Dict],
+                                 opposing_arguments: List[Dict],
+                                 side: str,
+                                 frame_context: str = "") -> Tuple[float, float]:
+        """LSD v1.2 binary coverage: mean ADDRESSED labels over opposing targets."""
+        rebuttal_text = " ".join(a.get("inference_text", "") for a in own_arguments)
+        judge_coverages = []
+        for judge_idx in range(self.num_judges):
+            labels = []
+            for opp_arg in opposing_arguments:
+                determinations = self.llm_client.judge_coverage(
+                    opp_arg,
+                    rebuttal_text,
+                    side=side,
+                    frame_context=frame_context,
+                )
+                addressed = bool(
+                    judge_idx < len(determinations)
+                    and determinations[judge_idx].get("addressed", False)
+                )
+                labels.append(1.0 if addressed else 0.0)
+            judge_coverages.append(sum(labels) / len(labels) if labels else 1.0)
+
+        median_coverage = np.median(judge_coverages)
+        q75, q25 = np.percentile(judge_coverages, [75, 25])
+        return float(median_coverage), float(q75 - q25)
+
+    def compute_normative_acceptability(self, premise_text: str,
+                                        frame_values: List[str],
+                                        frame_context: str = "") -> Dict[str, Any]:
+        """Deterministic q = P(acceptable | Frame) hook for normative premises."""
+        text = (premise_text or "").lower()
+        values = [value for value in frame_values if value]
+        positive_markers = ("fair", "transparent", "accountable", "evidence", "safety", "accuracy")
+        conflict_markers = ("unfair", "opaque", "harm", "coerce", "ignore")
+        score = 0.5
+        score += 0.08 * sum(1 for marker in positive_markers if marker in text)
+        score -= 0.08 * sum(1 for marker in conflict_markers if marker in text)
+        if values and any(value.split()[0].lower() in text for value in values if value.split()):
+            score += 0.1
+        q = min(1.0, max(0.0, score))
+        return {
+            "q": round(q, 4),
+            "rationale": {
+                "frame_values_applied": values[:4],
+                "scope_constraints_considered": bool(frame_context),
+                "judge_summary": "Heuristic v1.2 normative hook; replace with calibrated judges when enabled.",
+            },
+        }
+
     def compute_quality(self, factuality: float, reasoning: float,
                         coverage: float) -> float:
         """Compute quality Q_{t,s}."""
@@ -219,16 +285,7 @@ class ScoringEngine:
     def compute_topic_relevance(self, topics: List[Dict],
                                 topic_content_mass: Dict[str, int]) -> Dict[str, float]:
         """Compute topic relevance weights."""
-        total_mass = sum(topic_content_mass.values())
-
-        if total_mass == 0:
-            n = max(len(topics), 1)
-            return {t.get("topic_id", ""): 1.0 / n for t in topics}
-
-        return {
-            topic_id: mass / total_mass
-            for topic_id, mass in topic_content_mass.items()
-        }
+        return compute_topic_relevance_from_masses(topic_content_mass, scoring_formula_mode())
 
     def compute_debate_scores(self, topics: List[Dict],
                               topic_facts: Dict[str, List[Dict]],
@@ -270,6 +327,16 @@ class ScoringEngine:
                     frame_context=frame_context,
                 )
                 quality = self.compute_quality(factuality["f_all"], reasoning, coverage)
+                sensitivity = component_sensitivity(factuality["f_all"], reasoning, coverage)
+                normative_facts = [fact for fact in side_facts if fact.get("fact_type") == "normative"]
+                normative = [
+                    self.compute_normative_acceptability(
+                        fact.get("canon_fact_text", ""),
+                        [],
+                        frame_context=frame_context,
+                    )
+                    for fact in normative_facts
+                ]
 
                 side_scores = {
                     "topic_id": topic_id,
@@ -280,8 +347,21 @@ class ScoringEngine:
                     "reasoning": round(reasoning, 2),
                     "coverage": round(coverage, 2),
                     "quality": round(quality, 2),
+                    "q_geo": sensitivity["q_geo"],
+                    "q_arith": sensitivity["q_arith"],
+                    "drop_component_sensitivity": sensitivity["drop_component"],
+                    "formula_metadata": {
+                        "version_id": formula_registry()["quality"]["version_id"],
+                        "epsilon": Q_EPSILON,
+                    },
                     "reasoning_iqr": round(reasoning_iqr, 2),
                     "coverage_iqr": round(coverage_iqr, 2),
+                    "normative_acceptability": {
+                        "count": len(normative),
+                        "average_q": round(float(np.mean([item["q"] for item in normative])), 4) if normative else None,
+                        "items": normative,
+                    },
+                    "rebuttal_type_distribution": self._rebuttal_type_distribution(side_args, opposing_args),
                     "judge_disagreement": {
                         "reasoning": judge_details,
                         "disagreement_level": (
@@ -322,7 +402,28 @@ class ScoringEngine:
             "runner_up": runner_up,
             "lead_margin": round(lead_margin, 4),
             "relevance": relevance,
+            "relevance_formula": {
+                "mode": scoring_formula_mode(),
+                "version_id": formula_registry()["relevance"]["version_id"],
+            },
+            "formula_metadata": formula_registry(),
         }
+
+    @staticmethod
+    def _rebuttal_type_distribution(own_arguments: List[Dict], opposing_arguments: List[Dict]) -> Dict[str, int]:
+        if not opposing_arguments:
+            return {"EMPIRICAL": 0, "NORMATIVE": 0, "INFERENCE": 0, "SCOPE/DEFINITION": 0}
+        joined = " ".join(arg.get("inference_text", "") for arg in own_arguments).lower()
+        distribution = {"EMPIRICAL": 0, "NORMATIVE": 0, "INFERENCE": 0, "SCOPE/DEFINITION": 0}
+        if any(word in joined for word in ("data", "study", "evidence", "measured")):
+            distribution["EMPIRICAL"] += len(opposing_arguments)
+        elif any(word in joined for word in ("fair", "should", "ought", "value")):
+            distribution["NORMATIVE"] += len(opposing_arguments)
+        elif any(word in joined for word in ("because", "therefore", "implies")):
+            distribution["INFERENCE"] += len(opposing_arguments)
+        else:
+            distribution["SCOPE/DEFINITION"] += len(opposing_arguments)
+        return distribution
 
     def run_replicates(self, topics, topic_facts, topic_arguments,
                        topic_content_mass,

@@ -12,27 +12,34 @@
   </style>
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
 </HEAD>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html" class="active" aria-current="page">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -41,7 +48,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -74,9 +80,19 @@
   
   <hr />
   <div class="row">
-    <a class="pill" href="topic.html?id=t1">Most contested: t1</a>
-    <a class="pill" href="topic.html?id=t3">Biggest verdict mover: t3</a>
+    <a class="pill" id="most-contested-link" href="topic.html">Most contested: -</a>
+    <a class="pill" id="verdict-mover-link" href="topic.html">Biggest verdict mover: -</a>
     <a class="pill" href="audits.html#topic-geometry">Open topic audit</a>
+  </div>
+
+  <div class="callout soft" id="topic-diagnostics-summary" style="margin-top:16px;">
+    <div class="row">
+      <span class="pill">Rel formula: <span class="mono" id="topic-rel-formula">legacy_linear</span></span>
+      <span class="pill">Top-3 canonical mass: <span class="mono" id="topic-top3-pre">-</span></span>
+      <span class="pill">Top-3 selected mass: <span class="mono" id="topic-top3-sel">-</span></span>
+      <span class="pill">Micro-topic rate: <span class="mono" id="topic-micro-rate">-</span></span>
+      <span class="pill">Mass Gini: <span class="mono" id="topic-gini">-</span></span>
+    </div>
   </div>
   
   <div class="table-wrap" id="topics-table-container" data-testid="topics-table-container">
@@ -113,11 +129,11 @@
 
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+    <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
@@ -158,11 +174,78 @@ async function loadData() {
     const topicsData = await BDA.api('/api/debate/topics');
     
     if (topicsData.topics) {
+      renderTopicDiagnostics(topicsData);
       renderTopics(topicsData.topics);
+      updateTopicHighlights(topicsData.topics);
     }
   } catch (error) {
     console.error('Error loading data:', error);
     document.getElementById('topics-tbody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--bad)">Error loading topics</td></tr>';
+  }
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function computeLeadMargin(scores) {
+  if (!scores || typeof scores !== 'object') return null;
+  const qualities = Object.values(scores)
+    .map((sideScore) => toFiniteNumber(sideScore && sideScore.quality, Number.NaN))
+    .filter((quality) => Number.isFinite(quality))
+    .sort((a, b) => b - a);
+
+  if (qualities.length < 2) return null;
+  return Math.abs(qualities[0] - qualities[1]);
+}
+
+function updateTopicHighlights(topics) {
+  const contestedLink = document.getElementById('most-contested-link');
+  const moverLink = document.getElementById('verdict-mover-link');
+  if (!contestedLink || !moverLink) return;
+
+  if (!Array.isArray(topics) || topics.length === 0) {
+    contestedLink.textContent = 'Most contested: -';
+    contestedLink.href = 'topic.html';
+    moverLink.textContent = 'Biggest verdict mover: -';
+    moverLink.href = 'topic.html';
+    return;
+  }
+
+  const normalized = topics.map((topic) => ({
+    ...topic,
+    _topicId: String(topic.topic_id || ''),
+    _relevance: toFiniteNumber(topic.relevance, 0),
+    _leadMargin: computeLeadMargin(topic.scores),
+  }));
+
+  const withMargin = normalized.filter((topic) => Number.isFinite(topic._leadMargin));
+  const mostContested = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      toFiniteNumber(a._leadMargin, 1) - toFiniteNumber(b._leadMargin, 1)
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  const biggestMover = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      (b._relevance * toFiniteNumber(b._leadMargin, 1))
+      - (a._relevance * toFiniteNumber(a._leadMargin, 1))
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  if (mostContested && mostContested._topicId) {
+    contestedLink.textContent = `Most contested: ${mostContested._topicId}`;
+    contestedLink.href = `topic.html?id=${encodeURIComponent(mostContested._topicId)}`;
+  }
+
+  if (biggestMover && biggestMover._topicId) {
+    moverLink.textContent = `Biggest verdict mover: ${biggestMover._topicId}`;
+    moverLink.href = `topic.html?id=${encodeURIComponent(biggestMover._topicId)}`;
   }
 }
 
@@ -182,6 +265,15 @@ function renderTopics(topics) {
       <td class='mono'>${t.distinctness.toFixed(2)}</td>
     </tr>
   `).join('');
+}
+
+function renderTopicDiagnostics(data) {
+  const dominance = data.dominance || {};
+  document.getElementById('topic-rel-formula').textContent = data.relevance_formula_mode || 'legacy_linear';
+  document.getElementById('topic-top3-pre').textContent = BDA.formatNumber(dominance.top_3_canonical_mass_share || 0, 4);
+  document.getElementById('topic-top3-sel').textContent = BDA.formatNumber(dominance.top_3_selected_mass_share || 0, 4);
+  document.getElementById('topic-micro-rate').textContent = BDA.formatNumber(data.micro_topic_rate || 0, 4);
+  document.getElementById('topic-gini').textContent = BDA.formatNumber(data.gini_coefficient || 0, 4);
 }
 
 // Initialize

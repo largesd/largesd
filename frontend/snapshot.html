@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
   <style>
     .diff-list { margin: 0; padding-left: 18px; }
     .diff-list li { margin-bottom: 8px; }
@@ -14,25 +15,31 @@
   </style>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html" class="active" aria-current="page">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -42,7 +49,6 @@
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="header-updated">-</strong></div>
   </div>
   <div class="state-wrap" style="display:none;">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -64,11 +70,12 @@
   <div class="callout soft" id="snapshot-empty" style="display:none;"></div>
 
   <div id="snapshot-content" style="display:none;">
-    <div class="row">
-      <span class="pill">ID: <span class="mono" id="snapshot-id">-</span></span>
-      <span class="pill">Timestamp: <span class="mono" id="snapshot-timestamp">-</span></span>
-      <span class="pill"><span class="tooltip" data-tooltip="What caused this snapshot to be created">Trigger</span>: <span class="mono" id="snapshot-trigger">-</span></span>
-    </div>
+      <div class="row">
+        <span class="pill">ID: <span class="mono" id="snapshot-id">-</span></span>
+        <span class="pill">Timestamp: <span class="mono" id="snapshot-timestamp">-</span></span>
+        <span class="pill"><span class="tooltip" data-tooltip="What caused this snapshot to be created">Trigger</span>: <span class="mono" id="snapshot-trigger">-</span></span>
+        <span class="pill warn" id="snapshot-status-pill">Status: <span class="mono" id="snapshot-status">valid</span></span>
+      </div>
 
     <hr />
     <h3>Moderation template</h3>
@@ -76,8 +83,21 @@
       <div class="row">
         <span class="pill">Template: <span class="mono" id="template-name">-</span></span>
         <span class="pill">Version: <span class="mono" id="template-version">-</span></span>
+        <span class="pill">Borderline rate: <span class="mono" id="borderline-rate">-</span></span>
+        <span class="pill">Suppression: <span class="mono" id="suppression-k">k=5</span></span>
+        <span class="pill">Suppressed buckets: <span class="mono" id="suppressed-bucket-count">0</span></span>
       </div>
       <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
+    </div>
+
+    <hr />
+    <h3>Active frame</h3>
+    <div class="callout soft">
+      <div class="row">
+        <span class="pill">Frame id: <span class="mono" id="frame-id">-</span></span>
+        <span class="pill">Frame version: <span class="mono" id="frame-version">-</span></span>
+      </div>
+      <p style="margin:10px 0 0 0" id="frame-statement">Loading active frame...</p>
     </div>
 
     <hr />
@@ -131,10 +151,30 @@
     </div>
 
     <hr />
+    <h3>Snapshot Integrity</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Tamper-evident digests and replay metadata for independent verification.</p>
+    <div class="callout soft">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+        <span class="pill">Input Hash: <span class="mono" id="integrity-input-hash" style="font-size:0.72rem">-</span></span>
+        <span class="pill">Output Hash: <span class="mono" id="integrity-output-hash" style="font-size:0.72rem">-</span></span>
+      </div>
+      <div style="margin-top:var(--space-sm)">
+        <small><strong>Recipe versions:</strong></small>
+        <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px" id="integrity-recipe-versions"></div>
+      </div>
+      <details class="trace" style="margin-top:var(--space-sm)">
+        <summary>Show replay manifest</summary>
+        <div class="codebox" id="integrity-replay-manifest">Loading...</div>
+      </details>
+    </div>
+
+    <hr />
     <div class="row">
       <a class="pill" href="topics.html">Go to Topics →</a>
       <a class="pill" href="audits.html">Go to Audits →</a>
       <a class="pill" href="verdict.html">Go to Verdict →</a>
+      <a class="pill" href="dossier.html">Open Dossier →</a>
+      <a class="pill" href="governance.html">Open Governance →</a>
     </div>
   </div>
 </section>
@@ -150,11 +190,11 @@
 
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<div class="help-overlay" onclick="toggleHelp()"></div>
+<div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel">
   <div class="help-panel-header">
     <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+    <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
@@ -212,8 +252,14 @@ function renderSnapshot(snapshot) {
   document.getElementById('snapshot-id').textContent = snapshot.snapshot_id || '-';
   document.getElementById('snapshot-timestamp').textContent = BDA.formatDateTime(snapshot.timestamp);
   document.getElementById('snapshot-trigger').textContent = snapshot.trigger_type || '-';
+  document.getElementById('snapshot-status').textContent = snapshot.status || 'valid';
+  document.getElementById('snapshot-status-pill').style.display = snapshot.status === 'incident' ? 'inline-flex' : 'inline-flex';
   document.getElementById('template-name').textContent = snapshot.template_name || '-';
   document.getElementById('template-version').textContent = snapshot.template_version || '-';
+  document.getElementById('borderline-rate').textContent = BDA.formatNumber(snapshot.borderline_rate || 0, 4);
+  const suppression = snapshot.suppression_policy || {};
+  document.getElementById('suppression-k').textContent = `k=${suppression.k || 5}`;
+  document.getElementById('suppressed-bucket-count').textContent = suppression.affected_bucket_count ?? (suppression.affected_buckets || []).length ?? 0;
   document.getElementById('allowed-count').textContent = snapshot.allowed_count ?? '-';
   document.getElementById('blocked-count').textContent = snapshot.blocked_count ?? '-';
 
@@ -226,6 +272,30 @@ function renderSnapshot(snapshot) {
       `<span class="pill">${BDA.escapeHtml(reason)}: <span class="mono">${count}</span></span>`
     ).join('');
   }
+
+  // Integrity fields
+  const inputHash = snapshot.input_hash_root || '-';
+  const outputHash = snapshot.output_hash_root || '-';
+  document.getElementById('integrity-input-hash').textContent = inputHash.length > 16 ? inputHash.slice(0, 16) + '…' : inputHash;
+  document.getElementById('integrity-input-hash').title = inputHash;
+  document.getElementById('integrity-output-hash').textContent = outputHash.length > 16 ? outputHash.slice(0, 16) + '…' : outputHash;
+  document.getElementById('integrity-output-hash').title = outputHash;
+
+  const recipeVersions = snapshot.recipe_versions || {};
+  const recipeContainer = document.getElementById('integrity-recipe-versions');
+  recipeContainer.innerHTML = Object.entries(recipeVersions).map(([k, v]) =>
+    `<span class="pill" style="font-size:0.72rem">${BDA.escapeHtml(k)}: ${BDA.escapeHtml(String(v))}</span>`
+  ).join('');
+
+  const replayManifest = snapshot.replay_manifest || {};
+  document.getElementById('integrity-replay-manifest').textContent = JSON.stringify(replayManifest, null, 2);
+}
+
+function renderFrameInfo(payload) {
+  const frame = payload?.active_frame || {};
+  document.getElementById('frame-id').textContent = frame.frame_id || '-';
+  document.getElementById('frame-version').textContent = String(frame.version ?? '-');
+  document.getElementById('frame-statement').textContent = frame.statement || 'No active frame statement available.';
 }
 
 function renderHistory(history) {
@@ -335,6 +405,13 @@ async function initSnapshotPage() {
     renderDiff(diffData);
   } catch (error) {
     renderDiff({ error: error.message });
+  }
+
+  try {
+    const frameData = await BDA.api('/api/governance/frames');
+    renderFrameInfo(frameData);
+  } catch (error) {
+    renderFrameInfo({});
   }
 
   BDA.setupTableScroll();

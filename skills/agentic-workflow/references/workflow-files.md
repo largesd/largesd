@@ -4,7 +4,7 @@ Use this reference when the `agentic-workflow` skill triggers and you need to kn
 
 ## Primary Files
 
-- `WORKFLOW.md`: generic workflow contract and command semantics
+- `docs/workflow/WORKFLOW.md`: generic workflow contract and command semantics
 - `scripts/agentic_workflow.py`: stateful workflow engine
 - `wf`: convenience launcher
 - `workflow_state/state.json`: current workflow state after bootstrap

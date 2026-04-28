@@ -24,7 +24,7 @@ from .cache import MultiLayerCache
 from .pii import PIIDetector
 from .sources import SourceRegistry, EvidenceRetriever, get_default_registry
 from .audit import AuditLogger
-from .queue import FactCheckQueue, get_global_queue
+from .fc_queue import FactCheckQueue, get_global_queue
 
 
 class FactCheckingSkill:
@@ -65,7 +65,13 @@ class FactCheckingSkill:
             enable_async: Whether to enable async processing
             async_worker_count: Number of background workers
         """
-        self.mode = mode
+        mode_aliases = {
+            "simulated": "OFFLINE",
+            "offline": "OFFLINE",
+            "online_allowlist": "ONLINE_ALLOWLIST",
+            "perfect_checker": "PERFECT_CHECKER",
+        }
+        self.mode = mode_aliases.get(str(mode).lower(), mode)
         self.allowlist_version = allowlist_version
         self.config = config or get_config()
         self.source_registry = source_registry or get_default_registry()
@@ -78,7 +84,7 @@ class FactCheckingSkill:
         self._evidence_retriever = EvidenceRetriever(self.source_registry)
         
         # Initialize async queue if enabled
-        self._async_enabled = enable_async and mode == "ONLINE_ALLOWLIST"
+        self._async_enabled = enable_async and self.mode == "ONLINE_ALLOWLIST"
         self._queue: Optional[FactCheckQueue] = None
         
         if self._async_enabled:
@@ -166,6 +172,11 @@ class FactCheckingSkill:
         if self.mode == "OFFLINE":
             result = self._check_offline(
                 claim_text, normalized, claim_hash, 
+                contains_pii, temporal_context
+            )
+        elif self.mode == "PERFECT_CHECKER":
+            result = self._check_perfect_checker(
+                claim_text, normalized, claim_hash,
                 contains_pii, temporal_context
             )
         else:  # ONLINE_ALLOWLIST
@@ -334,6 +345,44 @@ class FactCheckingSkill:
             operationalization="Live source lookup would be required to confirm or refute this claim.",
             evidence=[],
             algorithm_version=self.config.algorithm_version,
+            cache_result=CacheResult.MISS,
+            contains_pii=contains_pii,
+            temporal_context=temporal_context,
+        )
+
+    def _check_perfect_checker(self, claim_text: str, normalized_claim: str,
+                               claim_hash: str, contains_pii: bool,
+                               temporal_context: Optional[TemporalContext]) -> FactCheckResult:
+        """PERFECT_CHECKER mode: deterministic discrete p values per LSD §13."""
+        lowered = normalized_claim.lower()
+        if any(marker in lowered for marker in ("refuted", "false", "contradicted")):
+            verdict = FactCheckVerdict.REFUTED
+            factuality_score = 0.0
+            explanation = "Perfect checker fixture marked the claim as refuted."
+        elif any(marker in lowered for marker in ("insufficient", "unknown", "unavailable")):
+            verdict = FactCheckVerdict.INSUFFICIENT
+            factuality_score = 0.5
+            explanation = "Perfect checker fixture marked evidence as unavailable."
+        else:
+            verdict = FactCheckVerdict.SUPPORTED
+            factuality_score = 1.0
+            explanation = "Perfect checker fixture marked the claim as supported."
+
+        return FactCheckResult(
+            claim_text=claim_text,
+            normalized_claim_text=normalized_claim,
+            claim_hash=claim_hash,
+            fact_mode="PERFECT_CHECKER",
+            allowlist_version=self.allowlist_version,
+            status=FactCheckStatus.CHECKED,
+            verdict=verdict,
+            factuality_score=factuality_score,
+            confidence=1.0 if verdict != FactCheckVerdict.INSUFFICIENT else 0.0,
+            confidence_explanation=explanation,
+            operationalization="A perfect checker fixture directly determines support, refutation, or insufficiency.",
+            evidence=[],
+            evidence_tier_counts={"TIER_1": 1 if verdict != FactCheckVerdict.INSUFFICIENT else 0, "TIER_2": 0, "TIER_3": 0},
+            algorithm_version="fc-perfect-v1.2",
             cache_result=CacheResult.MISS,
             contains_pii=contains_pii,
             temporal_context=temporal_context,

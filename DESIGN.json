@@ -1,0 +1,400 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-24T10:33:42Z",
+  "title": "Design System: Blind Debate Adjudicator",
+  "extensions": {
+    "colorMeta": {
+      "primary-accent": {
+        "role": "primary",
+        "displayName": "Civic Signal Blue",
+        "canonical": "oklch(0.44 0.1 248)",
+        "tonalRamp": [
+          "oklch(0.15 0.04 248)",
+          "oklch(0.23 0.06 248)",
+          "oklch(0.31 0.08 248)",
+          "oklch(0.44 0.1 248)",
+          "oklch(0.56 0.09 248)",
+          "oklch(0.68 0.07 248)",
+          "oklch(0.82 0.04 248)",
+          "oklch(0.93 0.02 248)"
+        ]
+      },
+      "primary-accent-hover": {
+        "role": "primary",
+        "displayName": "Civic Signal Blue, Pressed",
+        "canonical": "oklch(0.39 0.11 248)",
+        "tonalRamp": [
+          "oklch(0.14 0.05 248)",
+          "oklch(0.21 0.07 248)",
+          "oklch(0.29 0.09 248)",
+          "oklch(0.39 0.11 248)",
+          "oklch(0.52 0.1 248)",
+          "oklch(0.65 0.08 248)",
+          "oklch(0.79 0.05 248)",
+          "oklch(0.91 0.025 248)"
+        ]
+      },
+      "neutral-surface-base": {
+        "role": "neutral",
+        "displayName": "Archive Base",
+        "canonical": "oklch(0.96 0.009 248)",
+        "tonalRamp": [
+          "oklch(0.16 0.009 248)",
+          "oklch(0.25 0.009 248)",
+          "oklch(0.34 0.009 248)",
+          "oklch(0.47 0.009 248)",
+          "oklch(0.6 0.009 248)",
+          "oklch(0.74 0.009 248)",
+          "oklch(0.86 0.009 248)",
+          "oklch(0.96 0.009 248)"
+        ]
+      },
+      "neutral-surface-raised": {
+        "role": "neutral",
+        "displayName": "Paper Raised",
+        "canonical": "oklch(0.985 0.006 248)",
+        "tonalRamp": [
+          "oklch(0.18 0.006 248)",
+          "oklch(0.27 0.006 248)",
+          "oklch(0.36 0.006 248)",
+          "oklch(0.5 0.006 248)",
+          "oklch(0.64 0.006 248)",
+          "oklch(0.78 0.006 248)",
+          "oklch(0.9 0.006 248)",
+          "oklch(0.985 0.006 248)"
+        ]
+      },
+      "neutral-surface-muted": {
+        "role": "neutral",
+        "displayName": "Soft Partition",
+        "canonical": "oklch(0.93 0.012 248)",
+        "tonalRamp": [
+          "oklch(0.16 0.012 248)",
+          "oklch(0.24 0.012 248)",
+          "oklch(0.33 0.012 248)",
+          "oklch(0.45 0.012 248)",
+          "oklch(0.58 0.012 248)",
+          "oklch(0.7 0.012 248)",
+          "oklch(0.82 0.012 248)",
+          "oklch(0.93 0.012 248)"
+        ]
+      },
+      "neutral-surface-accent": {
+        "role": "neutral",
+        "displayName": "Accent Wash",
+        "canonical": "oklch(0.92 0.028 248)",
+        "tonalRamp": [
+          "oklch(0.15 0.028 248)",
+          "oklch(0.23 0.028 248)",
+          "oklch(0.32 0.028 248)",
+          "oklch(0.45 0.028 248)",
+          "oklch(0.58 0.028 248)",
+          "oklch(0.7 0.028 248)",
+          "oklch(0.82 0.028 248)",
+          "oklch(0.92 0.028 248)"
+        ]
+      },
+      "neutral-ink-strong": {
+        "role": "neutral",
+        "displayName": "Record Ink Strong",
+        "canonical": "oklch(0.26 0.028 248)",
+        "tonalRamp": [
+          "oklch(0.12 0.028 248)",
+          "oklch(0.18 0.028 248)",
+          "oklch(0.26 0.028 248)",
+          "oklch(0.36 0.025 248)",
+          "oklch(0.48 0.02 248)",
+          "oklch(0.62 0.015 248)",
+          "oklch(0.78 0.01 248)",
+          "oklch(0.9 0.006 248)"
+        ]
+      },
+      "neutral-ink-default": {
+        "role": "neutral",
+        "displayName": "Record Ink Default",
+        "canonical": "oklch(0.37 0.024 248)",
+        "tonalRamp": [
+          "oklch(0.13 0.024 248)",
+          "oklch(0.2 0.024 248)",
+          "oklch(0.29 0.024 248)",
+          "oklch(0.37 0.024 248)",
+          "oklch(0.5 0.02 248)",
+          "oklch(0.64 0.015 248)",
+          "oklch(0.79 0.01 248)",
+          "oklch(0.9 0.006 248)"
+        ]
+      },
+      "neutral-ink-soft": {
+        "role": "neutral",
+        "displayName": "Record Ink Soft",
+        "canonical": "oklch(0.5 0.02 248)",
+        "tonalRamp": [
+          "oklch(0.15 0.02 248)",
+          "oklch(0.23 0.02 248)",
+          "oklch(0.33 0.02 248)",
+          "oklch(0.5 0.02 248)",
+          "oklch(0.62 0.016 248)",
+          "oklch(0.74 0.012 248)",
+          "oklch(0.85 0.008 248)",
+          "oklch(0.93 0.005 248)"
+        ]
+      },
+      "neutral-line": {
+        "role": "neutral",
+        "displayName": "Rule Line",
+        "canonical": "oklch(0.84 0.015 248)",
+        "tonalRamp": [
+          "oklch(0.15 0.015 248)",
+          "oklch(0.23 0.015 248)",
+          "oklch(0.32 0.015 248)",
+          "oklch(0.46 0.015 248)",
+          "oklch(0.6 0.015 248)",
+          "oklch(0.72 0.015 248)",
+          "oklch(0.84 0.015 248)",
+          "oklch(0.93 0.01 248)"
+        ]
+      },
+      "neutral-line-strong": {
+        "role": "neutral",
+        "displayName": "Rule Line Strong",
+        "canonical": "oklch(0.74 0.02 248)",
+        "tonalRamp": [
+          "oklch(0.14 0.02 248)",
+          "oklch(0.21 0.02 248)",
+          "oklch(0.31 0.02 248)",
+          "oklch(0.43 0.02 248)",
+          "oklch(0.56 0.02 248)",
+          "oklch(0.67 0.02 248)",
+          "oklch(0.74 0.02 248)",
+          "oklch(0.86 0.015 248)"
+        ]
+      },
+      "status-good": {
+        "role": "secondary",
+        "displayName": "Resolution Green",
+        "canonical": "oklch(0.55 0.14 155)",
+        "tonalRamp": [
+          "oklch(0.16 0.08 155)",
+          "oklch(0.25 0.1 155)",
+          "oklch(0.35 0.12 155)",
+          "oklch(0.55 0.14 155)",
+          "oklch(0.66 0.12 155)",
+          "oklch(0.76 0.1 155)",
+          "oklch(0.86 0.07 155)",
+          "oklch(0.94 0.04 155)"
+        ]
+      },
+      "status-warn": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "oklch(0.69 0.14 88)",
+        "tonalRamp": [
+          "oklch(0.16 0.08 88)",
+          "oklch(0.25 0.1 88)",
+          "oklch(0.35 0.12 88)",
+          "oklch(0.52 0.14 88)",
+          "oklch(0.69 0.14 88)",
+          "oklch(0.78 0.11 88)",
+          "oklch(0.88 0.08 88)",
+          "oklch(0.95 0.05 88)"
+        ]
+      },
+      "status-bad": {
+        "role": "tertiary",
+        "displayName": "Dispute Red",
+        "canonical": "oklch(0.57 0.17 28)",
+        "tonalRamp": [
+          "oklch(0.16 0.1 28)",
+          "oklch(0.25 0.12 28)",
+          "oklch(0.35 0.14 28)",
+          "oklch(0.57 0.17 28)",
+          "oklch(0.66 0.14 28)",
+          "oklch(0.75 0.11 28)",
+          "oklch(0.85 0.08 28)",
+          "oklch(0.93 0.05 28)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page-level headings and major institutional framing."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Primary section and panel headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Subsection headers and compact heading rows."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Core explanatory copy and workflow text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase metadata labels, field labels, compact UI context."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-rest",
+        "value": "0 1px 1px color-mix(in oklch, var(--ink-strong), white 92%)",
+        "purpose": "Subtle resting definition for cards and panels."
+      },
+      {
+        "name": "overlay-lift",
+        "value": "0 8px 20px color-mix(in oklch, var(--ink-strong), white 75%)",
+        "purpose": "Tooltip and transient overlay separation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "140ms ease",
+        "purpose": "Default hover and state transitions for controls."
+      },
+      {
+        "name": "panel-slide",
+        "value": "180ms ease",
+        "purpose": "Help panel entry and other directional surface transitions."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Compresses animation and transition duration to near-instant feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xs",
+        "value": "640px"
+      },
+      {
+        "name": "sm",
+        "value": "760px"
+      },
+      {
+        "name": "md",
+        "value": "900px"
+      },
+      {
+        "name": "lg",
+        "value": "980px"
+      },
+      {
+        "name": "xl",
+        "value": "1120px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default action for high-commitment workflow steps.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Generate New Snapshot</button>",
+      "css": ".ds-btn-primary{border:1px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 56%);border-radius:999px;background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 42%);color:color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),black 16%);font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.82rem;font-weight:650;padding:7px 12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease}.ds-btn-primary:hover{background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 32%);border-color:color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 40%);color:color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),black 22%)}.ds-btn-primary:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}.ds-btn-primary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting action with neutral emphasis.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Preview</button>",
+      "css": ".ds-btn-secondary{border:1px solid var(--line-strong,oklch(0.74 0.02 248));border-radius:999px;background:var(--surface-muted,oklch(0.93 0.012 248));color:var(--ink-default,oklch(0.37 0.024 248));font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.82rem;font-weight:650;padding:7px 12px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease}.ds-btn-secondary:hover{background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 44%);border-color:color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 56%);color:var(--ink-strong,oklch(0.26 0.028 248))}.ds-btn-secondary:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}.ds-btn-secondary:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Default field treatment for forms and structured entry.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-field\">Debate motion</label><input class=\"ds-field-input\" id=\"ds-field\" type=\"text\" placeholder=\"Resolved: ...\" />",
+      "css": ".ds-field-label{display:block;margin-bottom:6px;font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.75rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--ink-soft,oklch(0.5 0.02 248))}.ds-field-input{width:100%;border:1px solid var(--line-strong,oklch(0.74 0.02 248));border-radius:8px;background:var(--surface-raised,oklch(0.985 0.006 248));color:var(--ink-strong,oklch(0.26 0.028 248));font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:14px;padding:10px 12px;transition:border-color 140ms ease,background-color 140ms ease}.ds-field-input:hover{background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 46%)}.ds-field-input:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}"
+    },
+    {
+      "name": "Navigation Pill Link",
+      "kind": "nav",
+      "refersTo": "nav-pill",
+      "description": "Primary navigation chip with active state parity across top nav and overflow nav.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Primary\"><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\">Verdict</a><a class=\"ds-nav-link\" href=\"#\">Audits</a></nav>",
+      "css": ".ds-nav{display:flex;flex-wrap:wrap;gap:6px}.ds-nav-link{border:1px solid transparent;border-radius:999px;padding:7px 11px;font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.82rem;color:var(--ink-default,oklch(0.37 0.024 248));text-decoration:none;background:transparent;transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease}.ds-nav-link:hover{background:var(--surface-muted,oklch(0.93 0.012 248));border-color:var(--line,oklch(0.84 0.015 248));color:var(--ink-strong,oklch(0.26 0.028 248))}.ds-nav-link:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}.ds-nav-link-active{border-color:color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 45%);background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 42%);color:var(--ink-strong,oklch(0.26 0.028 248));font-weight:600}"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Primary content container for state summaries, forms, and tabular sections.",
+      "html": "<section class=\"ds-card\"><h3 class=\"ds-card-title\">Current Snapshot</h3><p class=\"ds-card-copy\">Canonical facts, reasoning score, and coverage are grouped in one review block.</p></section>",
+      "css": ".ds-card{border:1px solid var(--line,oklch(0.84 0.015 248));background:var(--surface-raised,oklch(0.985 0.006 248));border-radius:14px;padding:24px;box-shadow:0 1px 1px color-mix(in oklch,var(--ink-strong,oklch(0.26 0.028 248)),white 92%)}.ds-card-title{margin:0 0 8px;font-family:var(--serif,\"Source Serif 4\",\"Literata\",serif);font-size:1.15rem;line-height:1.2;color:var(--ink-strong,oklch(0.26 0.028 248))}.ds-card-copy{margin:0;max-width:66ch;font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.97rem;line-height:1.56;color:var(--ink-default,oklch(0.37 0.024 248))}.ds-card:hover{border-color:var(--line-strong,oklch(0.74 0.02 248))}.ds-card:focus-within{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}"
+    },
+    {
+      "name": "Semantic Status Pill",
+      "kind": "chip",
+      "refersTo": "badge-neutral",
+      "description": "Compact metadata indicator with semantic status variants.",
+      "html": "<span class=\"ds-pill\" data-state=\"warn\">No verdict</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:baseline;gap:4px;border:1px solid var(--line-strong,oklch(0.74 0.02 248));border-radius:999px;padding:6px 10px;font-family:var(--mono,\"Red Hat Mono\",\"Menlo\",\"Consolas\",monospace);font-size:0.82rem;color:var(--ink-default,oklch(0.37 0.024 248));background:var(--surface-muted,oklch(0.93 0.012 248))}.ds-pill[data-state='good']{background:color-mix(in oklch,var(--good,oklch(0.55 0.14 155)),white 86%);border-color:color-mix(in oklch,var(--good,oklch(0.55 0.14 155)),white 72%);color:color-mix(in oklch,var(--good,oklch(0.55 0.14 155)),black 26%)}.ds-pill[data-state='warn']{background:color-mix(in oklch,var(--warn,oklch(0.69 0.14 88)),white 84%);border-color:color-mix(in oklch,var(--warn,oklch(0.69 0.14 88)),white 70%);color:color-mix(in oklch,var(--warn,oklch(0.69 0.14 88)),black 30%)}.ds-pill[data-state='bad']{background:color-mix(in oklch,var(--bad,oklch(0.57 0.17 28)),white 86%);border-color:color-mix(in oklch,var(--bad,oklch(0.57 0.17 28)),white 70%);color:color-mix(in oklch,var(--bad,oklch(0.57 0.17 28)),black 28%)}.ds-pill:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}"
+    },
+    {
+      "name": "Data Table Shell",
+      "kind": "custom",
+      "refersTo": "table-shell",
+      "description": "Scrollable table container with sticky identity column and restrained borders.",
+      "html": "<div class=\"ds-table-wrap\"><table class=\"ds-table\"><thead><tr><th>Topic</th><th>FOR</th><th>AGAINST</th></tr></thead><tbody><tr><td>Energy</td><td>0.62</td><td>0.51</td></tr></tbody></table></div>",
+      "css": ".ds-table-wrap{overflow:auto;border:1px solid var(--line,oklch(0.84 0.015 248));border-radius:10px;background:var(--surface-muted,oklch(0.93 0.012 248));position:relative}.ds-table{width:100%;min-width:560px;border-collapse:collapse;font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.86rem}.ds-table th,.ds-table td{padding:10px;border-bottom:1px solid var(--line,oklch(0.84 0.015 248));text-align:left;vertical-align:top;color:var(--ink-default,oklch(0.37 0.024 248))}.ds-table th{font-size:0.72rem;letter-spacing:0.03em;text-transform:uppercase;font-weight:600;color:var(--ink-soft,oklch(0.5 0.02 248))}.ds-table tbody tr:hover td{background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 52%)}.ds-table td:first-child,.ds-table th:first-child{position:sticky;left:0;background:color-mix(in oklch,var(--surface-muted,oklch(0.93 0.012 248)),var(--surface-raised,oklch(0.985 0.006 248)) 35%)}"
+    },
+    {
+      "name": "Help Drawer",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "Right-edge glossary panel used for contextual definitions without leaving task flow.",
+      "html": "<aside class=\"ds-help-panel\"><header class=\"ds-help-header\"><strong>Glossary</strong><button class=\"ds-help-close\" type=\"button\" aria-label=\"Close\">&times;</button></header><div class=\"ds-help-body\">Key terms and metrics used throughout the system.</div></aside>",
+      "css": ".ds-help-panel{width:min(380px,100%);height:100%;background:var(--surface-raised,oklch(0.985 0.006 248));border-left:1px solid var(--line,oklch(0.84 0.015 248));display:flex;flex-direction:column;transition:transform 180ms ease}.ds-help-header{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line,oklch(0.84 0.015 248));background:var(--surface-raised,oklch(0.985 0.006 248));font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);color:var(--ink-strong,oklch(0.26 0.028 248))}.ds-help-close{width:32px;height:32px;border:1px solid var(--line-strong,oklch(0.74 0.02 248));border-radius:8px;background:var(--surface-muted,oklch(0.93 0.012 248));color:var(--ink-strong,oklch(0.26 0.028 248));cursor:pointer;font-size:1.1rem;line-height:1}.ds-help-close:hover{background:color-mix(in oklch,var(--surface-accent,oklch(0.92 0.028 248)),white 44%)}.ds-help-close:focus-visible{outline:3px solid color-mix(in oklch,var(--accent,oklch(0.44 0.1 248)),white 22%);outline-offset:2px}.ds-help-body{padding:14px;font-family:var(--sans,\"Public Sans\",\"Noto Sans\",sans-serif);font-size:0.84rem;line-height:1.45;color:var(--ink-default,oklch(0.37 0.024 248))}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Civic Ledger",
+    "overview": "This system should feel like a public record interface for serious reasoning, not a social feed and not a startup landing page. Every surface should communicate that arguments are being processed in a procedural environment where clarity, traceability, and fairness are more important than visual spectacle.\n\nDensity is moderate and deliberate. Panels, tables, and status strips are grouped with consistent spacing and soft structural boundaries so users can track debate state without cognitive overload. Motion remains functional and restrained, with reduced-motion support as a first-class requirement.\n\nThe interface explicitly rejects \"trend-heavy vibecoded aesthetics that prioritize novelty over clarity\" and rejects \"overly playful or entertainment-first visual language that weakens perceived procedural integrity.\" It is rigorous, calm, and institutional at every decision point.",
+    "keyCharacteristics": [
+      "Clear hierarchy built on serif headings and neutral sans body text.",
+      "Tinted blue-gray neutrals that preserve composure while avoiding sterile grayscale.",
+      "Semantic status colors used for evidence and verdict context, never as decorative noise.",
+      "Flat-by-default surfaces with minimal shadow and strong border logic.",
+      "Navigation and actions that emphasize next-step clarity over visual novelty."
+    ],
+    "rules": [
+      {
+        "name": "The Evidence-First Contrast Rule",
+        "body": "Accent and status colors are for state and meaning. If a color does not encode action, verdict, confidence, or system condition, it should be removed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ledger Hierarchy Rule",
+        "body": "Serif marks structure, sans carries explanation, mono marks evidence metadata. Do not swap these roles.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "If a component is not floating above other content, it should rely on border and tone, not blur-heavy shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep action hierarchy explicit: primary actions use accent treatment, secondary actions stay neutral, destructive/error actions stay semantic.",
+      "**Do** use status colors only for meaning-bearing states (success, caution, error, verdict confidence context), not decoration.",
+      "**Do** preserve the spacing scale (`4, 8, 12, 16, 24, 32, 48`) and card padding rhythm (`24px` desktop, `16px` compact).",
+      "**Do** keep reduced-motion support active and test with `prefers-reduced-motion: reduce` before shipping.",
+      "**Do** maintain strong keyboard-visible focus for every interactive control."
+    ],
+    "donts": [
+      "**Don't** introduce Social-feed styling that introduces status signals or engagement gamification (likes, popularity badges, influencer-style profiles).",
+      "**Don't** use Trend-heavy \"vibecoded\" aesthetics that prioritize novelty over clarity (neon glows, decorative gradients, excessive visual effects).",
+      "**Don't** drift into Overly playful or entertainment-first visual language that weakens perceived procedural integrity.",
+      "**Don't** replace semantic status meaning with purely decorative color usage.",
+      "**Don't** remove border structure in favor of blur-heavy elevation or glass-like overlays."
+    ]
+  }
+}

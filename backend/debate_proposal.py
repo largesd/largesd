@@ -309,6 +309,12 @@ def _normalize_frame_payload(
             or payload.get("framing_debate_id")
             or prior_frame.get("framing_debate_id")
         ),
+        "frame_mode": _clean_text(frame_source.get("frame_mode") or payload.get("frame_mode") or prior_frame.get("frame_mode") or "single"),
+        "review_date": _clean_text(frame_source.get("review_date") or payload.get("review_date") or prior_frame.get("review_date")),
+        "review_cadence_months": int(frame_source.get("review_cadence_months") or payload.get("review_cadence_months") or prior_frame.get("review_cadence_months") or 6),
+        "emergency_override_reason": _clean_text(frame_source.get("emergency_override_reason") or prior_frame.get("emergency_override_reason")),
+        "emergency_override_by": _clean_text(frame_source.get("emergency_override_by") or prior_frame.get("emergency_override_by")),
+        "governance_decision_id": _clean_text(frame_source.get("governance_decision_id") or payload.get("governance_decision_id") or prior_frame.get("governance_decision_id")),
     }
     frame["frame_summary"] = build_frame_summary(frame)
     return frame
@@ -332,6 +338,12 @@ def serialize_frame_record(frame: Dict[str, Any]) -> Dict[str, Any]:
         "framing_debate_id": _clean_text(frame.get("framing_debate_id")),
         "created_at": frame.get("created_at"),
         "is_active": 1 if frame.get("is_active", True) else 0,
+        "frame_mode": _clean_text(frame.get("frame_mode") or "single"),
+        "review_date": _clean_text(frame.get("review_date")),
+        "review_cadence_months": int(frame.get("review_cadence_months", 6) or 6),
+        "emergency_override_reason": _clean_text(frame.get("emergency_override_reason")),
+        "emergency_override_by": _clean_text(frame.get("emergency_override_by")),
+        "governance_decision_id": _clean_text(frame.get("governance_decision_id")),
     }
 
 

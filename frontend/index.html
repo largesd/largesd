@@ -3,266 +3,401 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Blind Debate Adjudicator — Home</title>
+  <title>Blind Debate Adjudicator - Home</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
-  <style>
-    .loading { opacity: 0.6; pointer-events: none; }
-    .api-status { font-size: 11px; padding: 4px 8px; border-radius: 4px; }
-    .api-status.connected { background: rgba(142,240,180,.2); color: var(--good); }
-    .api-status.error { background: rgba(255,107,107,.2); color: var(--bad); }
-    .refresh-btn { cursor: pointer; padding: 4px 10px; border-radius: 4px; background: rgba(109,214,255,.1); border: 1px solid rgba(109,214,255,.3); }
-    .refresh-btn:hover { background: rgba(109,214,255,.2); }
-  </style>
+  <script src="static/js/data_bridge.js"></script>
 </head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html" class="active" aria-current="page">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
       <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
+
 <section class="state-strip" aria-label="Current debate state">
-  <div class="state-wrap">
+  <div class="state-wrap" id="state-wrap-desktop" aria-live="polite" aria-atomic="true">
     <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="confidence-display">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title="">Loading...</strong></div>
-    <div class="state-item"><span class="state-label">Updated</span><strong class="state-value mono" id="updated-display">-</strong></div>
   </div>
-  <!-- Mobile compact state (visible only on small screens) -->
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap" id="state-wrap-mobile" hidden aria-live="polite" aria-atomic="true">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
 </section>
 
-<main>
-
-<div class="grid cols2">
-  <section class="card">
-    <div class="section-head">
+<main class="home-main layout-home">
+  <section class="panel panel-current-state">
+    <div class="panel-head panel-head-home">
       <div>
-        <h2>Debate prompt</h2>
-        <p class="lede">Fully blind adjudication: the system judges arguments — not people.</p>
+        <p class="eyebrow">Current Debate</p>
+        <h1>Understand the current state in one screen</h1>
+        <p class="intro-copy">This view highlights what is being debated, where the verdict stands, and the clearest next steps for participating or auditing.</p>
       </div>
-      <span class="api-status" id="api-status">Connecting...</span>
-    </div>
-    
-    <div class="callout" id="debate-prompt-content">
-      <div style="font-size:18px;font-weight:750;color:var(--muted)" id="resolution-display">No debate started yet.</div>
-      <small id="frame-display" style="display:none">Create a new debate to get started.</small><br>
-      <small id="frame-meta-display" style="display:none"></small><br>
-      <small id="sides-display" style="display:none"></small><br>
-      <small id="criteria-display" style="display:none"></small>
+      <span class="api-status" id="api-status" role="status" aria-live="polite">Loading...</span>
     </div>
 
-    <hr />
-    <div class="kpis">
-      <div class="kpi">
-        <div class="label">Current verdict</div>
-        <div class="value" id="kpi-verdict">NO VERDICT</div>
-        <div class="hint"><span class="tooltip" data-tooltip="Confidence interval of D (FOR − AGAINST) crosses zero">CI(D) crosses 0</span> across replicates</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Confidence</div>
-        <div class="value" id="kpi-confidence">-</div>
-        <div class="hint">share of replicates supporting a direction</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Snapshot trigger</div>
-        <div class="value" id="kpi-trigger">Activity</div>
-        <div class="hint">immutable scoring run</div>
-      </div>
-    </div>
-
-    <hr />
-    <h3>What changed in the latest snapshot</h3>
-    <div class="callout soft">
-      <ul class="compact-list" id="changes-list">
-        <li><strong>t3</strong> now contributes the largest positive movement toward FOR.</li>
-        <li><strong>t1</strong> remains the strongest source of uncertainty because the top counterarguments are closely matched.</li>
-        <li>The overall decision remains <strong>NO VERDICT</strong> because CI(D) still crosses 0.</li>
-      </ul>
-    </div>
-
-    <h3>What you can do next</h3>
-    <div class="cta-row">
-      <a class="button" href="snapshot.html">Open latest snapshot</a>
-      <a class="pill" href="verdict.html">See what is driving the verdict →</a>
-    </div>
-    <ul class="compact-list">
-      <li><a href="topics.html">Review Topics</a> (neutral scopes + steelman summaries)</li>
-      <li><a href="audits.html">Audit robustness</a> (label-flip, extraction stability, relevance sensitivity)</li>
-      <li><a href="verdict.html">Inspect verdict math</a> (D distribution + CI(D))</li>
-      <li><a href="evidence.html">See "what evidence would change this"</a></li>
-    </ul>
-    
-    <div id="login-notice" class="callout soft" style="margin-top: 16px; display: none;">
-      <strong>💡 Want to participate?</strong> <a href="login.html">Log in</a> or <a href="register.html">create an account</a> to start debates and post arguments.
+    <div class="resolution-block resolution-block-home" id="debate-prompt-content">
+      <p class="resolution-text is-empty" id="resolution-display">No debate started yet.</p>
+      <p class="meta-line" id="frame-display" hidden>Create a new debate to get started.</p>
+      <p class="meta-line" id="frame-meta-display" hidden></p>
+      <p class="meta-line" id="sides-display" hidden></p>
+      <p class="meta-line" id="criteria-display" hidden></p>
     </div>
   </section>
 
-  <aside class="card">
-    <div class="section-head">
-      <h2>Snapshot essentials</h2>
-      <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
-    </div>
-    <p class="lede">This panel stays consistent across pages so users can orient themselves immediately.</p>
-    <div class="row">
-      <span class="badge">snapshot_id: <span class="mono" id="badge-snapshot-id">-</span></span>
-      <span class="badge">timestamp: <span class="mono" id="badge-timestamp">-</span></span>
-      <span class="badge">trigger: <span class="mono" id="badge-trigger">-</span></span>
-    </div>
-    <hr />
-    <h3>Moderation template</h3>
-    <div class="row">
-      <span class="pill">Template: <span class="mono" id="template-name">Standard Civility + PII Guard v3</span></span>
-      <span class="pill">Version: <span class="mono" id="template-version">3.2.1</span></span>
-      <a class="pill" href="snapshot.html">Open snapshot →</a>
-    </div>
-    <hr />
-    <h3>Allowed vs blocked</h3>
-    <div class="table-wrap"><table class="table">
-      <tr><th>Allowed</th><td class="mono" id="allowed-count">84</td></tr>
-      <tr><th>Blocked</th><td class="mono" id="blocked-count">11</td></tr>
-      <tr><th>Top block reasons</th><td id="block-reasons"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
-    </table></div>
-    <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
-  </aside>
-</div>
+  <div class="home-layout">
+    <div class="primary-stack">
+      <section class="panel panel-signal-summary">
+        <h2>Snapshot at a glance</h2>
+        <p class="lede">Three core indicators summarize outcome confidence and scoring cadence.</p>
 
+        <div class="signal-list" aria-label="Snapshot signals">
+          <article class="signal-row">
+            <p class="signal-label">Verdict status</p>
+            <p class="signal-value" id="kpi-verdict">NO VERDICT</p>
+            <p class="signal-note"><span class="tooltip" data-tooltip="Confidence interval of D (FOR - AGAINST) crosses zero">CI(D) crosses 0</span> across replicates.</p>
+          </article>
+          <article class="signal-row">
+            <p class="signal-label">Confidence</p>
+            <p class="signal-value mono" id="kpi-confidence">-</p>
+            <p class="signal-note">Share of replicate runs that support one direction.</p>
+          </article>
+          <article class="signal-row">
+            <p class="signal-label">Snapshot trigger</p>
+            <p class="signal-value" id="kpi-trigger">Activity</p>
+            <p class="signal-note">Event that produced the latest immutable scoring run.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel panel-latest-changes">
+        <h2>What changed in the latest snapshot</h2>
+        <p class="lede">Use this summary before opening detailed scoring pages.</p>
+        <ul class="compact-list update-list" id="changes-list">
+          <li>Loading snapshot changes...</li>
+        </ul>
+      </section>
+
+      <section class="panel panel-start-here">
+        <h2>Start here</h2>
+        <p class="lede">Choose one path based on your intent: contribute, inspect, or audit.</p>
+
+        <div class="action-lanes">
+          <article class="action-lane action-lane-primary">
+            <p class="action-lane-label">Contribute</p>
+            <a class="action-link prominent" href="new_debate.html">Post an argument</a>
+            <p class="action-lane-copy">Submit FOR or AGAINST argument units with explicit facts and inference.</p>
+          </article>
+          <article class="action-lane">
+            <p class="action-lane-label">Inspect</p>
+            <p class="action-lane-copy">Read the current state before posting new arguments.</p>
+            <div class="action-link-list">
+              <a class="action-link" href="snapshot.html">Review latest snapshot</a>
+              <a class="action-link" href="verdict.html">Inspect verdict math</a>
+              <a class="action-link" href="topics.html">Explore topic surfaces</a>
+              <a class="action-link" href="dossier.html">Open decision dossier</a>
+            </div>
+          </article>
+          <article class="action-lane">
+            <p class="action-lane-label">Audit</p>
+            <p class="action-lane-copy">Challenge robustness and identify evidence that could move the decision.</p>
+            <div class="action-link-list">
+              <a class="action-link" href="audits.html">Audit robustness</a>
+              <a class="action-link" href="evidence.html">Find decisive evidence</a>
+              <a class="action-link" href="governance.html">View governance status</a>
+              <a class="action-link" href="appeals.html">Submit an appeal</a>
+            </div>
+          </article>
+        </div>
+
+        <div id="login-notice" class="notice" hidden role="status" aria-live="polite">
+          Participation requires authentication. <a href="login.html">Log in</a> or <a href="register.html">create an account</a> to post arguments.
+        </div>
+      </section>
+    </div>
+
+    <aside class="secondary-stack">
+      <section class="panel snapshot-essentials-panel">
+        <div class="panel-head">
+          <h3>Snapshot essentials</h3>
+          <button type="button" class="refresh-btn" id="refresh-data-btn" onclick="loadData()">Refresh</button>
+          <button type="button" class="refresh-btn" id="github-refresh-btn" onclick="refreshFromGitHub()" style="display:none;">Refresh from GitHub</button>
+        </div>
+
+        <dl class="snapshot-meta">
+          <div class="snapshot-meta-item">
+            <dt>Snapshot ID</dt>
+            <dd class="mono" id="badge-snapshot-id">-</dd>
+          </div>
+          <div class="snapshot-meta-item">
+            <dt>Timestamp</dt>
+            <dd class="mono" id="badge-timestamp">-</dd>
+          </div>
+          <div class="snapshot-meta-item">
+            <dt>Trigger</dt>
+            <dd class="mono" id="badge-trigger">-</dd>
+          </div>
+        </dl>
+
+        <div class="snapshot-group">
+          <h4>Moderation template</h4>
+          <div class="row snapshot-template-row">
+            <span class="pill">Template: <span class="mono" id="template-name">Standard Civility + PII Guard v3</span></span>
+            <span class="pill">Version: <span class="mono" id="template-version">3.2.1</span></span>
+          </div>
+        </div>
+
+        <div class="snapshot-group">
+          <h4>Allowed vs blocked</h4>
+          <div class="table-wrap">
+            <table class="table table-compact">
+              <tbody>
+                <tr><th scope="row">Allowed</th><td class="mono" id="allowed-count">84</td></tr>
+                <tr><th scope="row">Blocked</th><td class="mono" id="blocked-count">11</td></tr>
+                <tr><th scope="row">Top block reasons</th><td id="block-reasons" class="pill-cluster"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Need help?</h3>
+        <p class="lede">Use the glossary for term definitions and the About page for system rules.</p>
+        <div class="row">
+          <button class="button" type="button" onclick="BDA.toggleHelp()">Open Glossary</button>
+          <a class="button" href="about.html">Open About</a>
+        </div>
+      </section>
+    </aside>
+  </div>
 </main>
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<!-- Back to top button -->
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
 
-<!-- Help panel -->
-<div class="help-overlay" onclick="toggleHelp()"></div>
-<div class="help-panel" id="helpPanel">
+<div class="help-overlay" aria-hidden="true"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
   <div class="help-panel-header">
-    <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
+    <h3 id="help-panel-title">Glossary and Help</h3>
+    <button type="button" class="close-help" aria-label="Close help">x</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
-    
+    <p class="help-panel-note help-panel-note-top">Key terms used across snapshot, topic, and verdict pages.</p>
+
     <div class="glossary-term">CI(D)</div>
-    <div class="glossary-def">Confidence Interval of D (the difference score). If this interval crosses zero, the verdict is "NO VERDICT" because FOR and AGAINST are statistically indistinguishable.</div>
-    
-    <div class="glossary-term">D = FOR − AGAINST</div>
-    <div class="glossary-def">The margin between overall FOR and AGAINST scores. Positive = FOR leading; Negative = AGAINST leading.</div>
-    
-    <div class="glossary-term">F<sub>t,s</sub> (Factuality)</div>
-    <div class="glossary-def">Mean truth probability across canonical FACT nodes for topic t, side s. Calculated as average of P(fact true).</div>
-    
-    <div class="glossary-term">Reason<sub>t,s</sub> (Reasoning)</div>
-    <div class="glossary-def">Median reasoning strength across canonical ARGUMENT nodes for topic t, side s. Scored by independent judges.</div>
-    
-    <div class="glossary-term">Cov<sub>t,s</sub> (Coverage)</div>
-    <div class="glossary-def">How well side s addresses the opposing side's arguments, weighted by argument leverage. Higher = better rebuttal coverage.</div>
-    
-    <div class="glossary-term">Q<sub>t,s</sub> (Quality)</div>
-    <div class="glossary-def">Geometric mean of Factuality, Reasoning, and Coverage. Balances all three components without tuned weights.</div>
-    
-    <div class="glossary-term">Rel<sub>t</sub> (Relevance)</div>
-    <div class="glossary-def">Topic relevance weight based on claim-producing content mass. Determines how much each topic contributes to the overall score.</div>
-    
+    <p class="glossary-def">Confidence interval of D (difference score). If the interval crosses zero, verdict remains NO VERDICT.</p>
+
+    <div class="glossary-term">D = FOR - AGAINST</div>
+    <p class="glossary-def">Margin between overall FOR and AGAINST scores. Positive values favor FOR; negative values favor AGAINST.</p>
+
+    <div class="glossary-term">F_t,s (Factuality)</div>
+    <p class="glossary-def">Average truth probability across canonical FACT nodes for each topic and side.</p>
+
+    <div class="glossary-term">Reason_t,s (Reasoning)</div>
+    <p class="glossary-def">Median reasoning strength across canonical ARGUMENT nodes for each topic and side.</p>
+
+    <div class="glossary-term">Cov_t,s (Coverage)</div>
+    <p class="glossary-def">How well one side addresses opposing arguments, weighted by leverage.</p>
+
+    <div class="glossary-term">Q_t,s (Quality)</div>
+    <p class="glossary-def">Geometric mean of factuality, reasoning, and coverage for balanced scoring.</p>
+
+    <div class="glossary-term">Rel_t (Relevance)</div>
+    <p class="glossary-def">Topic relevance weight derived from claim-producing content mass.</p>
+
     <div class="glossary-term">Steelman</div>
-    <div class="glossary-def">A summary that presents the strongest version of each side's arguments, not a strawman. Generated from canonical arguments.</div>
-    
+    <p class="glossary-def">Strongest representation of each side based on canonical arguments, not weakest points.</p>
+
     <div class="glossary-term">IQR</div>
-    <div class="glossary-def">Interquartile Range — shows spread of judge scores. Wider IQR = more disagreement among evaluators.</div>
-    
-    <div class="glossary-term">Drift Score</div>
-    <div class="glossary-def">Measures how much a topic has changed from its previous snapshot. Higher = more change.</div>
-    
-    <div class="glossary-term">Canonical FACT/ARGUMENT</div>
-    <div class="glossary-def">Deduplicated, normalized representations of claims and arguments extracted from posts. Used for consistent scoring.</div>
-    
+    <p class="glossary-def">Interquartile range showing spread of judge scores; wider means less evaluator agreement.</p>
+
+    <div class="glossary-term">Drift score</div>
+    <p class="glossary-def">Degree of topic change relative to previous snapshot.</p>
+
+    <div class="glossary-term">Canonical FACT and ARGUMENT</div>
+    <p class="glossary-def">Normalized, deduplicated claim and argument units used for stable scoring.</p>
+
     <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="about.html">About</a>.</p>
   </div>
 </div>
 
 <script>
-// API Configuration
-const API_BASE = window.location.origin;
-
-// Load data from API
+// Load data from DataBridge (GitHub cache) or fallback to API
 async function loadData() {
   const statusEl = document.getElementById('api-status');
+  const refreshBtn = document.getElementById('refresh-data-btn');
+  const ghRefreshBtn = document.getElementById('github-refresh-btn');
+  const resolutionEl = document.getElementById('resolution-display');
+  const frameDisplay = document.getElementById('frame-display');
+  const frameMetaDisplay = document.getElementById('frame-meta-display');
+  const sidesDisplay = document.getElementById('sides-display');
+  const criteriaDisplay = document.getElementById('criteria-display');
+
+  if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.setAttribute('aria-busy', 'true'); }
   statusEl.textContent = 'Loading...';
   statusEl.className = 'api-status';
-  
+
   try {
-    const debateData = await BDA.loadDebate();
-    
-    // Update debate info based on whether a debate exists
-    const motion = debateData.motion || debateData.resolution;
-    if (debateData.has_debate && motion) {
-      const activeFrame = debateData.active_frame || {};
-      document.getElementById('resolution-display').textContent = motion;
-      document.getElementById('resolution-display').style.color = '';
-      document.getElementById('frame-display').textContent = debateData.debate_frame ? `Frame: ${debateData.debate_frame}` : '';
-      document.getElementById('frame-display').style.display = debateData.debate_frame ? '' : 'none';
-      document.getElementById('frame-meta-display').textContent = activeFrame.frame_id ? `Active frame: v${activeFrame.version || 1} • ${activeFrame.stage || 'substantive'}` : '';
-      document.getElementById('frame-meta-display').style.display = activeFrame.frame_id ? '' : 'none';
-      const hasSides = Array.isArray(activeFrame.sides) && activeFrame.sides.length > 0;
-      document.getElementById('sides-display').textContent = hasSides ? `Sides: ${activeFrame.sides.map(side => side.label).join(', ')}` : '';
-      document.getElementById('sides-display').style.display = hasSides ? '' : 'none';
-      document.getElementById('criteria-display').textContent = debateData.moderation_criteria ? `Moderation criteria: ${debateData.moderation_criteria}` : '';
-      document.getElementById('criteria-display').style.display = debateData.moderation_criteria ? '' : 'none';
+    // Hard cutover: prefer DataBridge (GitHub mode)
+    DataBridge.loadConfig();
+    if (DataBridge.isConfigured()) {
+      ghRefreshBtn.style.display = 'inline-block';
+      refreshBtn.style.display = 'none';
+      await DataBridge.ensureData();
+      const debateData = DataBridge.getDebate();
+      const snapshotData = DataBridge.getSnapshot();
+
+      if (debateData.has_debate && debateData.resolution) {
+        const frame = DataBridge.getFrame();
+        resolutionEl.textContent = debateData.resolution;
+        resolutionEl.classList.remove('is-empty');
+        frameDisplay.textContent = debateData.motion ? `Motion: ${debateData.motion}` : '';
+        frameDisplay.hidden = !debateData.motion;
+        frameMetaDisplay.textContent = frame ? `Active frame: v${frame.version || 1} | ${frame.stage || 'substantive'}` : '';
+        frameMetaDisplay.hidden = !frame;
+        const hasSides = frame && Array.isArray(frame.sides) && frame.sides.length > 0;
+        sidesDisplay.textContent = hasSides ? `Sides: ${frame.sides.map(s => s.label || s).join(', ')}` : '';
+        sidesDisplay.hidden = !hasSides;
+        criteriaDisplay.hidden = true;
+        if (debateData.debate_id) { BDA.setActiveDebateId(debateData.debate_id); }
+      } else {
+        resolutionEl.textContent = 'No debate started yet.';
+        resolutionEl.classList.add('is-empty');
+        frameDisplay.hidden = true; frameMetaDisplay.hidden = true;
+        sidesDisplay.hidden = true; criteriaDisplay.hidden = true;
+      }
+
+      if (snapshotData && snapshotData.has_snapshot) {
+        updateSnapshotDisplay(snapshotData);
+        await loadLatestChanges(snapshotData);
+      } else if (!debateData.has_debate) {
+        resetToEmptyState();
+      }
+
+      statusEl.textContent = 'GitHub mode';
+      statusEl.className = 'api-status connected';
+      statusEl.title = 'Cached ' + DataBridge.formatCacheAge();
     } else {
-      // No debate started yet - show empty state
-      document.getElementById('resolution-display').textContent = 'No debate started yet.';
-      document.getElementById('resolution-display').style.color = 'var(--muted)';
-      document.getElementById('frame-display').style.display = 'none';
-      document.getElementById('frame-meta-display').style.display = 'none';
-      document.getElementById('sides-display').style.display = 'none';
-      document.getElementById('criteria-display').style.display = 'none';
+      // Not configured — show empty state with setup prompt
+      statusEl.textContent = 'Setup required';
+      statusEl.className = 'api-status error';
+      resolutionEl.textContent = 'Welcome to Blind Debate Adjudicator. Configure a data source to get started.';
+      resolutionEl.classList.remove('is-empty');
+      document.getElementById('changes-list').innerHTML = '<li>Open <a href="setup.html">Setup</a> to configure your debate source.</li>';
+      return;
     }
-    
-    const snapshotData = await BDA.loadSnapshot();
-    
-    if (snapshotData && !snapshotData.error && snapshotData.has_snapshot) {
-      updateSnapshotDisplay(snapshotData);
-    } else if (!debateData.has_debate) {
-      // No debate exists - reset display to empty state
-      resetToEmptyState();
-    }
-    
-    statusEl.textContent = 'Connected';
-    statusEl.className = 'api-status connected';
-    
   } catch (error) {
     console.error('Error loading data:', error);
     statusEl.textContent = 'Offline';
     statusEl.className = 'api-status error';
+    // Try to show cached data even on error
+    if (DataBridge.hasCache()) {
+      const debateData = DataBridge.getDebate();
+      const snapshotData = DataBridge.getSnapshot();
+      if (debateData.has_debate && debateData.resolution) {
+        resolutionEl.textContent = debateData.resolution;
+        resolutionEl.classList.remove('is-empty');
+      }
+      if (snapshotData && snapshotData.has_snapshot) {
+        updateSnapshotDisplay(snapshotData);
+      }
+    }
+  } finally {
+    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.setAttribute('aria-busy', 'false'); }
+  }
+}
+
+async function loadLatestChanges(snapshotData) {
+  const list = document.getElementById('changes-list');
+  if (!list) return;
+
+  // Try to get diff data from cache
+  let changes = [];
+  try {
+    const diff = DataBridge.getSnapshotDiff();
+    if (diff && diff.changes && diff.changes.length > 0) {
+      changes = diff.changes.slice(0, 3).map(c => c.description || String(c));
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Fallback: generate meaningful messages from snapshot data
+  if (changes.length === 0 && snapshotData) {
+    const verdict = snapshotData.verdict || 'NO VERDICT';
+    const confidence = snapshotData.confidence !== null && snapshotData.confidence !== undefined ? snapshotData.confidence.toFixed(2) : '-';
+    const trigger = snapshotData.trigger_type || 'Activity';
+
+    if (verdict === 'FOR') {
+      changes.push(`Verdict is <strong>FOR</strong> with confidence ${confidence}.`);
+    } else if (verdict === 'AGAINST') {
+      changes.push(`Verdict is <strong>AGAINST</strong> with confidence ${confidence}.`);
+    } else {
+      changes.push(`The overall decision remains <strong>NO VERDICT</strong> because CI(D) still crosses 0.`);
+    }
+    changes.push(`Latest snapshot triggered by <strong>${BDA.escapeHtml(trigger)}</strong>.`);
+    if (snapshotData.topic_contributions && snapshotData.topic_contributions.length > 0) {
+      const top = snapshotData.topic_contributions[0];
+      changes.push(`<strong>${BDA.escapeHtml(top.topic_id || 'Top topic')}</strong> contributes the largest movement toward ${top.side || 'FOR'}.`);
+    }
+  }
+
+  if (changes.length === 0) {
+    changes.push('No snapshot data available yet. Generate a snapshot to see changes.');
+  }
+
+  list.innerHTML = changes.map(c => `<li>${c}</li>`).join('');
+}
+
+async function refreshFromGitHub() {
+  const statusEl = document.getElementById('api-status');
+  const btn = document.getElementById('github-refresh-btn');
+  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  statusEl.textContent = 'Refreshing from GitHub...';
+  try {
+    await DataBridge.refreshFromGitHub();
+    await loadData();
+    statusEl.textContent = 'Updated from GitHub';
+  } catch (err) {
+    statusEl.textContent = 'Refresh failed';
+    BDA.showStatus('Failed to refresh from GitHub: ' + err.message, true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); }
   }
 }
 
@@ -273,36 +408,43 @@ function updateSnapshotDisplay(data) {
   document.getElementById('confidence-display').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
   document.getElementById('snapshot-display').textContent = data.snapshot_id || '-';
   document.getElementById('snapshot-display').title = data.snapshot_id || '';
-  document.getElementById('updated-display').textContent = data.timestamp ? new Date(data.timestamp).toLocaleString() : '-';
-  
+
   // Mobile
   document.getElementById('verdict-mobile').textContent = data.verdict || 'NO VERDICT';
   document.getElementById('confidence-mobile').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
-  
+
   // Update KPIs
   document.getElementById('kpi-verdict').textContent = data.verdict || 'NO VERDICT';
   document.getElementById('kpi-confidence').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
   document.getElementById('kpi-trigger').textContent = data.trigger_type || '-';
-  
+
   // Update badges
   document.getElementById('badge-snapshot-id').textContent = data.snapshot_id || '-';
   document.getElementById('badge-timestamp').textContent = data.timestamp ? new Date(data.timestamp).toLocaleString() : '-';
   document.getElementById('badge-trigger').textContent = data.trigger_type || '-';
-  
+
   document.getElementById('template-name').textContent = data.template_name || '-';
   document.getElementById('template-version').textContent = data.template_version || '-';
-  
+
   document.getElementById('allowed-count').textContent = data.allowed_count !== undefined ? data.allowed_count : '-';
   document.getElementById('blocked-count').textContent = data.blocked_count !== undefined ? data.blocked_count : '-';
-  
+
   // Block reasons
   const blockReasonsEl = document.getElementById('block-reasons');
   if (data.block_reasons && Object.keys(data.block_reasons).length > 0) {
-    blockReasonsEl.innerHTML = Object.entries(data.block_reasons)
-      .map(([reason, count]) => `<span class="pill warn">${reason}: ${count}</span>`)
-      .join(' ');
+    blockReasonsEl.textContent = '';
+    Object.entries(data.block_reasons).forEach(([reason, count]) => {
+      const pill = document.createElement('span');
+      pill.className = 'pill warn';
+      pill.textContent = `${reason}: ${count}`;
+      blockReasonsEl.appendChild(pill);
+    });
   } else {
-    blockReasonsEl.innerHTML = '<span class="pill">-</span>';
+    const emptyPill = document.createElement('span');
+    emptyPill.className = 'pill';
+    emptyPill.textContent = '-';
+    blockReasonsEl.textContent = '';
+    blockReasonsEl.appendChild(emptyPill);
   }
 }
 
@@ -313,92 +455,97 @@ function resetToEmptyState() {
   document.getElementById('confidence-display').textContent = '-';
   document.getElementById('snapshot-display').textContent = '-';
   document.getElementById('snapshot-display').title = '';
-  document.getElementById('updated-display').textContent = '-';
-  
+
   // Mobile
   document.getElementById('verdict-mobile').textContent = 'NO VERDICT';
   document.getElementById('confidence-mobile').textContent = '-';
-  
+
   // KPIs
   document.getElementById('kpi-verdict').textContent = 'NO VERDICT';
   document.getElementById('kpi-confidence').textContent = '-';
   document.getElementById('kpi-trigger').textContent = '-';
-  
+
   // Badges
   document.getElementById('badge-snapshot-id').textContent = '-';
   document.getElementById('badge-timestamp').textContent = '-';
   document.getElementById('badge-trigger').textContent = '-';
-  
+
   document.getElementById('template-name').textContent = '-';
   document.getElementById('template-version').textContent = '-';
-  
+
   document.getElementById('allowed-count').textContent = '-';
   document.getElementById('blocked-count').textContent = '-';
-  document.getElementById('block-reasons').innerHTML = '<span class="pill">-</span>';
+  const blockReasonsEl = document.getElementById('block-reasons');
+  const emptyPill = document.createElement('span');
+  emptyPill.className = 'pill';
+  emptyPill.textContent = '-';
+  blockReasonsEl.textContent = '';
+  blockReasonsEl.appendChild(emptyPill);
 }
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   loadData();
-  
+
   // Show login notice if not logged in
   if (!Auth.isLoggedIn()) {
     const notice = document.getElementById('login-notice');
-    if (notice) notice.style.display = 'block';
+    if (notice) notice.hidden = false;
   }
 });
 
-// Back to top button visibility
-const backToTop = document.querySelector('.back-to-top');
-window.addEventListener('scroll', () => {
-  if (window.scrollY > 300) backToTop.classList.add('visible');
-  else backToTop.classList.remove('visible');
-});
+// Override shared helpers with page-specific accessibility behavior before BDA.init runs.
+if (window.BDA) {
+  BDA.toggleHelp = function () {
+    const panel = document.getElementById('helpPanel');
+    const overlay = document.querySelector('.help-overlay');
+    const helpButtons = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
+    if (!panel || !overlay) return;
 
-// Help panel toggle
-function toggleHelp() {
-  document.getElementById('helpPanel').classList.toggle('open');
-  document.querySelector('.help-overlay').classList.toggle('visible');
+    const shouldOpen = !panel.classList.contains('open');
+    panel.classList.toggle('open', shouldOpen);
+    overlay.classList.toggle('visible', shouldOpen);
+    panel.setAttribute('aria-hidden', String(!shouldOpen));
+    overlay.setAttribute('aria-hidden', String(!shouldOpen));
+    if (shouldOpen) {
+      panel.removeAttribute('inert');
+    } else {
+      panel.setAttribute('inert', '');
+    }
+    helpButtons.forEach(btn => btn.setAttribute('aria-expanded', String(shouldOpen)));
+  };
+
+  BDA.setupMobileState = function () {
+    const desktop = document.getElementById('state-wrap-desktop');
+    const mobile = document.getElementById('state-wrap-mobile');
+    if (!desktop || !mobile) return;
+
+    const applyLayout = () => {
+      const isMobile = window.innerWidth <= 640;
+      desktop.hidden = isMobile;
+      mobile.hidden = !isMobile;
+    };
+
+    applyLayout();
+    window.addEventListener('resize', BDA.debounce(applyLayout, 120));
+  };
 }
 
-// Table scroll fade indicator
-document.querySelectorAll('.table-wrap').forEach(wrap => {
-  wrap.classList.add('scrollable');
-  wrap.addEventListener('scroll', () => {
-    const isScrollable = wrap.scrollWidth > wrap.clientWidth;
-    const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
-    wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
-  });
-  wrap.dispatchEvent(new Event('scroll'));
+// Close help panel on Escape and close nav "More" menu on outside click.
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const panel = document.getElementById('helpPanel');
+    if (panel && panel.classList.contains('open')) {
+      BDA.toggleHelp();
+    }
+  }
 });
 
-// Mobile state strip toggle
-if (window.innerWidth <= 640) {
-  document.querySelector('.state-wrap').style.display = 'none';
-  document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
-}
-
-// Tooltip system
-const tooltipPopup = document.createElement('div');
-tooltipPopup.className = 'tooltip-popup';
-document.body.appendChild(tooltipPopup);
-
-document.querySelectorAll('.tooltip').forEach(el => {
-  el.addEventListener('mouseenter', (e) => {
-    const text = el.getAttribute('data-tooltip');
-    tooltipPopup.textContent = text;
-    tooltipPopup.classList.add('visible');
-    const rect = el.getBoundingClientRect();
-    const popupRect = tooltipPopup.getBoundingClientRect();
-    let top = rect.top - popupRect.height - 8;
-    let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
-    left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
-    if (top < 10) top = rect.bottom + 8;
-    tooltipPopup.style.top = top + 'px';
-    tooltipPopup.style.left = left + 'px';
-  });
-  el.addEventListener('mouseleave', () => {
-    tooltipPopup.classList.remove('visible');
+document.addEventListener('click', (event) => {
+  document.querySelectorAll('.nav-more').forEach((menu) => {
+    if (!menu.contains(event.target)) {
+      menu.removeAttribute('open');
+    }
   });
 });
 </script>

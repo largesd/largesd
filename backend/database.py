@@ -3,11 +3,15 @@ SQLite database layer for debate system persistence
 """
 import sqlite3
 import json
+import uuid
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 
-from debate_proposal import hydrate_frame_record, serialize_frame_record
+try:
+    from debate_proposal import hydrate_frame_record, serialize_frame_record
+except ModuleNotFoundError:
+    from .debate_proposal import hydrate_frame_record, serialize_frame_record
 
 
 class DebateDatabase:
@@ -227,6 +231,9 @@ class DebateDatabase:
                 confidence REAL DEFAULT 0.0,
                 verdict TEXT DEFAULT 'NO VERDICT',
                 topic_scores TEXT,
+                borderline_rate REAL DEFAULT 0.0,
+                suppression_policy_json TEXT,
+                status TEXT DEFAULT 'valid',
                 FOREIGN KEY (debate_id) REFERENCES debates(debate_id)
             )
         """)
@@ -271,6 +278,36 @@ class DebateDatabase:
             )
         """)
 
+        # Moderation template persistence for admin workflow.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS moderation_templates (
+                template_record_id TEXT PRIMARY KEY,
+                base_template_id TEXT NOT NULL,
+                template_name TEXT NOT NULL,
+                version TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('draft', 'active')),
+                topic_requirements TEXT NOT NULL,
+                toxicity_settings TEXT NOT NULL,
+                pii_settings TEXT NOT NULL,
+                spam_rate_limit_settings TEXT NOT NULL,
+                prompt_injection_settings TEXT NOT NULL,
+                author_user_id TEXT,
+                notes TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                applied_at TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS moderation_template_state (
+                state_id INTEGER PRIMARY KEY CHECK (state_id = 1),
+                active_template_record_id TEXT,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (active_template_record_id) REFERENCES moderation_templates(template_record_id)
+            )
+        """)
+
         # Lightweight schema migrations for older local databases.
         self._ensure_column(cursor, "debates", "user_id", "TEXT")
         self._ensure_column(cursor, "debates", "motion", "TEXT DEFAULT ''")
@@ -285,9 +322,236 @@ class DebateDatabase:
         self._ensure_column(cursor, "snapshots", "frame_id", "TEXT")
         self._ensure_column(cursor, "snapshots", "side_order", "TEXT")
         self._ensure_column(cursor, "snapshots", "overall_scores", "TEXT")
+        self._ensure_column(cursor, "moderation_templates", "notes", "TEXT")
+        self._ensure_column(cursor, "moderation_templates", "applied_at", "TEXT")
+        # Phase 1 snapshot integrity fields
+        self._ensure_column(cursor, "snapshots", "replay_manifest_json", "TEXT")
+        self._ensure_column(cursor, "snapshots", "input_hash_root", "TEXT")
+        self._ensure_column(cursor, "snapshots", "output_hash_root", "TEXT")
+        self._ensure_column(cursor, "snapshots", "recipe_versions_json", "TEXT")
+        # LSD v1.2 gap-closure fields
+        self._ensure_column(cursor, "snapshots", "borderline_rate", "REAL DEFAULT 0.0")
+        self._ensure_column(cursor, "snapshots", "suppression_policy_json", "TEXT")
+        self._ensure_column(cursor, "snapshots", "status", "TEXT DEFAULT 'valid'")
+        self._ensure_column(cursor, "facts", "fact_type", "TEXT DEFAULT 'empirical'")
+        self._ensure_column(cursor, "facts", "normative_provenance", "TEXT")
+        self._ensure_column(cursor, "facts", "operationalization", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "fact_type", "TEXT DEFAULT 'empirical'")
+        self._ensure_column(cursor, "canonical_facts", "normative_provenance", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "operationalization", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "evidence_tier_counts_json", "TEXT")
+        self._ensure_column(cursor, "arguments", "completeness_proxy", "REAL DEFAULT 0.0")
+        self._ensure_column(cursor, "canonical_arguments", "completeness_proxy", "REAL DEFAULT 0.0")
+        self._ensure_column(cursor, "debate_frames", "frame_mode", "TEXT DEFAULT 'single'")
+        self._ensure_column(cursor, "debate_frames", "review_date", "TEXT")
+        self._ensure_column(cursor, "debate_frames", "review_cadence_months", "INTEGER DEFAULT 6")
+        self._ensure_column(cursor, "debate_frames", "emergency_override_reason", "TEXT")
+        self._ensure_column(cursor, "debate_frames", "emergency_override_by", "TEXT")
+        self._ensure_column(cursor, "debate_frames", "governance_decision_id", "TEXT")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS frame_petitions (
+                petition_id TEXT PRIMARY KEY,
+                debate_id TEXT NOT NULL,
+                proposer_user_id TEXT,
+                candidate_frame_json TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+                governance_decision_json TEXT,
+                reviewer_user_id TEXT,
+                reviewed_at TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (debate_id) REFERENCES debates(debate_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_frame_petitions_debate ON frame_petitions(debate_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_frame_petitions_status ON frame_petitions(status)")
+
+        # Debate proposals table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS debate_proposals (
+                proposal_id TEXT PRIMARY KEY,
+                proposer_user_id TEXT NOT NULL,
+                motion TEXT NOT NULL,
+                moderation_criteria TEXT NOT NULL,
+                debate_frame TEXT DEFAULT '',
+                frame_payload_json TEXT DEFAULT '{}',
+                status TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+                decision_reason TEXT,
+                reviewer_user_id TEXT,
+                reviewed_at TEXT,
+                accepted_debate_id TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (proposer_user_id) REFERENCES users(user_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_status ON debate_proposals(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_proposer ON debate_proposals(proposer_user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_created ON debate_proposals(created_at)")
+
+        # Ensure singleton moderation template pointer exists.
+        now = datetime.now().isoformat()
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO moderation_template_state
+            (state_id, active_template_record_id, updated_at)
+            VALUES (1, NULL, ?)
+            """,
+            (now,),
+        )
+
+        # Seed a default active template if no active pointer is present.
+        cursor.execute(
+            "SELECT active_template_record_id FROM moderation_template_state WHERE state_id = 1"
+        )
+        state_row = cursor.fetchone()
+        active_id = state_row["active_template_record_id"] if state_row else None
+        active_exists = False
+        if active_id:
+            cursor.execute(
+                "SELECT template_record_id FROM moderation_templates WHERE template_record_id = ?",
+                (active_id,),
+            )
+            active_exists = cursor.fetchone() is not None
+
+        if not active_exists:
+            defaults = self._default_moderation_template_settings()
+            template_record_id = f"modtpl_{uuid.uuid4().hex[:12]}"
+            cursor.execute(
+                """
+                INSERT INTO moderation_templates
+                (template_record_id, base_template_id, template_name, version, status,
+                 topic_requirements, toxicity_settings, pii_settings, spam_rate_limit_settings,
+                 prompt_injection_settings, author_user_id, notes, created_at, updated_at, applied_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    template_record_id,
+                    "standard_civility",
+                    "Standard Civility + PII Guard",
+                    "1.0.0",
+                    "active",
+                    json.dumps(defaults["topic_requirements"]),
+                    json.dumps(defaults["toxicity_settings"]),
+                    json.dumps(defaults["pii_settings"]),
+                    json.dumps(defaults["spam_rate_limit_settings"]),
+                    json.dumps(defaults["prompt_injection_settings"]),
+                    "system",
+                    "Seeded default template",
+                    now,
+                    now,
+                    now,
+                ),
+            )
+            cursor.execute(
+                """
+                UPDATE moderation_template_state
+                SET active_template_record_id = ?, updated_at = ?
+                WHERE state_id = 1
+                """,
+                (template_record_id, now),
+            )
         
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def _default_moderation_template_settings() -> Dict[str, Dict[str, Any]]:
+        return {
+            "topic_requirements": {
+                "required_keywords": [],
+                "relevance_threshold": "moderate",
+                "enforce_scope": True,
+            },
+            "toxicity_settings": {
+                "sensitivity_level": 3,
+                "block_personal_attacks": True,
+                "block_hate_speech": True,
+                "block_threats": True,
+                "block_sexual_harassment": True,
+                "block_mild_profanity": False,
+            },
+            "pii_settings": {
+                "detect_email": True,
+                "detect_phone": True,
+                "detect_address": True,
+                "detect_full_names": False,
+                "detect_social_handles": False,
+                "action": "block",
+            },
+            "spam_rate_limit_settings": {
+                "min_length": 50,
+                "max_length": 5000,
+                "flood_threshold_per_hour": 10,
+                "duplicate_detection": True,
+                "rate_limiting": True,
+            },
+            "prompt_injection_settings": {
+                "enabled": True,
+                "block_markdown_hiding": True,
+                "custom_patterns": [],
+            },
+        }
+
+    @staticmethod
+    def _coerce_json_field(raw_value: Any, fallback: Any) -> Any:
+        if raw_value is None:
+            return fallback
+        if isinstance(raw_value, (dict, list)):
+            return raw_value
+        if isinstance(raw_value, str):
+            try:
+                return json.loads(raw_value)
+            except json.JSONDecodeError:
+                return fallback
+        return fallback
+
+    def _serialize_moderation_template_row(
+        self,
+        row: sqlite3.Row | Dict[str, Any],
+        current_active_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        data = dict(row)
+        template_record_id = data["template_record_id"]
+        is_current = bool(current_active_id and template_record_id == current_active_id)
+        raw_status = data.get("status", "draft")
+        if is_current:
+            status = "active"
+        elif raw_status == "active":
+            status = "applied"
+        else:
+            status = "draft"
+
+        defaults = self._default_moderation_template_settings()
+        return {
+            "template_record_id": template_record_id,
+            "base_template_id": data.get("base_template_id", "standard_civility"),
+            "template_name": data.get("template_name", ""),
+            "version": data.get("version", ""),
+            "status": status,
+            "raw_status": raw_status,
+            "is_current": is_current,
+            "topic_requirements": self._coerce_json_field(
+                data.get("topic_requirements"), defaults["topic_requirements"]
+            ),
+            "toxicity_settings": self._coerce_json_field(
+                data.get("toxicity_settings"), defaults["toxicity_settings"]
+            ),
+            "pii_settings": self._coerce_json_field(
+                data.get("pii_settings"), defaults["pii_settings"]
+            ),
+            "spam_rate_limit_settings": self._coerce_json_field(
+                data.get("spam_rate_limit_settings"), defaults["spam_rate_limit_settings"]
+            ),
+            "prompt_injection_settings": self._coerce_json_field(
+                data.get("prompt_injection_settings"), defaults["prompt_injection_settings"]
+            ),
+            "author_user_id": data.get("author_user_id"),
+            "notes": data.get("notes") or "",
+            "created_at": data.get("created_at"),
+            "updated_at": data.get("updated_at"),
+            "applied_at": data.get("applied_at"),
+        }
     
     # Debate operations
     def save_debate(self, debate_data: Dict[str, Any]):
@@ -333,8 +597,10 @@ class DebateDatabase:
             INSERT OR REPLACE INTO debate_frames
             (frame_id, debate_id, version, stage, label, motion, frame_summary,
              sides, evaluation_criteria, definitions, scope_constraints, notes,
-             supersedes_frame_id, framing_debate_id, created_at, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             supersedes_frame_id, framing_debate_id, created_at, is_active,
+             frame_mode, review_date, review_cadence_months, emergency_override_reason,
+             emergency_override_by, governance_decision_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             serialized['frame_id'],
             serialized['debate_id'],
@@ -352,6 +618,12 @@ class DebateDatabase:
             serialized['framing_debate_id'],
             serialized['created_at'],
             serialized['is_active'],
+            serialized.get('frame_mode', 'single'),
+            serialized.get('review_date'),
+            serialized.get('review_cadence_months', 6),
+            serialized.get('emergency_override_reason'),
+            serialized.get('emergency_override_by'),
+            serialized.get('governance_decision_id'),
         ))
         conn.commit()
         conn.close()
@@ -410,6 +682,49 @@ class DebateDatabase:
         rows = cursor.fetchall()
         conn.close()
         return [hydrate_frame_record(dict(row)) for row in rows]
+
+    def update_frame_review_schedule(
+        self,
+        debate_id: str,
+        review_date: Optional[str],
+        review_cadence_months: int,
+    ):
+        """Update review cadence metadata for active frame(s) in a debate."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE debate_frames
+            SET review_date = ?, review_cadence_months = ?
+            WHERE debate_id = ? AND is_active = 1
+            """,
+            (review_date, review_cadence_months, debate_id),
+        )
+        conn.commit()
+        conn.close()
+
+    def apply_emergency_override(
+        self,
+        frame_id: str,
+        reason: str,
+        by_user_id: Optional[str],
+        governance_decision_id: Optional[str] = None,
+    ):
+        """Attach emergency override metadata to a frame record."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE debate_frames
+            SET emergency_override_reason = ?,
+                emergency_override_by = ?,
+                governance_decision_id = COALESCE(?, governance_decision_id)
+            WHERE frame_id = ?
+            """,
+            (reason, by_user_id, governance_decision_id, frame_id),
+        )
+        conn.commit()
+        conn.close()
     
     # Post operations
     def save_post(self, post_data: Dict[str, Any]):
@@ -543,6 +858,21 @@ class DebateDatabase:
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
+
+    def get_topic(self, topic_id: str, debate_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get one topic, optionally scoped to a debate."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if debate_id:
+            cursor.execute(
+                "SELECT * FROM topics WHERE topic_id = ? AND debate_id = ?",
+                (topic_id, debate_id),
+            )
+        else:
+            cursor.execute("SELECT * FROM topics WHERE topic_id = ?", (topic_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
     
     # Canonical fact operations
     def save_canonical_fact(self, fact_data: Dict[str, Any]):
@@ -552,8 +882,9 @@ class DebateDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO canonical_facts
             (canon_fact_id, debate_id, frame_id, topic_id, side, canon_fact_text, member_fact_ids,
-             p_true, provenance_links, referenced_by_au_ids, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             p_true, provenance_links, referenced_by_au_ids, fact_type, normative_provenance,
+             operationalization, evidence_tier_counts_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fact_data['canon_fact_id'],
             fact_data['debate_id'],
@@ -565,6 +896,10 @@ class DebateDatabase:
             fact_data.get('p_true', 0.5),
             json.dumps(fact_data.get('provenance_links', [])),
             json.dumps(fact_data.get('referenced_by_au_ids', [])),
+            fact_data.get('fact_type', 'empirical'),
+            fact_data.get('normative_provenance'),
+            fact_data.get('operationalization'),
+            json.dumps(fact_data.get('evidence_tier_counts', {})),
             fact_data['created_at']
         ))
         conn.commit()
@@ -603,8 +938,8 @@ class DebateDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO canonical_arguments
             (canon_arg_id, debate_id, frame_id, topic_id, side, inference_text, supporting_facts,
-             member_au_ids, provenance_links, reasoning_score, reasoning_iqr, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             member_au_ids, provenance_links, reasoning_score, reasoning_iqr, completeness_proxy, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             arg_data['canon_arg_id'],
             arg_data['debate_id'],
@@ -617,6 +952,7 @@ class DebateDatabase:
             json.dumps(arg_data.get('provenance_links', [])),
             arg_data.get('reasoning_score', 0.5),
             arg_data.get('reasoning_iqr', 0.0),
+            arg_data.get('completeness_proxy', 0.0),
             arg_data['created_at']
         ))
         conn.commit()
@@ -649,16 +985,28 @@ class DebateDatabase:
     
     # Snapshot operations
     def save_snapshot(self, snapshot_data: Dict[str, Any]):
-        """Save a snapshot"""
+        """Save a snapshot (append-only; rejects duplicate snapshot_id)."""
         conn = self._get_connection()
         cursor = conn.cursor()
+        # Enforce append-only: reject duplicate snapshot_id
+        cursor.execute(
+            "SELECT 1 FROM snapshots WHERE snapshot_id = ?",
+            (snapshot_data['snapshot_id'],)
+        )
+        if cursor.fetchone() is not None:
+            conn.close()
+            raise ValueError(
+                f"Snapshot {snapshot_data['snapshot_id']} already exists. "
+                "Snapshots are append-only."
+            )
         cursor.execute("""
-            INSERT OR REPLACE INTO snapshots
+            INSERT INTO snapshots
             (snapshot_id, debate_id, frame_id, timestamp, trigger_type, template_name, template_version,
              allowed_count, blocked_count, block_reasons, side_order, overall_scores,
              overall_for, overall_against, margin_d, ci_d_lower, ci_d_upper, confidence,
-             verdict, topic_scores)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             verdict, topic_scores, replay_manifest_json, input_hash_root, output_hash_root,
+             recipe_versions_json, borderline_rate, suppression_policy_json, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             snapshot_data['snapshot_id'],
             snapshot_data['debate_id'],
@@ -679,7 +1027,14 @@ class DebateDatabase:
             snapshot_data.get('ci_d_upper', 0.1),
             snapshot_data.get('confidence', 0.0),
             snapshot_data.get('verdict', 'NO VERDICT'),
-            json.dumps(snapshot_data.get('topic_scores', {}))
+            json.dumps(snapshot_data.get('topic_scores', {})),
+            json.dumps(snapshot_data.get('replay_manifest_json', {})),
+            snapshot_data.get('input_hash_root'),
+            snapshot_data.get('output_hash_root'),
+            json.dumps(snapshot_data.get('recipe_versions_json', {})),
+            snapshot_data.get('borderline_rate', 0.0),
+            json.dumps(snapshot_data.get('suppression_policy_json', {})),
+            snapshot_data.get('status', 'valid'),
         ))
         conn.commit()
         conn.close()
@@ -721,6 +1076,26 @@ class DebateDatabase:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+
+    def get_snapshot_by_id(self, snapshot_id: str) -> Optional[Dict[str, Any]]:
+        """Get a snapshot by id."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM snapshots WHERE snapshot_id = ?", (snapshot_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def update_snapshot_status(self, snapshot_id: str, status: str):
+        """Update additive snapshot status metadata."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE snapshots SET status = ? WHERE snapshot_id = ?",
+            (status, snapshot_id),
+        )
+        conn.commit()
+        conn.close()
     
     # Audit operations
     def save_audit(self, audit_data: Dict[str, Any]):
@@ -830,3 +1205,459 @@ class DebateDatabase:
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+
+    # Moderation template operations
+    def create_moderation_template_version(
+        self,
+        *,
+        base_template_id: str,
+        template_name: str,
+        version: str,
+        status: str,
+        topic_requirements: Dict[str, Any],
+        toxicity_settings: Dict[str, Any],
+        pii_settings: Dict[str, Any],
+        spam_rate_limit_settings: Dict[str, Any],
+        prompt_injection_settings: Dict[str, Any],
+        author_user_id: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a new moderation template record."""
+        if status not in {"draft", "active"}:
+            raise ValueError("status must be 'draft' or 'active'")
+
+        template_record_id = f"modtpl_{uuid.uuid4().hex[:12]}"
+        now = datetime.now().isoformat()
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO moderation_templates
+            (template_record_id, base_template_id, template_name, version, status,
+             topic_requirements, toxicity_settings, pii_settings, spam_rate_limit_settings,
+             prompt_injection_settings, author_user_id, notes, created_at, updated_at, applied_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                template_record_id,
+                base_template_id,
+                template_name,
+                version,
+                status,
+                json.dumps(topic_requirements),
+                json.dumps(toxicity_settings),
+                json.dumps(pii_settings),
+                json.dumps(spam_rate_limit_settings),
+                json.dumps(prompt_injection_settings),
+                author_user_id,
+                notes or "",
+                now,
+                now,
+                now if status == "active" else None,
+            ),
+        )
+
+        if status == "active":
+            cursor.execute(
+                """
+                UPDATE moderation_template_state
+                SET active_template_record_id = ?, updated_at = ?
+                WHERE state_id = 1
+                """,
+                (template_record_id, now),
+            )
+
+        conn.commit()
+        conn.close()
+
+        row = self.get_moderation_template_by_id(template_record_id)
+        if not row:
+            raise RuntimeError("Failed to create moderation template record")
+        return row
+
+    def get_moderation_template_by_id(self, template_record_id: str) -> Optional[Dict[str, Any]]:
+        """Get one moderation template record by id."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT active_template_record_id FROM moderation_template_state WHERE state_id = 1"
+        )
+        state_row = cursor.fetchone()
+        active_id = state_row["active_template_record_id"] if state_row else None
+
+        cursor.execute(
+            "SELECT * FROM moderation_templates WHERE template_record_id = ?",
+            (template_record_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return self._serialize_moderation_template_row(row, active_id) if row else None
+
+    def activate_moderation_template(
+        self,
+        template_record_id: str,
+        *,
+        author_user_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Mark an existing template record as active and update the pointer."""
+        now = datetime.now().isoformat()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            UPDATE moderation_templates
+            SET status = 'active',
+                updated_at = ?,
+                applied_at = COALESCE(applied_at, ?),
+                author_user_id = COALESCE(?, author_user_id)
+            WHERE template_record_id = ?
+            """,
+            (now, now, author_user_id, template_record_id),
+        )
+
+        if cursor.rowcount == 0:
+            conn.close()
+            return None
+
+        cursor.execute(
+            """
+            UPDATE moderation_template_state
+            SET active_template_record_id = ?, updated_at = ?
+            WHERE state_id = 1
+            """,
+            (template_record_id, now),
+        )
+
+        conn.commit()
+        conn.close()
+        return self.get_moderation_template_by_id(template_record_id)
+
+    def get_active_moderation_template(self) -> Optional[Dict[str, Any]]:
+        """Return the currently active moderation template record."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT active_template_record_id FROM moderation_template_state WHERE state_id = 1"
+        )
+        state_row = cursor.fetchone()
+        active_id = state_row["active_template_record_id"] if state_row else None
+        if not active_id:
+            conn.close()
+            return None
+
+        cursor.execute(
+            "SELECT * FROM moderation_templates WHERE template_record_id = ?",
+            (active_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return self._serialize_moderation_template_row(row, active_id) if row else None
+
+    def get_moderation_template_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return moderation template records from newest to oldest."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT active_template_record_id FROM moderation_template_state WHERE state_id = 1"
+        )
+        state_row = cursor.fetchone()
+        active_id = state_row["active_template_record_id"] if state_row else None
+
+        cursor.execute(
+            """
+            SELECT * FROM moderation_templates
+            ORDER BY datetime(COALESCE(applied_at, created_at)) DESC, datetime(created_at) DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [self._serialize_moderation_template_row(row, active_id) for row in rows]
+
+    def get_latest_snapshot_any(self) -> Optional[Dict[str, Any]]:
+        """Get the latest snapshot across all debates."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @staticmethod
+    def _block_reason_description(reason: str) -> str:
+        descriptions = {
+            "off_topic": "Post does not relate to the debate scope or resolution.",
+            "pii": "Personally identifiable information detected.",
+            "spam": "Duplicate or flooding behavior detected.",
+            "harassment": "Harassment or personal attack detected.",
+            "toxicity": "Toxic or abusive language detected.",
+            "prompt_injection": "Prompt-manipulation attempt detected.",
+            "length": "Post violated length constraints.",
+        }
+        return descriptions.get(reason.lower(), "Moderation rule triggered.")
+
+    # Debate proposal operations
+    def save_debate_proposal(self, proposal_data: Dict[str, Any]):
+        """Save a debate proposal"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO debate_proposals
+            (proposal_id, proposer_user_id, motion, moderation_criteria, debate_frame,
+             frame_payload_json, status, decision_reason, reviewer_user_id, reviewed_at,
+             accepted_debate_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            proposal_data['proposal_id'],
+            proposal_data['proposer_user_id'],
+            proposal_data['motion'],
+            proposal_data.get('moderation_criteria', ''),
+            proposal_data.get('debate_frame', ''),
+            json.dumps(proposal_data.get('frame_payload_json', {})),
+            proposal_data.get('status', 'pending'),
+            proposal_data.get('decision_reason'),
+            proposal_data.get('reviewer_user_id'),
+            proposal_data.get('reviewed_at'),
+            proposal_data.get('accepted_debate_id'),
+            proposal_data['created_at'],
+            proposal_data['updated_at']
+        ))
+        conn.commit()
+        conn.close()
+
+    def get_debate_proposal(self, proposal_id: str) -> Optional[Dict[str, Any]]:
+        """Get a debate proposal by ID"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM debate_proposals WHERE proposal_id = ?", (proposal_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        proposal = dict(row)
+        try:
+            proposal['frame_payload_json'] = json.loads(proposal.get('frame_payload_json', '{}') or '{}')
+        except json.JSONDecodeError:
+            proposal['frame_payload_json'] = {}
+        return proposal
+
+    def get_debate_proposals_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all proposals submitted by a user"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM debate_proposals WHERE proposer_user_id = ? ORDER BY created_at DESC",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        result = []
+        for row in rows:
+            proposal = dict(row)
+            try:
+                proposal['frame_payload_json'] = json.loads(proposal.get('frame_payload_json', '{}') or '{}')
+            except json.JSONDecodeError:
+                proposal['frame_payload_json'] = {}
+            result.append(proposal)
+        return result
+
+    def get_debate_proposals_by_status(self, status: Optional[str] = None,
+                                        limit: int = 100) -> List[Dict[str, Any]]:
+        """Get proposals filtered by status"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                "SELECT * FROM debate_proposals WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                (status, limit)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM debate_proposals ORDER BY created_at DESC LIMIT ?",
+                (limit,)
+            )
+        rows = cursor.fetchall()
+        conn.close()
+        result = []
+        for row in rows:
+            proposal = dict(row)
+            try:
+                proposal['frame_payload_json'] = json.loads(proposal.get('frame_payload_json', '{}') or '{}')
+            except json.JSONDecodeError:
+                proposal['frame_payload_json'] = {}
+            result.append(proposal)
+        return result
+
+    def update_debate_proposal_status(self, proposal_id: str, status: str,
+                                       decision_reason: Optional[str] = None,
+                                       reviewer_user_id: Optional[str] = None,
+                                       accepted_debate_id: Optional[str] = None):
+        """Update proposal status with decision info"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute("""
+            UPDATE debate_proposals
+            SET status = ?, decision_reason = ?, reviewer_user_id = ?,
+                reviewed_at = ?, accepted_debate_id = ?, updated_at = ?
+            WHERE proposal_id = ?
+        """, (status, decision_reason, reviewer_user_id, now, accepted_debate_id, now, proposal_id))
+        conn.commit()
+        conn.close()
+
+    # Frame petition operations
+    def create_frame_petition(
+        self,
+        debate_id: str,
+        proposer_user_id: Optional[str],
+        candidate_frame: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Create a public frame petition for governance review."""
+        petition_id = f"frpet_{uuid.uuid4().hex[:12]}"
+        now = datetime.now().isoformat()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO frame_petitions
+            (petition_id, debate_id, proposer_user_id, candidate_frame_json, status,
+             governance_decision_json, reviewer_user_id, reviewed_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                petition_id,
+                debate_id,
+                proposer_user_id,
+                json.dumps(candidate_frame),
+                "pending",
+                None,
+                None,
+                None,
+                now,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return self.get_frame_petition(petition_id) or {}
+
+    def get_frame_petition(self, petition_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM frame_petitions WHERE petition_id = ?", (petition_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return self._serialize_frame_petition_row(row)
+
+    def get_frame_petitions(self, debate_id: Optional[str] = None,
+                            status: Optional[str] = None) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        query = "SELECT * FROM frame_petitions WHERE 1=1"
+        params: List[Any] = []
+        if debate_id:
+            query += " AND debate_id = ?"
+            params.append(debate_id)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY datetime(created_at) DESC"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        return [self._serialize_frame_petition_row(row) for row in rows]
+
+    def update_frame_petition_status(
+        self,
+        petition_id: str,
+        status: str,
+        governance_decision: Dict[str, Any],
+        reviewer_user_id: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        now = datetime.now().isoformat()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE frame_petitions
+            SET status = ?, governance_decision_json = ?, reviewer_user_id = ?, reviewed_at = ?
+            WHERE petition_id = ?
+            """,
+            (status, json.dumps(governance_decision), reviewer_user_id, now, petition_id),
+        )
+        conn.commit()
+        conn.close()
+        return self.get_frame_petition(petition_id)
+
+    @staticmethod
+    def _serialize_frame_petition_row(row: sqlite3.Row | Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(row)
+        return {
+            "petition_id": data["petition_id"],
+            "debate_id": data["debate_id"],
+            "proposer_user_id": data.get("proposer_user_id"),
+            "candidate_frame": DebateDatabase._coerce_json_field(
+                data.get("candidate_frame_json"), {}
+            ),
+            "status": data.get("status", "pending"),
+            "governance_decision": DebateDatabase._coerce_json_field(
+                data.get("governance_decision_json"), {}
+            ),
+            "reviewer_user_id": data.get("reviewer_user_id"),
+            "reviewed_at": data.get("reviewed_at"),
+            "created_at": data.get("created_at"),
+        }
+
+    def get_moderation_outcome_summary(self, debate_id: Optional[str] = None) -> Dict[str, Any]:
+        """Return latest moderation outcome summary for admin dashboards."""
+        snapshot = self.get_latest_snapshot(debate_id) if debate_id else self.get_latest_snapshot_any()
+        if not snapshot:
+            return {
+                "snapshot_id": None,
+                "debate_id": debate_id,
+                "allowed_count": 0,
+                "blocked_count": 0,
+            "block_rate": 0.0,
+            "top_reason": None,
+            "block_reasons": [],
+            "borderline_rate": 0.0,
+            "suppression_policy": {"k": 5, "affected_buckets": [], "affected_bucket_count": 0},
+        }
+
+        raw_reasons = self._coerce_json_field(snapshot.get("block_reasons"), {})
+        if not isinstance(raw_reasons, dict):
+            raw_reasons = {}
+        sorted_reasons = sorted(raw_reasons.items(), key=lambda pair: pair[1], reverse=True)
+
+        blocked_count = int(snapshot.get("blocked_count") or 0)
+        allowed_count = int(snapshot.get("allowed_count") or 0)
+        total = allowed_count + blocked_count
+        block_rate = (blocked_count / total) if total > 0 else 0.0
+
+        reason_rows = []
+        for reason, count in sorted_reasons:
+            percentage = (count / blocked_count * 100.0) if blocked_count > 0 else 0.0
+            reason_rows.append({
+                "reason": reason,
+                "count": int(count),
+                "percentage": round(percentage, 2),
+                "description": self._block_reason_description(reason),
+            })
+
+        return {
+            "snapshot_id": snapshot.get("snapshot_id"),
+            "debate_id": snapshot.get("debate_id"),
+            "allowed_count": allowed_count,
+            "blocked_count": blocked_count,
+            "block_rate": round(block_rate, 4),
+            "top_reason": reason_rows[0]["reason"] if reason_rows else None,
+            "block_reasons": reason_rows,
+            "borderline_rate": snapshot.get("borderline_rate", 0.0) or 0.0,
+            "suppression_policy": self._coerce_json_field(
+                snapshot.get("suppression_policy_json"), {}
+            ),
+        }

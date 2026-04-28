@@ -1,274 +1,221 @@
-# Blind Debate Adjudicator
+# Blind Debate Adjudicator (`debate_system`)
 
-A fully functional prototype of the **Blind LLM-Adjudicated Debate System** based on the Medium Scale Discussion (MSD) specification.
+A v3 prototype for **identity-blind, auditable debate adjudication**.
 
-> **📢 Version 2 Available!** See [README_v2.md](README_v2.md) for the enhanced implementation with:
-> - Dynamic topic extraction
-> - Real span extraction with traceability
-> - FACT and ARGUMENT canonicalization
-> - Real multi-judge LLM evaluation
-> - Full audit suite (extraction stability, side-label symmetry, relevance sensitivity)
-> - SQLite persistence
->
-> Run v2: `./start.sh --v2`
+The system ingests structured arguments, applies visible moderation rules, builds canonical fact/argument layers, scores each side with multi-judge evaluation, and produces immutable snapshots with audits.
 
-## Features
+## What This Repository Implements
 
-### Core System
-- **Identity Blindness**: No usernames, profiles, likes, or social signals
-- **Visible Modulation**: Transparent, versioned moderation rules
-- **FACT Layer**: Atomic facts with P(true) from agentic fact-checking
-- **ARGUMENT Layer**: Structured arguments (Facts → Inference)
-- **Canonicalization**: Deduplication of facts and arguments
-- **Topic Geometry**: Bounded topics with neutrality enforcement
+- **Identity-blind public surfaces** (no likes/profiles/reputation signals in debate views)
+- **JWT auth + per-user debate session context**
+- **Debate proposal workflow** (user submission -> admin accept/reject)
+- **Versioned moderation templates** with draft/apply history
+- **Snapshot pipeline**:
+  - post modulation
+  - extraction and canonicalization
+  - fact checking (OFFLINE or ONLINE_ALLOWLIST)
+  - scoring (Factuality, Reasoning, Coverage, Quality)
+  - verdict with confidence interval logic
+- **Governance endpoints** (frames, changelog, appeals, judge pool, fairness summaries)
+- **Snapshot integrity metadata** (`replay_manifest`, input/output hash roots, recipe versions)
+- **Optional GitHub publication** of consolidated results JSON
+- **Email ingestion daemon** for processing structured email submissions
 
-### Scoring System
-- **Factuality (F)**: Mean P(fact true) across canonical facts
-- **Reasoning (Reason)**: Median strength of inferences
-- **Coverage (Cov)**: Weighted proportion of opposing arguments addressed
-- **Quality (Q)**: Geometric mean of F × Reason × Cov
-- **Overall Score**: Topic-relevance-weighted sum
-- **Margin (D)**: FOR − AGAINST difference
-- **Verdict**: Statistical separability from replicates
+## Architecture At A Glance
 
-### Fact Checking
-Two modes per specification:
-- **OFFLINE**: Neutral results (p=0.5, confidence=0)
-- **ONLINE_ALLOWLIST**: Deterministic fact-checking with simulated evidence
-
-Features:
-- SHA256 claim normalization
-- Immutable caching
-- Versioned thresholds
-- Deterministic verdict mapping
-
-## Quick Start
-
-Prefer the new agentic workflow for day-to-day work:
-
-```bash
-./wf bootstrap --goal "Improve debate_system through human-AI checkpoints"
-./wf status
-./wf resume --human-note "system design approved"
+```
+Participants -> Post Submission (API or Email)
+             -> Modulation Engine (versioned template)
+             -> Extraction + Canonicalization
+             -> Fact Check Layer
+             -> Multi-judge Scoring
+             -> Immutable Snapshot + Audits
+             -> Optional GitHub publish (consolidated_results.json)
+             -> Frontend reads live API and/or GitHub cache
 ```
 
-The workflow creates scaffold summaries in `workflow_state/`, logs human prompts, and advances one phase at a time with explicit checkpoints.
+## Project Layout
 
-See [WORKFLOW.md](WORKFLOW.md) for the agentic process and [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) for the lower-level execution commands used underneath it.
+- `backend/app_v3.py`: Flask API (auth, debates, snapshots, governance, admin)
+- `backend/debate_engine_v2.py`: core orchestration pipeline
+- `backend/database.py`, `backend/database_v3.py`: SQLite schema + v3 extensions
+- `backend/modulation.py`: built-in moderation templates and rule engine
+- `backend/scoring_engine.py`: scoring, replicates, verdict logic
+- `backend/email_processor.py`: IMAP -> parse -> snapshot -> GitHub publish loop
+- `backend/published_results.py`: consolidated JSON bundle builder
+- `frontend/`: UI pages and shared JS
+- `frontend/static/js/data_bridge.js`: GitHub-cached read mode + email submission bridge
+- `acceptance/run_ui_acceptance.py`: browser acceptance suite
 
-### Installation
+## Quick Start (Local API Development)
+
+### 1. Install
 
 ```bash
-# Navigate to the project directory
 cd debate_system
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install the browser used by the UI acceptance suite
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-### Start the Server
+### 2. Start Server
 
 ```bash
-# Start with default settings (mock LLM - no API key needed)
-python start_server.py
-
-# Or with custom options
-python start_server.py --port 8080 --fact-mode ONLINE_ALLOWLIST
-
-# With OpenRouter (requires API key)
-export LLM_PROVIDER=openrouter
-export OPENROUTER_API_KEY=sk-or-v1-xxxxxxxx
-python start_server.py
+python start_server.py --host 127.0.0.1 --port 5000
 ```
 
-The server will start at `http://localhost:5000`
-
-### LLM Provider Configuration
-
-The system supports multiple LLM providers:
-
-| Provider | Description | API Key Required |
-|----------|-------------|------------------|
-| `mock` | Deterministic mock responses (default) | No |
-| `openai` | OpenAI API | `OPENAI_API_KEY` |
-| `openrouter` | OpenRouter (single model) | `OPENROUTER_API_KEY` |
-| `openrouter-multi` | OpenRouter (multi-model judges) | `OPENROUTER_API_KEY` |
-
-**Multi-Model Judges (`openrouter-multi`):**
-Instead of using temperature variations on a single model, this uses different models for each judge:
-- Judge 1: Claude 3.5 Sonnet
-- Judge 2: GPT-4o Mini
-- Judge 3: Gemini Flash 1.5
-- Judge 4: Llama 3.1 70B
-- Judge 5: Mistral Large
-
-This provides **true evaluator diversity** per MSD §14.B.
-
-Get an OpenRouter API key at: https://openrouter.ai/keys
-
-### Access the Web Interface
-
-Open your browser and navigate to:
-- **Home**: http://localhost:5000/
-- **New Debate/Post**: http://localhost:5000/new_debate.html
-- **Topics**: http://localhost:5000/topics.html
-- **Verdict**: http://localhost:5000/verdict.html
-- **Audits**: http://localhost:5000/audits.html
-- **Admin**: http://localhost:5000/admin.html
-- **Spec**: http://localhost:5000/about.html
-
-### Acceptance-First UI Testing
-
-This repo now includes a browser-driven acceptance suite based on explicit criteria in `acceptance/ui_debate_flow.json`.
+Or with explicit runtime options:
 
 ```bash
-# Start a temporary v2 server and run the UI acceptance checks
+python start_server.py \
+  --host 127.0.0.1 \
+  --port 5000 \
+  --fact-mode OFFLINE \
+  --llm-provider mock \
+  --num-judges 5
+```
+
+### 3. Validate Health
+
+```bash
+curl http://127.0.0.1:5000/api/health
+```
+
+Expected shape:
+
+```json
+{
+  "status": "healthy",
+  "version": "3.0",
+  "auth_enabled": true,
+  "timestamp": "..."
+}
+```
+
+## Auth + Debate Flow (API)
+
+1. Register: `POST /api/auth/register`
+2. Login: `POST /api/auth/login`
+3. Submit proposal: `POST /api/debate-proposals`
+4. Admin accepts proposal: `POST /api/admin/debate-proposals/{proposal_id}/accept`
+5. Submit posts: `POST /api/debate/posts`
+6. Generate snapshot: `POST /api/debate/snapshot`
+7. Inspect results:
+   - `GET /api/debate/verdict`
+   - `GET /api/debate/topics`
+   - `GET /api/debate/audits`
+   - `GET /api/debate/evidence-targets`
+
+## Frontend Operating Modes
+
+### Mode A: Live API mode (backend-first)
+
+Use local API endpoints for authenticated actions and dynamic state.
+
+### Mode B: GitHub cached mode (DataBridge)
+
+Frontend can read debate state from a published JSON file (`consolidated_results.json`) and generate **email-based** submissions via `mailto:`.
+
+Setup page:
+
+- `frontend/setup.html`
+- Requires:
+  - Raw GitHub URL for consolidated results JSON
+  - Destination email for submissions
+
+## Email + GitHub Publication Workflow
+
+The email processor supports asynchronous ingestion:
+
+1. Poll IMAP inbox
+2. Parse structured submission body (`BDA Submission v1`)
+3. Submit to debate engine
+4. Generate snapshot
+5. Publish updated consolidated JSON to GitHub
+
+Run:
+
+```bash
+python -m backend.email_processor --poll-interval 60
+```
+
+Key env vars for this workflow:
+
+- `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD`
+- `GITHUB_REPO`, `GITHUB_TOKEN`
+- Optional: `GITHUB_BRANCH`, `GITHUB_RESULTS_PATH`
+- Optional: `PROCESSOR_DEST_EMAIL`, `SENDER_WHITELIST`
+
+## LLM and Fact-Check Configuration
+
+From `.env.example`:
+
+- `LLM_PROVIDER`: `mock`, `openai`, `openrouter`, `openrouter-multi`
+- `NUM_JUDGES`: judge count for evaluation replicates
+- `FACT_CHECK_MODE`: `OFFLINE` or `ONLINE_ALLOWLIST`
+- `OPENAI_API_KEY` (if `openai`)
+- `OPENROUTER_API_KEY` (if `openrouter` or `openrouter-multi`)
+
+## Admin Access Policy
+
+`ADMIN_ACCESS_MODE` controls admin endpoints:
+
+- `open`: no auth checks
+- `authenticated`: any logged-in user
+- `restricted`: only users in `ADMIN_USER_EMAILS` / `ADMIN_USER_IDS`
+
+## Testing
+
+### Unit + Fact Check
+
+```bash
+python test_debate_system.py
+python test_fact_check_skill.py
+```
+
+### Manual Scenarios
+
+```bash
+python test_manual.py server-check --base-url http://127.0.0.1:5000
+python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+```
+
+### UI Acceptance
+
+```bash
 python scripts/dev_workflow.py acceptance
 ```
 
-Artifacts are written to `artifacts/acceptance/` with:
-- `ui_acceptance_report.json` for machine-readable pass/fail results
-- `ui_acceptance_report.md` for a human-readable summary
-- `screenshots/` with one browser screenshot per acceptance criterion
+Artifacts:
 
-### Agent While You Sleep
+- `artifacts/acceptance/ui_acceptance_report.json`
+- `artifacts/acceptance/ui_acceptance_report.md`
+- `artifacts/acceptance/screenshots/`
 
-If you want to work from a queue of small, acceptance-checked LSD slices:
+## Core Scoring Concepts
 
-- use the GitHub `LSD Acceptance Slice` issue template
-- use [SLEEP_AGENT_WORKFLOW.md](SLEEP_AGENT_WORKFLOW.md) as the builder/verifier/judge runbook
-- use `.github/workflows/nightly-acceptance.yml` for nightly verification on the default branch
+Per topic-side:
 
-## API Endpoints
+- `F`: factuality from canonical fact `p_true`
+- `Reason`: median judge reasoning score
+- `Cov`: how well arguments address opposing leverage
+- `Q = (F * Reason * Cov)^(1/3)`
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check |
-| `/api/debate` | GET | Get current debate info |
-| `/api/debate` | POST | Create new debate |
-| `/api/debate/posts` | POST | Submit a post |
-| `/api/debate/snapshot` | GET | Get current snapshot |
-| `/api/debate/snapshot` | POST | Generate new snapshot |
-| `/api/debate/snapshot-history` | GET | Get all snapshots (MSD §16) |
-| `/api/debate/snapshot-diff` | GET | Compare snapshots (MSD §16) |
-| `/api/debate/topics` | GET | Get all topics with scores |
-| `/api/debate/topics/{id}/facts` | GET | Get facts for a topic |
-| `/api/debate/topics/{id}/arguments` | GET | Get arguments for a topic |
-| `/api/debate/topic-lineage` | GET | Topic evolution history |
-| `/api/debate/verdict` | GET | Get verdict data |
-| `/api/debate/audits` | GET | Get audit reports |
-| `/api/debate/evidence-targets` | GET | "What would change this" (MSD §15) |
-| `/api/debate/evidence` | GET | Legacy evidence targets |
-| `/api/debate/modulation-info` | GET | Current modulation template (MSD §3) |
-| `/api/debate/modulation-templates` | GET | List available templates |
-| `/api/debate/audits` | GET | Get audit data |
-| `/api/debate/evidence` | GET | Get evidence targets |
+Debate-level margin:
 
-## Project Structure
+- `D = Overall_FOR - Overall_AGAINST`
+- Verdict is driven by confidence interval behavior and replicate stability.
 
-```
-debate_system/
-├── backend/
-│   ├── app.py              # Flask API server
-│   ├── models.py           # Data models
-│   ├── fact_checker.py     # Fact checking skill
-│   ├── scoring.py          # MSD scoring engine
-│   └── debate_engine.py    # Main orchestration
-├── frontend/
-│   ├── assets/styles.css   # UI styling
-│   ├── index.html          # Home page
-│   ├── topics.html         # Topics listing
-│   ├── topic_t*.html       # Individual topic pages
-│   ├── facts_t*.html       # Fact layer pages
-│   ├── arguments_t*.html   # Argument layer pages
-│   ├── verdict.html        # Verdict display
-│   ├── audits.html         # Audit reports
-│   ├── new_debate.html     # Post submission
-│   ├── admin.html          # Admin configuration
-│   ├── evidence.html       # Evidence targets
-│   └── about.html          # Specification
-├── requirements.txt        # Python dependencies
-├── start_server.py         # Startup script
-└── README.md              # This file
-```
+## Documentation
 
-## How to Use
+- Full docs index: `docs/README.md`
+- Workflow contract: `docs/workflow/WORKFLOW.md`
+- Testing guide: `docs/guides/TESTING.md`
 
-### 1. View Current Debate
-Navigate to the home page to see:
-- Current verdict and confidence
-- Overall FOR/AGAINST scores
-- Snapshot information
-- Moderation template
+## Notes
 
-### 2. Submit a Post
-Go to "New Debate / Post Point":
-1. Select your position (FOR or AGAINST)
-2. Choose a topic area
-3. Enter factual premises (one per line)
-4. State your inference/conclusion
-5. Optionally identify counter-arguments addressed
-6. Click "Submit Post"
-
-Your post will be evaluated by the modulation system and either:
-- **Allowed**: Included in the next snapshot
-- **Blocked**: Excluded with reason
-
-### 3. Generate a Snapshot
-After submitting posts, click "Generate New Snapshot" to:
-- Extract and canonicalize facts
-- Run fact-checking
-- Compute all scores
-- Update the verdict
-
-### 4. Explore Results
-- **Topics**: View all topics with geometry metrics
-- **Verdict**: See detailed scoring and D distribution
-- **Audits**: Check robustness and stability
-- **Evidence**: See what evidence would change the verdict
-
-## Scoring Formulas
-
-### Per Topic-Side:
-```
-F_{t,s} = (1/K) × Σ p_k                 # Factuality
-Reason_{t,s} = median_a(Reason_{t,s,a}) # Reasoning
-Cov_{t,s} = Σ(addressed) / Σ(all)       # Coverage
-Q_{t,s} = (F × Reason × Cov)^(1/3)      # Quality
-```
-
-### Debate Level:
-```
-Overall_s = Σ_t (Rel_t × Q_{t,s})       # Weighted sum
-D = Overall_FOR − Overall_AGAINST       # Margin
-```
-
-### Verdict:
-```
-If CI(D) entirely > 0: FOR wins
-If CI(D) entirely < 0: AGAINST wins
-Else: NO VERDICT
-```
-
-## Requirements Compliance
-
-This implementation meets all requirements from the specification:
-
-- ✅ **Identity-blind**: No usernames, likes, or popularity metrics
-- ✅ **Visible modulation**: Template + version displayed
-- ✅ **Snapshot immutability**: Each snapshot frozen after creation
-- ✅ **Topic geometry audit**: Lineage, drift, coherence, distinctness
-- ✅ **FACT layer**: P(true) and provenance tracking
-- ✅ **ARGUMENT layer**: Reasoning scores and coverage
-- ✅ **Replicate-based verdict**: D distribution + CI(D)
-- ✅ **"What evidence would change this"**: High-leverage targets
-- ✅ **Side-label symmetry audit**: Label flip detection
-- ✅ **Extraction stability reporting**: Overlap distributions
-- ✅ **Evaluator disagreement**: IQR display
-
-## License
-
-This is a prototype implementation for demonstration purposes.
+- `start_server.py` delegates to `start_server_v3.py`.
+- Database defaults to `data/debate_system.db`.
+- For deterministic local development, `LLM_PROVIDER=mock` and `FACT_CHECK_MODE=OFFLINE` are recommended.

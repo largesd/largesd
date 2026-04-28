@@ -3,88 +3,444 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Blind Debate Adjudicator</title>
+  <title>Admin - Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <style>
-    /* Admin-specific layout improvements */
-    .admin-config-grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: 1fr;
-      align-items: start;
+    html.route-auth-pending main {
+      visibility: hidden;
     }
-    @media(min-width:900px) {
-      .admin-config-grid {
-        grid-template-columns: 1fr 1fr;
+
+    .admin-page {
+      --admin-space-block: clamp(var(--space-lg), 2.2vw, var(--space-2xl));
+      --admin-space-section: clamp(var(--space-xl), 3vw, var(--space-3xl));
+    }
+
+    .admin-access-denied {
+      display: none;
+      max-width: 72ch;
+      margin: clamp(var(--space-xl), 3vw, var(--space-3xl)) auto;
+    }
+
+    .admin-page.admin-locked .admin-access-denied {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-page.admin-locked .admin-hero,
+    .admin-page.admin-locked .admin-shell {
+      display: none;
+    }
+
+    .admin-access-denied-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+
+    .admin-hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(var(--space-lg), 2.4vw, var(--space-2xl));
+      border-color: color-mix(in oklch, var(--accent), white 74%);
+      background:
+        linear-gradient(
+          160deg,
+          color-mix(in oklch, var(--surface-accent), white 58%) 0%,
+          var(--surface-raised) 42%,
+          var(--surface-raised) 100%
+        );
+    }
+
+    .admin-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--accent), white 86%) 0%, transparent 56%);
+    }
+
+    .admin-hero-content,
+    .admin-shell {
+      position: relative;
+      z-index: 1;
+    }
+
+    .admin-hero-grid {
+      display: grid;
+      gap: var(--admin-space-block);
+      margin-top: var(--admin-space-block);
+    }
+
+    @media (min-width: 900px) {
+      .admin-hero-grid {
+        grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
       }
     }
+
+    .admin-hero-panel {
+      display: grid;
+      gap: var(--space-sm);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .admin-hero-panel + .admin-hero-panel {
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+      padding-top: var(--space-md);
+    }
+
+    @media (min-width: 900px) {
+      .admin-hero-panel + .admin-hero-panel {
+        border-top: 0;
+        border-left: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+        padding-top: 0;
+        padding-left: var(--space-lg);
+      }
+    }
+
+    .admin-sidebar-card,
     .config-section {
-      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-muted) 18%);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 16px;
-      height: fit-content;
+      padding: var(--space-lg);
+      box-shadow: var(--shadow);
     }
-    .config-section h3 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      color: var(--accent);
+
+    .admin-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .admin-status-tile {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--surface-muted);
+    }
+
+    .admin-status-tile span {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.045em;
       font-weight: 600;
     }
+
+    .admin-status-tile strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.04rem;
+      line-height: 1.2;
+      color: var(--ink-strong);
+    }
+
+    .admin-shell {
+      display: grid;
+      gap: var(--admin-space-block);
+      margin-top: clamp(var(--space-xl), 3vw, var(--space-3xl));
+      align-items: start;
+    }
+
+    @media (min-width: 980px) {
+      .admin-shell {
+        grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      }
+    }
+
+    .admin-sidebar {
+      display: grid;
+      gap: var(--space-lg);
+      align-self: start;
+    }
+
+    @media (min-width: 980px) {
+      .admin-sidebar {
+        position: sticky;
+        top: 96px;
+      }
+    }
+
+    .admin-main {
+      display: grid;
+      gap: var(--admin-space-section);
+      min-width: 0;
+    }
+
+    .admin-sidebar-card {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-sidebar-card h3 {
+      margin: 0;
+    }
+
+    .admin-quicklinks,
+    .admin-flow,
+    .admin-sidebar-list {
+      max-height: none;
+      overflow: visible;
+    }
+
+    .admin-quicklinks {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-quicklink {
+      display: block;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: var(--surface-muted);
+      color: var(--ink-strong);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+
+    .admin-quicklink:hover,
+    .admin-quicklink:focus-visible {
+      border-color: color-mix(in oklch, var(--accent), white 58%);
+      background: color-mix(in oklch, var(--surface-accent), white 48%);
+      color: var(--ink-strong);
+      text-decoration: none;
+      transform: translateX(2px);
+    }
+
+    .admin-quicklink strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 0.84rem;
+      color: var(--ink-strong);
+      font-weight: 650;
+    }
+
+    .admin-quicklink span {
+      display: block;
+      font-size: 0.76rem;
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    .admin-step {
+      scroll-margin-top: 104px;
+      display: grid;
+      gap: var(--space-md);
+      padding-top: var(--space-lg);
+      border: 0;
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-base) 28%);
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .admin-main > .admin-step:first-child {
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    .admin-step-head {
+      display: flex;
+      gap: var(--space-sm) var(--space-lg);
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-bottom: var(--space-sm);
+    }
+
+    .admin-step-head p {
+      max-width: 60ch;
+      margin: 0;
+    }
+
+    .step-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.69rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .step-label::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 82%);
+      flex-shrink: 0;
+    }
+
+    .template-picker {
+      display: grid;
+      gap: var(--space-sm);
+      align-items: end;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      padding: var(--space-md);
+    }
+
+    @media (min-width: 760px) {
+      .template-picker {
+        grid-template-columns: minmax(0, 1.45fr) minmax(170px, 0.85fr) auto;
+      }
+    }
+
+    .template-picker .form-group {
+      margin-bottom: 0;
+    }
+
+    .template-active-indicator {
+      padding-bottom: 0;
+      align-self: center;
+    }
+
+    .template-note {
+      margin-top: var(--space-md);
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      color: var(--ink-default);
+      font-size: 0.84rem;
+    }
+
+    .guardrail-grid {
+      display: grid;
+      gap: var(--admin-space-block);
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 760px) {
+      .guardrail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 1180px) {
+      .guardrail-grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+      }
+
+      .guardrail-grid .config-section:nth-child(1) {
+        grid-column: span 5;
+      }
+
+      .guardrail-grid .config-section:nth-child(2) {
+        grid-column: span 7;
+      }
+
+      .guardrail-grid .config-section:nth-child(n + 3) {
+        grid-column: span 4;
+      }
+    }
+
+    .config-section {
+      display: grid;
+      gap: var(--space-md);
+      align-content: start;
+    }
+
+    .config-section h3 {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      margin-bottom: 0;
+    }
+
+    .config-section h3::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 82%);
+      flex-shrink: 0;
+    }
+
+    .config-intro {
+      margin: 0;
+      font-size: 0.84rem;
+      color: var(--ink-default);
+      max-width: 54ch;
+    }
+
     .config-section h4 {
-      margin: 16px 0 8px 0;
-      font-size: 12px;
-      color: var(--muted);
+      margin: var(--space-sm) 0 0;
+      font-size: 0.74rem;
+      color: var(--ink-soft);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
+
     .checkbox-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      display: grid;
+      gap: var(--space-xs);
     }
+
     .checkbox-group label {
       display: flex;
       align-items: flex-start;
       gap: 8px;
       text-transform: none;
       letter-spacing: normal;
-      font-size: 13px;
-      color: var(--text);
+      font-size: 0.84rem;
+      color: var(--ink-strong);
       cursor: pointer;
-      padding: 6px 8px;
-      border-radius: 8px;
-      transition: background 0.15s;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      transition: background-color 140ms ease;
     }
-    .checkbox-group label:hover {
-      background: rgba(255,255,255,0.04);
+
+    .checkbox-group label:hover,
+    .checkbox-group label:focus-within {
+      background: color-mix(in oklch, var(--surface-accent), white 46%);
     }
+
     .checkbox-group input[type="checkbox"] {
       margin-top: 2px;
       width: auto;
       flex-shrink: 0;
     }
+
     .range-with-labels {
-      margin-top: 8px;
+      margin-top: var(--space-xs);
     }
+
     .range-labels {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 4px;
+      font-size: 0.7rem;
+      color: var(--ink-soft);
+      margin-top: var(--space-2xs);
     }
+
     input[type="range"] {
       width: 100%;
       height: 6px;
       -webkit-appearance: none;
       appearance: none;
       background: var(--line);
-      border-radius: 3px;
-      outline: none;
+      border-radius: 999px;
+      border: 0;
       padding: 0;
     }
+
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
@@ -93,127 +449,450 @@
       background: var(--accent);
       border-radius: 50%;
       cursor: pointer;
-      border: 2px solid var(--bg);
+      border: 2px solid var(--surface-raised);
     }
+
     input[type="range"]::-moz-range-thumb {
       width: 18px;
       height: 18px;
       background: var(--accent);
       border-radius: 50%;
       cursor: pointer;
-      border: 2px solid var(--bg);
+      border: 2px solid var(--surface-raised);
     }
+
+    input[type="range"]:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--accent), white 22%);
+      outline-offset: 2px;
+    }
+
     .action-bar {
-      background: rgba(109,214,255,.06);
-      border: 1px solid rgba(109,214,255,.15);
+      background: color-mix(in oklch, var(--surface-accent), white 45%);
+      border-color: color-mix(in oklch, var(--accent), white 62%);
     }
-    /* Preview grid */
+
+    .apply-actions {
+      display: grid;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .apply-actions .button {
+      justify-content: center;
+      width: 100%;
+    }
+
+    .apply-actions .button.success-action {
+      border-color: color-mix(in oklch, var(--good), white 66%);
+      background: color-mix(in oklch, var(--good), white 88%);
+      color: color-mix(in oklch, var(--good), black 24%);
+    }
+
+    .apply-actions .button.success-action:hover {
+      border-color: color-mix(in oklch, var(--good), white 52%);
+      background: color-mix(in oklch, var(--good), white 82%);
+      color: color-mix(in oklch, var(--good), black 30%);
+    }
+
+    .admin-copy-tight {
+      font-size: 0.84rem;
+      max-width: 68ch;
+    }
+
+    .admin-callout-top {
+      margin-top: var(--space-md);
+    }
+
+    .admin-callout-inline {
+      margin: var(--space-sm) 0;
+      padding: var(--space-sm) var(--space-md);
+    }
+
+    .admin-safe-default {
+      margin: 0;
+      color: var(--ink-default);
+      font-size: 0.8rem;
+    }
+
+    .admin-safe-default strong {
+      color: var(--ink-strong);
+    }
+
+    .admin-form-stack-tight {
+      margin-top: var(--space-sm);
+      margin-bottom: 0;
+    }
+
+    .admin-grid-tight {
+      gap: var(--space-sm);
+    }
+
+    .admin-form-group-tight {
+      margin-bottom: 0;
+    }
+
     .preview-grid {
       display: grid;
-      gap: 12px;
-      margin-top: 12px;
+      gap: var(--admin-space-block);
+      margin-top: var(--space-sm);
     }
-    @media(min-width:600px) {
+
+    @media (min-width: 760px) {
       .preview-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
       }
     }
+
     .preview-box {
-      background: rgba(0,0,0,.2);
-      border-radius: 10px;
-      padding: 14px;
+      background: var(--surface-muted);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      border: 1px solid var(--line);
     }
+
     .preview-box h4 {
-      margin: 0 0 10px 0;
-      font-size: 12px;
+      margin: 0 0 10px;
+      font-size: 0.88rem;
+      line-height: 1.3;
+      font-family: var(--sans);
+      font-weight: 650;
+      color: var(--ink-strong);
+      max-width: 100%;
     }
+
+    .preview-box h4.preview-allowed {
+      color: color-mix(in oklch, var(--good), black 20%);
+    }
+
+    .preview-box h4.preview-blocked {
+      color: color-mix(in oklch, var(--bad), black 18%);
+    }
+
     .preview-box ul {
       margin: 0;
       padding-left: 16px;
-      font-size: 13px;
+      font-size: 0.84rem;
     }
+
     .preview-box li {
       margin-bottom: 6px;
     }
-    .allowed-list li::marker { color: var(--good); }
-    .blocked-list li::marker { color: var(--bad); }
+
+    .allowed-list li::marker {
+      color: color-mix(in oklch, var(--good), black 14%);
+    }
+
+    .blocked-list li::marker {
+      color: color-mix(in oklch, var(--bad), black 14%);
+    }
+
+    .admin-data-stack {
+      display: grid;
+      gap: var(--admin-space-section);
+    }
+
+    .admin-metric-grid {
+      margin-top: 0;
+    }
+
+    .metric-chip strong.metric-good {
+      color: color-mix(in oklch, var(--good), black 18%);
+    }
+
+    .metric-chip strong.metric-bad {
+      color: color-mix(in oklch, var(--bad), black 14%);
+    }
+
+    .admin-subsection-title {
+      margin-top: var(--space-lg);
+    }
+
+    .admin-footnote {
+      display: block;
+      margin-top: var(--space-md);
+    }
+
+    @media (max-width: 820px) {
+      .nav {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        padding: var(--space-sm) var(--space-md);
+      }
+
+      .brand {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .brand-title {
+        font-size: 1.1rem;
+      }
+
+      .brand-subtitle {
+        font-size: 0.72rem;
+      }
+
+      .navlinks {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-start;
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .navlinks {
+        flex-wrap: wrap;
+        overflow: visible;
+        padding-bottom: 0;
+      }
+
+      .admin-page {
+        padding-left: var(--space-md);
+        padding-right: var(--space-md);
+      }
+
+      .admin-status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .admin-quicklink,
+      .checkbox-group label,
+      .apply-actions .button {
+        transition: none;
+      }
+
+      .admin-quicklink:hover,
+      .admin-quicklink:focus-visible {
+        transform: none;
+      }
+    }
   </style>
+  <script>
+    (function gateAdminRouteBeforePaint() {
+      const root = document.documentElement;
+      root.classList.add('route-auth-pending');
+      root.setAttribute('aria-busy', 'true');
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          const next = `${window.location.pathname || '/admin.html'}${window.location.search || ''}${window.location.hash || ''}`;
+          const params = new URLSearchParams();
+          params.set('reason', 'admin-login-required');
+          params.set('next', next);
+          window.location.replace(`login.html?${params.toString()}`);
+        }
+      } catch (error) {
+        window.location.replace('login.html?reason=admin-login-required');
+      }
+    })();
+  </script>
   <script src="static/js/auth.js"></script>
-</HEAD>
+  <script src="static/js/common.js"></script>
+</head>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html" class="active" aria-current="page">Admin</a>
-      <a href="about.html">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
 
-<main>
-
-<!-- Admin Header -->
-<section class="card">
+<main class="admin-page">
+<section class="card admin-access-denied" id="admin-access-denied" aria-live="polite">
   <div class="section-head">
     <div>
-      <h2>Admin: Moderation Configuration</h2>
-      <p class="lede">Configure moderation templates and filtering criteria. Changes are versioned and visible to all users per the Visible Modulation principle.</p>
+      <h2>Admin Access Restricted</h2>
+      <p class="lede" id="admin-access-denied-copy">You are signed in, but this account does not have permission to use admin tools.</p>
     </div>
-    <span class="pill warn">Admin Access</span>
+    <span class="pill bad">Access Denied</span>
   </div>
-  <div class="callout soft" style="margin-top:16px;">
-    This page is configuration-oriented. Current live debate state now appears on <a href="snapshot.html">Snapshot</a>, <a href="audits.html">Audits</a>, and <a href="verdict.html">Verdict</a> instead of in a shared header strip here.
+  <p class="lede" id="admin-access-denied-detail">Use a different account with admin privileges, or ask an existing admin to grant access.</p>
+  <div class="admin-access-denied-actions">
+    <a class="button secondary" href="index.html">Back to Home</a>
+    <a class="button" href="login.html?reason=admin-forbidden&next=%2Fadmin.html">Sign In With Another Account</a>
   </div>
 </section>
 
-<!-- Template Selection -->
-<section class="card">
-  <div class="row" style="align-items: flex-end; gap: 16px; flex-wrap: wrap;">
-    <div class="form-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
-      <label for="template-base">Base Template</label>
-      <select id="template-base" onchange="loadTemplatePreview()">
-        <option value="">Select a template...</option>
-        <option value="standard" selected>Standard Civility + PII Guard</option>
-        <option value="academic">Academic Strict (Citations Required)</option>
-        <option value="minimal">Minimal (Spam/PII Only)</option>
-        <option value="custom">Custom Configuration</option>
-      </select>
+<section class="card admin-hero">
+  <div class="admin-hero-content">
+    <div class="section-head">
+      <div>
+        <h2>Admin: Moderation Configuration</h2>
+        <p class="lede">This page is for shaping what the system will allow, block, or flag in the next snapshot. If you are new here, start with the base template, tune only the guardrails you need, then review the visible preview before applying a new version.</p>
+      </div>
+      <span class="pill warn">Admin Access</span>
     </div>
-    <div class="form-group" style="flex: 1; min-width: 120px; margin-bottom: 0;">
-      <label for="template-version">Version</label>
-      <input type="text" id="template-version" value="3.2.1" placeholder="e.g., 3.2.1" />
+
+    <div class="admin-status-grid">
+      <div class="admin-status-tile">
+        <span>Current Template</span>
+        <strong>Standard Civility</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Active Version</span>
+        <strong class="mono">3.2.1</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Change Scope</span>
+        <strong>Next Snapshot Only</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Audit Visibility</span>
+        <strong>Visible to Users</strong>
+      </div>
     </div>
-    <div style="flex: 0 0 auto; padding-bottom: 4px;">
-      <span class="pill good">Active</span>
+
+    <div class="admin-hero-grid">
+      <div class="admin-hero-panel">
+        <h3>What This Page Controls</h3>
+        <p class="lede admin-copy-tight">Use this screen to set the public moderation posture for debate submissions: on-topic rules, abuse controls, PII handling, spam protection, and prompt-injection defenses.</p>
+        <div class="callout soft admin-callout-top">
+          Current live debate state is intentionally separated out. Use <a href="snapshot.html">Snapshot</a>, <a href="audits.html">Audits</a>, and <a href="verdict.html">Verdict</a> to inspect current outcomes, and use this page to decide what the next moderation version should look like.
+        </div>
+      </div>
+      <div class="admin-hero-panel">
+        <h3>Recommended Flow</h3>
+        <ol class="admin-flow">
+          <li>Choose the closest base template instead of rebuilding from scratch.</li>
+          <li>Adjust only the guardrails that need stricter or looser handling.</li>
+          <li>Review the user-facing preview to confirm the policy reads clearly.</li>
+          <li>Apply a new version only when you are comfortable publishing the rationale.</li>
+        </ol>
+      </div>
     </div>
   </div>
-  <small style="display: block; margin-top: 12px;">Template changes apply to the next snapshot. Existing snapshots remain immutable. All templates are versioned and visible to users.</small>
 </section>
 
-<!-- Configuration Grid -->
-<div class="admin-config-grid">
-  
-  <!-- Column 1 -->
-  <div class="admin-column">
-    
-    <!-- On-Topic Requirements -->
-    <section class="config-section">
+<div class="admin-shell">
+  <aside class="admin-sidebar">
+    <section class="admin-sidebar-card">
+      <h3>Quick Navigation</h3>
+      <div class="admin-quicklinks">
+        <a class="admin-quicklink" href="#template-selection">
+          <strong>Step 1: Base Template</strong>
+          <span>Pick the safest starting point.</span>
+        </a>
+        <a class="admin-quicklink" href="#guardrails">
+          <strong>Step 2: Guardrails</strong>
+          <span>Tune what gets blocked or flagged.</span>
+        </a>
+        <a class="admin-quicklink" href="#preview">
+          <strong>Step 3: User Preview</strong>
+          <span>Check what the policy looks like publicly.</span>
+        </a>
+        <a class="admin-quicklink" href="#history">
+          <strong>Version History</strong>
+          <span>See who changed what.</span>
+        </a>
+        <a class="admin-quicklink" href="#proposal-review">
+          <strong>Proposal Review</strong>
+          <span>Review and accept or reject user-submitted debate proposals.</span>
+        </a>
+        <a class="admin-quicklink" href="#snapshot-audit">
+          <strong>Snapshot Audit</strong>
+          <span>Compare policy with current moderation outcomes.</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="admin-sidebar-card action-bar">
+      <h3>Ready to Publish?</h3>
+      <p class="lede admin-copy-tight">Changes are versioned, visible to users, and only apply to future snapshots. Draft first if you are still calibrating tradeoffs.</p>
+      <div class="callout admin-callout-inline">
+        <small class="admin-safe-default">
+          <strong>Safe default:</strong> keep the standard template, tighten only the categories that are causing false negatives, and verify the preview language before applying.
+        </small>
+      </div>
+      <div class="apply-actions">
+        <button class="button secondary" id="save-draft-btn" onclick="saveDraft()">Save Draft</button>
+        <button class="button success-action" id="apply-template-btn" onclick="applyTemplate()">Apply and Version</button>
+      </div>
+      <p class="notice" id="admin-action-feedback" role="status" aria-live="polite" hidden></p>
+    </section>
+
+    <section class="admin-sidebar-card">
+      <h3>Good First Checks</h3>
+      <ul class="admin-sidebar-list">
+        <li>Would a new moderator understand what changed in under a minute?</li>
+        <li>Is the preview language clear enough for participants to predict moderation outcomes?</li>
+        <li>Are you tightening a rule because of a real moderation issue, not just preference?</li>
+      </ul>
+    </section>
+  </aside>
+
+  <div class="admin-main">
+    <section class="admin-step" id="template-selection">
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Step 1</div>
+          <h3>Choose a Base Template</h3>
+          <p class="lede">Start from an opinionated baseline, then customize only what needs attention. This keeps the moderation posture legible and easier to audit later.</p>
+        </div>
+        <span class="pill good" id="template-current-state">Current template is active</span>
+      </div>
+
+      <div class="template-picker">
+        <div class="form-group admin-form-group-tight">
+          <label for="template-base">Base Template</label>
+          <select id="template-base" onchange="loadTemplatePreview()">
+            <option value="">Select a template...</option>
+            <option value="standard_civility" selected>Standard Civility + PII Guard</option>
+            <option value="strict">Strict Academic</option>
+            <option value="minimal">Minimal (Spam/PII Only)</option>
+            <option value="custom">Custom Configuration</option>
+          </select>
+        </div>
+        <div class="form-group admin-form-group-tight">
+          <label for="template-version">Version</label>
+          <input type="text" id="template-version" value="1.0.0" placeholder="e.g., 1.0.0" />
+        </div>
+        <div class="template-active-indicator">
+          <span class="pill good" id="template-state-pill">Active</span>
+        </div>
+      </div>
+      <div class="template-note">
+        Template changes apply to the next snapshot only. Existing snapshots remain immutable, and each version stays visible in the audit trail.
+      </div>
+    </section>
+
+    <section class="admin-step" id="guardrails">
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Step 2</div>
+          <h3>Tune Guardrails</h3>
+          <p class="lede">These settings define the practical moderation posture a participant experiences. Keep them consistent enough that users can predict outcomes before they post.</p>
+        </div>
+      </div>
+
+      <div class="guardrail-grid">
+        <section class="config-section">
       <h3>On-Topic Requirements</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Define what constitutes on-topic content for this debate.</p>
+      <p class="lede config-intro">Define what constitutes on-topic content for this debate.</p>
       
       <div class="form-group">
         <label for="topic-keywords">Required Keywords/Phrases</label>
@@ -224,9 +903,9 @@
       <div class="form-group">
         <label for="topic-threshold">Relevance Threshold</label>
         <select id="topic-threshold">
-          <option value="strict">Strict — Must directly address resolution</option>
-          <option value="moderate" selected>Moderate — Related to debate scope</option>
-          <option value="permissive">Permissive — Tangential discussion allowed</option>
+          <option value="strict">Strict: must directly address the resolution</option>
+          <option value="moderate" selected>Moderate: related to the debate scope</option>
+          <option value="permissive">Permissive: tangential discussion allowed</option>
         </select>
       </div>
 
@@ -236,64 +915,11 @@
           Enforce scope boundaries from debate definition
         </label>
       </div>
-    </section>
+        </section>
 
-    <!-- PII Restrictions -->
-    <section class="config-section">
-      <h3>PII Restrictions</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Configure personally identifiable information detection.</p>
-      
-      <h4>Detect and Block</h4>
-      <div class="checkbox-group">
-        <label><input type="checkbox" checked /> Email addresses</label>
-        <label><input type="checkbox" checked /> Phone numbers</label>
-        <label><input type="checkbox" checked /> Physical addresses</label>
-        <label><input type="checkbox" /> Full names (pattern-based)</label>
-        <label><input type="checkbox" /> Social media handles</label>
-      </div>
-
-      <div class="form-group" style="margin-top: 12px; margin-bottom: 0;">
-        <label for="pii-action">PII Detection Action</label>
-        <select id="pii-action">
-          <option value="block" selected>Block entire post</option>
-          <option value="redact">Redact PII and allow</option>
-          <option value="flag">Flag for manual review</option>
-        </select>
-      </div>
-    </section>
-
-    <!-- Prompt Injection Protection -->
-    <section class="config-section">
-      <h3>Prompt Injection Protection</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Protect the system from attempts to manipulate LLM adjudication.</p>
-      
-      <div class="checkbox-group">
-        <label>
-          <input type="checkbox" id="injection-protection" checked />
-          Enable prompt injection detection
-        </label>
-        <label>
-          <input type="checkbox" checked />
-          Block markdown/code block hiding attempts
-        </label>
-      </div>
-
-      <div class="form-group" style="margin-top: 12px; margin-bottom: 0;">
-        <label for="injection-patterns">Custom Patterns (one per line)</label>
-        <textarea id="injection-patterns" rows="3" placeholder="ignore previous instructions&#10;system prompt&#10;jailbreak"></textarea>
-        <small>Custom regex patterns or keywords for injection detection.</small>
-      </div>
-    </section>
-
-  </div>
-
-  <!-- Column 2 -->
-  <div class="admin-column">
-
-    <!-- Toxicity / Harassment -->
-    <section class="config-section">
+        <section class="config-section">
       <h3>Toxicity / Harassment / Hate</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Configure content moderation for harmful or abusive material.</p>
+      <p class="lede config-intro">Configure content moderation for harmful or abusive material.</p>
       
       <div class="form-group">
         <label for="toxicity-level">Sensitivity Level</label>
@@ -305,30 +931,52 @@
             <span>Strict</span>
           </div>
         </div>
-        <small>Current: Balanced — Blocks clear harassment, allows vigorous debate</small>
+        <small>Current: Balanced, blocks clear harassment and allows vigorous debate.</small>
       </div>
 
       <h4>Categories to Block</h4>
       <div class="checkbox-group">
-        <label><input type="checkbox" checked /> Personal attacks / ad hominem</label>
-        <label><input type="checkbox" checked /> Hate speech / discrimination</label>
-        <label><input type="checkbox" checked /> Threats or intimidation</label>
-        <label><input type="checkbox" checked /> Sexual harassment</label>
-        <label><input type="checkbox" /> Profanity (mild allowed)</label>
+        <label><input type="checkbox" id="toxicity-block-personal-attacks" checked /> Personal attacks / ad hominem</label>
+        <label><input type="checkbox" id="toxicity-block-hate-speech" checked /> Hate speech / discrimination</label>
+        <label><input type="checkbox" id="toxicity-block-threats" checked /> Threats or intimidation</label>
+        <label><input type="checkbox" id="toxicity-block-sexual-harassment" checked /> Sexual harassment</label>
+        <label><input type="checkbox" id="toxicity-block-mild-profanity" /> Profanity (mild allowed)</label>
       </div>
-    </section>
+        </section>
 
-    <!-- Spam & Length Constraints -->
-    <section class="config-section">
-      <h3>Spam & Length Constraints</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Control post quality through length limits and repetition detection.</p>
+        <section class="config-section">
+      <h3>PII Restrictions</h3>
+      <p class="lede config-intro">Configure personally identifiable information detection.</p>
       
-      <div class="grid cols2" style="gap: 12px;">
-        <div class="form-group" style="margin-bottom: 0;">
+      <h4>Detect and Block</h4>
+      <div class="checkbox-group">
+        <label><input type="checkbox" id="pii-detect-email" checked /> Email addresses</label>
+        <label><input type="checkbox" id="pii-detect-phone" checked /> Phone numbers</label>
+        <label><input type="checkbox" id="pii-detect-address" checked /> Physical addresses</label>
+        <label><input type="checkbox" id="pii-detect-full-names" /> Full names (pattern-based)</label>
+        <label><input type="checkbox" id="pii-detect-social-handles" /> Social media handles</label>
+      </div>
+
+      <div class="form-group admin-form-stack-tight">
+        <label for="pii-action">PII Detection Action</label>
+        <select id="pii-action">
+          <option value="block" selected>Block entire post</option>
+          <option value="redact">Redact PII and allow</option>
+          <option value="flag">Flag for manual review</option>
+        </select>
+      </div>
+        </section>
+
+        <section class="config-section">
+      <h3>Spam & Length Constraints</h3>
+      <p class="lede config-intro">Control post quality through length limits and repetition detection.</p>
+      
+      <div class="grid cols2 admin-grid-tight">
+        <div class="form-group admin-form-group-tight">
           <label for="min-length">Min Length (chars)</label>
           <input type="number" id="min-length" value="50" min="0" />
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
+        <div class="form-group admin-form-group-tight">
           <label for="max-length">Max Length (chars)</label>
           <input type="number" id="max-length" value="5000" min="100" />
         </div>
@@ -349,175 +997,239 @@
           Enable rate limiting per source
         </label>
       </div>
-    </section>
+        </section>
 
-    <!-- Apply Configuration -->
-    <section class="config-section action-bar">
-      <h3>Apply Configuration</h3>
-      <p class="lede" style="font-size: 13px; margin-bottom: 12px;">Review and activate the moderation template.</p>
+        <section class="config-section">
+      <h3>Prompt Injection Protection</h3>
+      <p class="lede config-intro">Protect the system from attempts to manipulate LLM adjudication.</p>
       
-      <div class="callout" style="margin: 12px 0; padding: 10px 12px;">
-        <small style="color: var(--muted);">
-          <strong>Template changes will be versioned and visible to all users.</strong> 
-          New template applies to the next snapshot. Existing snapshots remain immutable. 
-          All blocked posts include reason codes for transparency.
-        </small>
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" id="injection-protection" checked />
+          Enable prompt injection detection
+        </label>
+        <label>
+          <input type="checkbox" id="injection-block-markdown" checked />
+          Block markdown/code block hiding attempts
+        </label>
       </div>
 
-      <div class="row" style="margin: 0; gap: 10px;">
-        <button class="button secondary" onclick="saveDraft()" style="flex: 1;">Save Draft</button>
-        <button class="button" onclick="applyTemplate()" style="flex: 2; background: rgba(142,240,180,.2); border-color: rgba(142,240,180,.4);">Apply & Version</button>
+      <div class="form-group admin-form-stack-tight">
+        <label for="injection-patterns">Custom Patterns (one per line)</label>
+        <textarea id="injection-patterns" rows="3" placeholder="ignore previous instructions&#10;system prompt&#10;jailbreak"></textarea>
+        <small>Custom regex patterns or keywords for injection detection.</small>
+      </div>
+        </section>
       </div>
     </section>
 
+    <section class="admin-step" id="preview">
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Step 3</div>
+          <h3>Review the User-Facing Policy</h3>
+          <p class="lede">Before publishing a new version, read it the way a participant would. The goal is not just correct enforcement, but predictable enforcement.</p>
+        </div>
+      </div>
+
+      <div class="preview-grid">
+        <div class="preview-box">
+          <h4 class="preview-allowed">Allowed Content</h4>
+          <ul class="compact-list allowed-list">
+            <li>Factual claims with evidence</li>
+            <li>Logical inferences from stated facts</li>
+            <li>Direct engagement with opposing arguments</li>
+            <li>On-topic discussion within scope</li>
+            <li>Vigorous but respectful debate</li>
+          </ul>
+        </div>
+        <div class="preview-box">
+          <h4 class="preview-blocked">Blocked Content</h4>
+          <ul class="compact-list blocked-list">
+            <li>Personal attacks or harassment</li>
+            <li>Personally identifiable information (PII)</li>
+            <li>Off-topic or spam content</li>
+            <li>Hate speech or discriminatory content</li>
+            <li>Attempts to manipulate system instructions</li>
+            <li>Duplicate or flooding posts</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="admin-data-stack">
+      <section class="admin-step" id="history">
+        <div class="admin-step-head">
+          <div>
+            <div class="step-label">Audit Trail</div>
+            <h3>Template Version History</h3>
+            <p class="lede">Use the history table to understand the reasoning behind the current moderation posture and to avoid oscillating between template versions without context.</p>
+          </div>
+        </div>
+        
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Timestamp</th>
+                <th>Admin</th>
+                <th>Changes</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="template-history-tbody">
+              <tr>
+                <td colspan="5" style="text-align:center;color:var(--muted)">Loading moderation template history...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="admin-step" id="proposal-review">
+        <div class="admin-step-head">
+          <div>
+            <div class="step-label">Review Queue</div>
+            <h3>Debate Proposal Review</h3>
+            <p class="lede">Review user-submitted debate proposals. Accept to create a debate, or reject with a reason.</p>
+          </div>
+        </div>
+
+        <div class="template-picker" style="margin-bottom: var(--space-md);">
+          <div class="form-group admin-form-group-tight">
+            <label for="proposal-filter">Filter by Status</label>
+            <select id="proposal-filter" onchange="loadProposals()">
+              <option value="">All</option>
+              <option value="pending" selected>Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div class="template-active-indicator">
+            <span class="pill" id="proposal-count-pill">0 proposals</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Motion</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="proposal-review-tbody">
+              <tr>
+                <td colspan="4" style="text-align:center;color:var(--muted)">Loading proposals...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="proposal-decision-panel" class="callout soft" style="display:none; margin-top: var(--space-md);">
+          <h4 id="proposal-decision-title">Reject Proposal</h4>
+          <div class="form-group">
+            <label for="proposal-decision-reason">Reason *</label>
+            <textarea id="proposal-decision-reason" rows="2" placeholder="Explain why this proposal is being rejected..."></textarea>
+          </div>
+          <div class="row" style="gap: var(--space-sm);">
+            <button class="button secondary" onclick="cancelProposalDecision()">Cancel</button>
+            <button class="button" id="proposal-decision-confirm-btn" onclick="confirmProposalDecision()">Confirm Reject</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-step" id="snapshot-audit">
+        <div class="admin-step-head">
+          <div>
+            <div class="step-label">Reality Check</div>
+            <h3>Snapshot Audit: Moderation Outcomes</h3>
+            <p class="lede">This section helps a new admin connect policy choices with current moderation behavior. If you are changing a rule, this is where you sanity-check whether the current distribution supports that decision.</p>
+          </div>
+        </div>
+        
+        <div class="metric-grid admin-metric-grid">
+          <div class="metric-chip">
+            <span>Allowed Posts</span>
+            <strong class="metric-good" id="metric-allowed-posts">0</strong>
+          </div>
+          <div class="metric-chip">
+            <span>Blocked Posts</span>
+            <strong class="metric-bad" id="metric-blocked-posts">0</strong>
+          </div>
+          <div class="metric-chip">
+            <span>Block Rate</span>
+            <strong id="metric-block-rate">0.0%</strong>
+          </div>
+          <div class="metric-chip">
+            <span>Top Reason</span>
+            <strong id="metric-top-reason">—</strong>
+          </div>
+          <div class="metric-chip">
+            <span>Borderline Rate</span>
+            <strong id="metric-borderline-rate">0.0000</strong>
+          </div>
+          <div class="metric-chip">
+            <span>Suppression Policy</span>
+            <strong id="metric-suppression-policy">k=5</strong>
+          </div>
+        </div>
+
+        <h4 class="admin-subsection-title">Block Reasons Histogram</h4>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Reason Code</th>
+                <th>Count</th>
+                <th>Percentage</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="block-reasons-tbody">
+              <tr>
+                <td colspan="4" style="text-align:center;color:var(--muted)">No moderation snapshot data available yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout soft" style="margin-top:16px;">
+          <strong>Small-count suppression:</strong>
+          <span id="suppression-policy-detail">No suppressed buckets in the current snapshot.</span>
+        </div>
+        
+        <small class="admin-footnote">Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict. Block reasons are visible in audit logs for transparency.</small>
+      </section>
+
+      <section class="admin-step" id="frame-petition-queue">
+        <div class="admin-step-head">
+          <div>
+            <div class="step-label">Frame Governance</div>
+            <h3>Candidate Frame Queue</h3>
+            <p class="lede">Frame petitions are separate from debate proposals and publish their governance decision when accepted or rejected.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Petition</th><th>Status</th><th>Submitted</th><th>Decision</th></tr></thead>
+            <tbody id="frame-petitions-tbody">
+              <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading frame petitions...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
-
-<!-- Live Template Preview (Full Width) -->
-<section class="card" style="margin-top: 16px;">
-  <h3>Live Template Preview</h3>
-  <p class="lede">This is how moderation rules will appear to users.</p>
-  
-  <div class="preview-grid">
-    <div class="preview-box">
-      <h4 style="color: var(--good);">✓ Allowed Content</h4>
-      <ul class="compact-list allowed-list">
-        <li>Factual claims with evidence</li>
-        <li>Logical inferences from stated facts</li>
-        <li>Direct engagement with opposing arguments</li>
-        <li>On-topic discussion within scope</li>
-        <li>Vigorous but respectful debate</li>
-      </ul>
-    </div>
-    <div class="preview-box">
-      <h4 style="color: var(--bad);">✗ Blocked Content</h4>
-      <ul class="compact-list blocked-list">
-        <li>Personal attacks or harassment</li>
-        <li>Personally identifiable information (PII)</li>
-        <li>Off-topic or spam content</li>
-        <li>Hate speech or discriminatory content</li>
-        <li>Attempts to manipulate system instructions</li>
-        <li>Duplicate or flooding posts</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<!-- Version History -->
-<section class="card">
-  <h3>Template Version History</h3>
-  <p class="lede">Audit trail of all moderation template changes.</p>
-  
-  <div class="table-wrap" style="margin-top: 16px;">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Version</th>
-          <th>Timestamp</th>
-          <th>Admin</th>
-          <th>Changes</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="mono">3.2.1</td>
-          <td class="mono">2026-03-02 14:10 SGT</td>
-          <td>system</td>
-          <td>Initial configuration — Standard Civility + PII Guard</td>
-          <td><span class="pill good">Active</span></td>
-        </tr>
-        <tr>
-          <td class="mono">3.2.0</td>
-          <td class="mono">2026-03-01 02:00 SGT</td>
-          <td>admin_001</td>
-          <td>Adjusted toxicity sensitivity from strict to balanced</td>
-          <td><span class="pill">Superseded</span></td>
-        </tr>
-        <tr>
-          <td class="mono">3.1.0</td>
-          <td class="mono">2026-02-28 10:30 SGT</td>
-          <td>admin_001</td>
-          <td>Added prompt injection protection rules</td>
-          <td><span class="pill">Superseded</span></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- Snapshot Audit Reference -->
-<section class="card">
-  <h3>Snapshot Audit: Moderation Outcomes</h3>
-  <p class="lede">Summary of moderation results from the current snapshot.</p>
-  
-  <div class="metric-grid" style="margin-top: 16px;">
-    <div class="metric-chip">
-      <span>Allowed Posts</span>
-      <strong style="color: var(--good);">84</strong>
-    </div>
-    <div class="metric-chip">
-      <span>Blocked Posts</span>
-      <strong style="color: var(--bad);">11</strong>
-    </div>
-    <div class="metric-chip">
-      <span>Block Rate</span>
-      <strong>11.6%</strong>
-    </div>
-    <div class="metric-chip">
-      <span>Top Reason</span>
-      <strong>Off-topic</strong>
-    </div>
-  </div>
-
-  <h4 style="margin-top: 20px;">Block Reasons Histogram</h4>
-  <div class="table-wrap">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Reason Code</th>
-          <th>Count</th>
-          <th>Percentage</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="pill warn">OFF_TOPIC</span></td>
-          <td class="mono">5</td>
-          <td>45.5%</td>
-          <td>Post does not relate to debate resolution</td>
-        </tr>
-        <tr>
-          <td><span class="pill bad">PII_DETECTED</span></td>
-          <td class="mono">3</td>
-          <td>27.3%</td>
-          <td>Personally identifiable information found</td>
-        </tr>
-        <tr>
-          <td><span class="pill">SPAM_FLOOD</span></td>
-          <td class="mono">2</td>
-          <td>18.2%</td>
-          <td>Duplicate content or rate limit exceeded</td>
-        </tr>
-        <tr>
-          <td><span class="pill bad">HARASSMENT</span></td>
-          <td class="mono">1</td>
-          <td>9.1%</td>
-          <td>Personal attack or harassment detected</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  
-  <small style="display: block; margin-top: 12px;">Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict. Block reasons are visible in audit logs for transparency.</small>
-</section>
 
 </main>
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -525,88 +1237,595 @@
 <!-- Back to top button -->
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<!-- Help panel -->
-<div class="help-overlay" onclick="toggleHelp()"></div>
-<div class="help-panel" id="helpPanel">
-  <div class="help-panel-header">
-    <h3>Admin Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
-  </div>
-  <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Administrative terms for moderation configuration.</p>
-    
-    <div class="glossary-term">Modulation Template</div>
-    <div class="glossary-def">The complete set of rules that determine whether a post is Allowed or Blocked. Templates are versioned and visible to all users per the Visible Modulation principle.</div>
-    
-    <div class="glossary-term">PII (Personally Identifiable Information)</div>
-    <div class="glossary-def">Data that could identify an individual: emails, phone numbers, addresses, full names, etc. The system can block, redact, or flag posts containing PII.</div>
-    
-    <div class="glossary-term">Prompt Injection</div>
-    <div class="glossary-def">Attempts to manipulate the LLM adjudication system through hidden instructions, markdown tricks, or jailbreak prompts. Detection patterns block these attempts.</div>
-    
-    <div class="glossary-term">Snapshot Audit</div>
-    <div class="glossary-def">Immutable record of moderation outcomes per snapshot, including template version, allowed/blocked counts, and block reasons histogram.</div>
-    
-    <div class="glossary-term">Block Reason Code</div>
-    <div class="glossary-def">Standardized codes (e.g., OFF_TOPIC, PII_DETECTED) assigned to blocked posts for transparency and audit purposes.</div>
-    
-    <div class="glossary-term">Template Versioning</div>
-    <div class="glossary-def">All template changes are tracked with semantic versions. New versions apply to future snapshots; existing snapshots remain unchanged.</div>
-    
-    <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
-  </div>
-</div>
+<div id="shared-help-panel" data-panel="help-panel-admin"></div>
+
 
 <script>
-  // Back to top button visibility
-  const backToTop = document.querySelector('.back-to-top');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 300) backToTop.classList.add('visible');
-    else backToTop.classList.remove('visible');
-  });
-  
-  // Help panel toggle
-  function toggleHelp() {
-    document.getElementById('helpPanel').classList.toggle('open');
-    document.querySelector('.help-overlay').classList.toggle('visible');
+  const AdminState = {
+    currentTemplate: null,
+    history: [],
+    availableBases: [],
+  };
+
+  function releaseRouteAuthGate() {
+    const root = document.documentElement;
+    root.classList.remove('route-auth-pending');
+    root.removeAttribute('aria-busy');
   }
-  
-  // Save draft
-  function saveDraft() {
-    alert('Template configuration saved as draft.');
+
+  function showAdminAccessDenied(error) {
+    const page = document.querySelector('.admin-page');
+    const panel = document.getElementById('admin-access-denied');
+    const copy = document.getElementById('admin-access-denied-copy');
+    const detail = document.getElementById('admin-access-denied-detail');
+    if (!page || !panel || !copy || !detail) return;
+
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '');
+    const isForbidden = status === 403 || code === 'ADMIN_FORBIDDEN';
+
+    if (isForbidden) {
+      copy.textContent = 'You are signed in, but this account does not have permission to use admin tools.';
+      detail.textContent = 'Use a different account with admin privileges, or ask an existing admin to grant access.';
+    } else {
+      copy.textContent = 'Admin tools require a valid signed-in session.';
+      detail.textContent = 'Please sign in again and then retry opening the admin page.';
+    }
+
+    page.classList.add('admin-locked');
   }
-  
-  // Apply template
-  function applyTemplate() {
-    if (confirm('Apply this moderation template? Changes will be versioned and visible to all users.')) {
-      alert('Template applied successfully. New version will take effect on the next snapshot.');
+
+  function setActionFeedback(message, kind = 'success') {
+    const feedback = document.getElementById('admin-action-feedback');
+    if (!feedback) return;
+    feedback.hidden = false;
+    feedback.textContent = message;
+    feedback.className = 'notice';
+    if (kind === 'success') feedback.classList.add('alert-success');
+    if (kind === 'error') feedback.classList.add('alert-error');
+  }
+
+  function setActionButtonsDisabled(disabled) {
+    const saveBtn = document.getElementById('save-draft-btn');
+    const applyBtn = document.getElementById('apply-template-btn');
+    if (saveBtn) saveBtn.disabled = disabled;
+    if (applyBtn) applyBtn.disabled = disabled;
+  }
+
+  function setInputValue(id, value) {
+    const node = document.getElementById(id);
+    if (node) node.value = value;
+  }
+
+  function setInputChecked(id, checked) {
+    const node = document.getElementById(id);
+    if (node) node.checked = !!checked;
+  }
+
+  function normalizeListInput(value) {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(/[\n,;]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  }
+
+  function collectTemplatePayload() {
+    const baseSelect = document.getElementById('template-base');
+    const versionInput = document.getElementById('template-version');
+    const selectedOption = baseSelect?.options?.[baseSelect.selectedIndex];
+    const baseTemplateId = (baseSelect?.value || '').trim();
+
+    if (!baseTemplateId) {
+      throw new Error('Select a base template before saving or applying.');
+    }
+
+    const version = (versionInput?.value || '').trim() || '1.0.0';
+    const customPatterns = normalizeListInput(document.getElementById('injection-patterns')?.value || '');
+    const requiredKeywords = normalizeListInput(document.getElementById('topic-keywords')?.value || '');
+
+    return {
+      base_template_id: baseTemplateId,
+      template_name: selectedOption?.textContent?.trim() || baseTemplateId,
+      version,
+      notes: 'Updated from admin UI',
+      topic_requirements: {
+        required_keywords: requiredKeywords,
+        relevance_threshold: document.getElementById('topic-threshold')?.value || 'moderate',
+        enforce_scope: !!document.getElementById('enforce-scope')?.checked,
+      },
+      toxicity_settings: {
+        sensitivity_level: Number(document.getElementById('toxicity-level')?.value || 3),
+        block_personal_attacks: !!document.getElementById('toxicity-block-personal-attacks')?.checked,
+        block_hate_speech: !!document.getElementById('toxicity-block-hate-speech')?.checked,
+        block_threats: !!document.getElementById('toxicity-block-threats')?.checked,
+        block_sexual_harassment: !!document.getElementById('toxicity-block-sexual-harassment')?.checked,
+        block_mild_profanity: !!document.getElementById('toxicity-block-mild-profanity')?.checked,
+      },
+      pii_settings: {
+        detect_email: !!document.getElementById('pii-detect-email')?.checked,
+        detect_phone: !!document.getElementById('pii-detect-phone')?.checked,
+        detect_address: !!document.getElementById('pii-detect-address')?.checked,
+        detect_full_names: !!document.getElementById('pii-detect-full-names')?.checked,
+        detect_social_handles: !!document.getElementById('pii-detect-social-handles')?.checked,
+        action: document.getElementById('pii-action')?.value || 'block',
+      },
+      spam_rate_limit_settings: {
+        min_length: Number(document.getElementById('min-length')?.value || 50),
+        max_length: Number(document.getElementById('max-length')?.value || 5000),
+        flood_threshold_per_hour: Number(document.getElementById('flood-threshold')?.value || 10),
+        duplicate_detection: !!document.getElementById('duplicate-detection')?.checked,
+        rate_limiting: !!document.getElementById('rate-limiting')?.checked,
+      },
+      prompt_injection_settings: {
+        enabled: !!document.getElementById('injection-protection')?.checked,
+        block_markdown_hiding: !!document.getElementById('injection-block-markdown')?.checked,
+        custom_patterns: customPatterns,
+      },
+    };
+  }
+
+  function populateBaseTemplateOptions(availableBases, activeBaseTemplateId) {
+    const baseSelect = document.getElementById('template-base');
+    if (!baseSelect) return;
+
+    const selectedBefore = baseSelect.value || activeBaseTemplateId || 'standard_civility';
+    const options = (availableBases || []).slice();
+
+    const hasCustom = options.some((item) => item.template_id === 'custom');
+    if (!hasCustom) {
+      options.push({
+        template_id: 'custom',
+        name: 'Custom Configuration',
+        description: 'Saved custom configuration',
+      });
+    }
+
+    baseSelect.innerHTML = '';
+    options.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.template_id;
+      option.textContent = item.name;
+      baseSelect.appendChild(option);
+    });
+
+    if ([...baseSelect.options].some((opt) => opt.value === selectedBefore)) {
+      baseSelect.value = selectedBefore;
+    } else if ([...baseSelect.options].some((opt) => opt.value === activeBaseTemplateId)) {
+      baseSelect.value = activeBaseTemplateId;
+    } else if (baseSelect.options.length > 0) {
+      baseSelect.selectedIndex = 0;
     }
   }
-  
-  // Load template preview based on selection
+
+  function applyTemplateToForm(template) {
+    if (!template) return;
+
+    AdminState.currentTemplate = template;
+    const topic = template.topic_requirements || {};
+    const toxicity = template.toxicity_settings || {};
+    const pii = template.pii_settings || {};
+    const spam = template.spam_rate_limit_settings || {};
+    const prompt = template.prompt_injection_settings || {};
+
+    setInputValue('template-version', template.version || '1.0.0');
+    setInputValue('topic-keywords', normalizeListInput(topic.required_keywords).join(', '));
+    setInputValue('topic-threshold', topic.relevance_threshold || 'moderate');
+    setInputChecked('enforce-scope', topic.enforce_scope);
+
+    setInputValue('toxicity-level', String(toxicity.sensitivity_level ?? 3));
+    setInputChecked('toxicity-block-personal-attacks', toxicity.block_personal_attacks);
+    setInputChecked('toxicity-block-hate-speech', toxicity.block_hate_speech);
+    setInputChecked('toxicity-block-threats', toxicity.block_threats);
+    setInputChecked('toxicity-block-sexual-harassment', toxicity.block_sexual_harassment);
+    setInputChecked('toxicity-block-mild-profanity', toxicity.block_mild_profanity);
+
+    setInputChecked('pii-detect-email', pii.detect_email);
+    setInputChecked('pii-detect-phone', pii.detect_phone);
+    setInputChecked('pii-detect-address', pii.detect_address);
+    setInputChecked('pii-detect-full-names', pii.detect_full_names);
+    setInputChecked('pii-detect-social-handles', pii.detect_social_handles);
+    setInputValue('pii-action', pii.action || 'block');
+
+    setInputValue('min-length', String(spam.min_length ?? 50));
+    setInputValue('max-length', String(spam.max_length ?? 5000));
+    setInputValue('flood-threshold', String(spam.flood_threshold_per_hour ?? 10));
+    setInputChecked('duplicate-detection', spam.duplicate_detection);
+    setInputChecked('rate-limiting', spam.rate_limiting);
+
+    setInputChecked('injection-protection', prompt.enabled);
+    setInputChecked('injection-block-markdown', prompt.block_markdown_hiding);
+    setInputValue('injection-patterns', normalizeListInput(prompt.custom_patterns).join('\n'));
+
+    const baseSelect = document.getElementById('template-base');
+    if (baseSelect && template.base_template_id && [...baseSelect.options].some((opt) => opt.value === template.base_template_id)) {
+      baseSelect.value = template.base_template_id;
+    }
+  }
+
+  function getReasonPillClass(reason) {
+    const normalized = String(reason || '').toLowerCase();
+    if (normalized.includes('toxicity') || normalized.includes('harassment')) return 'bad';
+    if (normalized.includes('pii') || normalized.includes('off_topic')) return 'warn';
+    return '';
+  }
+
+  function renderModerationOutcomes(data) {
+    const outcomes = data || {};
+    const allowed = Number(outcomes.allowed_count || 0);
+    const blocked = Number(outcomes.blocked_count || 0);
+    const topReason = outcomes.top_reason ? String(outcomes.top_reason) : '—';
+    const blockRatePercent = `${((Number(outcomes.block_rate || 0)) * 100).toFixed(1)}%`;
+
+    document.getElementById('metric-allowed-posts').textContent = String(allowed);
+    document.getElementById('metric-blocked-posts').textContent = String(blocked);
+    document.getElementById('metric-block-rate').textContent = blockRatePercent;
+    document.getElementById('metric-top-reason').textContent = topReason === '—' ? topReason : topReason.replace(/_/g, ' ');
+    document.getElementById('metric-borderline-rate').textContent = Number(outcomes.borderline_rate || 0).toFixed(4);
+    const suppression = outcomes.suppression_policy || {};
+    document.getElementById('metric-suppression-policy').textContent = `k=${suppression.k || 5}`;
+    const affected = suppression.affected_buckets || [];
+    document.getElementById('suppression-policy-detail').textContent = affected.length
+      ? `${affected.length} bucket(s) suppressed: ${affected.map((bucket) => `${bucket.channel}:${bucket.key}`).join(', ')}`
+      : 'No suppressed buckets in the current snapshot.';
+
+    const tbody = document.getElementById('block-reasons-tbody');
+    const rows = Array.isArray(outcomes.block_reasons) ? outcomes.block_reasons : [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No moderation snapshot data available yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map((row) => {
+      const reason = String(row.reason || 'unknown');
+      const count = Number(row.count || 0);
+      const percentage = Number(row.percentage || 0).toFixed(1);
+      const description = row.description ? BDA.escapeHtml(row.description) : 'Moderation rule triggered.';
+      const pillClass = getReasonPillClass(reason);
+      return `
+        <tr>
+          <td><span class="pill ${pillClass}">${BDA.escapeHtml(reason.toUpperCase())}</span></td>
+          <td class="mono">${count}</td>
+          <td>${percentage}%</td>
+          <td>${description}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  let activeProposalId = null;
+  let activeDecisionAction = null;
+
+  async function loadFramePetitions() {
+    const tbody = document.getElementById('frame-petitions-tbody');
+    if (!tbody) return;
+    try {
+      const debate = await BDA.loadDebate();
+      if (!debate?.debate_id) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No active debate selected.</td></tr>';
+        return;
+      }
+      const response = await BDA.api(`/api/debate/${encodeURIComponent(debate.debate_id)}/frame-petitions`, { suppressAuthRedirect: true });
+      const petitions = response.petitions || [];
+      if (!petitions.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No frame petitions submitted.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = petitions.map((petition) => `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(petition.petition_id || '-')}</td>
+          <td>${BDA.escapeHtml(petition.status || 'pending')}</td>
+          <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(petition.created_at))}</td>
+          <td>${BDA.escapeHtml(petition.governance_decision?.reason || '-')}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--bad)">${BDA.escapeHtml(error.message || 'Failed to load frame petitions')}</td></tr>`;
+    }
+  }
+
+  async function loadProposals() {
+    const filter = document.getElementById('proposal-filter')?.value || '';
+    try {
+      const url = '/api/admin/debate-proposals' + (filter ? `?status=${encodeURIComponent(filter)}` : '');
+      const data = await BDA.api(url);
+      renderProposals(data.proposals || []);
+    } catch (error) {
+      const tbody = document.getElementById('proposal-review-tbody');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">Failed to load proposals.</td></tr>`;
+      }
+    }
+  }
+
+  function renderProposals(proposals) {
+    const tbody = document.getElementById('proposal-review-tbody');
+    const countPill = document.getElementById('proposal-count-pill');
+    if (countPill) countPill.textContent = `${proposals.length} proposal${proposals.length !== 1 ? 's' : ''}`;
+    if (!tbody) return;
+
+    if (proposals.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No proposals found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = proposals.map(p => {
+      const statusClass = p.status === 'accepted' ? 'good' : p.status === 'rejected' ? 'bad' : 'warn';
+      const acceptBtn = p.status === 'pending'
+        ? `<button class="button success-action" style="padding:6px 10px;font-size:0.78rem" onclick="acceptProposal('${p.proposal_id}')">Accept</button>`
+        : '';
+      const rejectBtn = p.status === 'pending'
+        ? `<button class="button secondary" style="padding:6px 10px;font-size:0.78rem" onclick="showRejectPanel('${p.proposal_id}')">Reject</button>`
+        : '';
+      const debateLink = p.accepted_debate_id
+        ? `<a href="new_debate.html?debate_id=${encodeURIComponent(p.accepted_debate_id)}">${p.accepted_debate_id}</a>`
+        : '—';
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600">${BDA.escapeHtml(p.motion)}</div>
+            <small style="color:var(--muted)">${BDA.escapeHtml(p.moderation_criteria.substring(0, 120))}${p.moderation_criteria.length > 120 ? '...' : ''}</small>
+            ${p.accepted_debate_id ? `<small style="display:block;margin-top:4px">Debate: ${debateLink}</small>` : ''}
+          </td>
+          <td class="mono">${BDA.formatDateTime(p.created_at)}</td>
+          <td><span class="pill ${statusClass}">${p.status}</span></td>
+          <td>
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              ${acceptBtn}
+              ${rejectBtn}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function acceptProposal(proposalId) {
+    try {
+      setActionButtonsDisabled(true);
+      const response = await BDA.api(`/api/admin/debate-proposals/${encodeURIComponent(proposalId)}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      setActionFeedback(`Accepted proposal. Created debate ${response.debate_id}.`, 'success');
+      await loadProposals();
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to accept proposal.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  function showRejectPanel(proposalId) {
+    activeProposalId = proposalId;
+    activeDecisionAction = 'reject';
+    const panel = document.getElementById('proposal-decision-panel');
+    const title = document.getElementById('proposal-decision-title');
+    const confirmBtn = document.getElementById('proposal-decision-confirm-btn');
+    if (panel) panel.style.display = 'grid';
+    if (title) title.textContent = 'Reject Proposal';
+    if (confirmBtn) {
+      confirmBtn.textContent = 'Confirm Reject';
+      confirmBtn.className = 'button';
+    }
+    document.getElementById('proposal-decision-reason').value = '';
+    document.getElementById('proposal-decision-reason').focus();
+  }
+
+  function cancelProposalDecision() {
+    activeProposalId = null;
+    activeDecisionAction = null;
+    const panel = document.getElementById('proposal-decision-panel');
+    if (panel) panel.style.display = 'none';
+    document.getElementById('proposal-decision-reason').value = '';
+  }
+
+  async function confirmProposalDecision() {
+    if (!activeProposalId || activeDecisionAction !== 'reject') return;
+    const reason = document.getElementById('proposal-decision-reason').value.trim();
+    if (!reason) {
+      setActionFeedback('Please provide a reason for rejection.', 'error');
+      return;
+    }
+    try {
+      setActionButtonsDisabled(true);
+      await BDA.api(`/api/admin/debate-proposals/${encodeURIComponent(activeProposalId)}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+      setActionFeedback('Proposal rejected.', 'success');
+      cancelProposalDecision();
+      await loadProposals();
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to reject proposal.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  function renderTemplateHistory(history) {
+    const tbody = document.getElementById('template-history-tbody');
+    const records = Array.isArray(history) ? history : [];
+
+    if (!records.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No template history found yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = records.map((item) => {
+      const status = String(item.status || 'draft').toLowerCase();
+      const pillClass = status === 'active' ? 'good' : status === 'applied' ? 'warn' : '';
+      const statusLabel = status === 'active' ? 'Active' : status === 'applied' ? 'Applied' : 'Draft';
+      const description = item.notes || `Base: ${item.base_template_id}`;
+      const actor = item.author_user_id || 'system';
+      const timestamp = item.applied_at || item.updated_at || item.created_at;
+      return `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(item.version || '-')}</td>
+          <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(timestamp))}</td>
+          <td>${BDA.escapeHtml(actor)}</td>
+          <td>${BDA.escapeHtml(description)}</td>
+          <td><span class="pill ${pillClass}">${statusLabel}</span></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   function loadTemplatePreview() {
-    const base = document.getElementById('template-base').value;
-    // In a real implementation, this would load the template configuration
-    console.log('Loading template:', base);
+    const baseSelect = document.getElementById('template-base');
+    const statePill = document.getElementById('template-state-pill');
+    const headerState = document.getElementById('template-current-state');
+    const templateNote = document.querySelector('#template-selection .template-note');
+    if (!baseSelect || !statePill || !headerState || !templateNote) return;
+
+    const selectedValue = baseSelect.value;
+    const selectedLabel = baseSelect.options[baseSelect.selectedIndex]?.text || 'No template selected';
+    const activeTemplate = AdminState.currentTemplate;
+    const isActiveTemplate = !!activeTemplate &&
+      selectedValue === activeTemplate.base_template_id &&
+      (document.getElementById('template-version')?.value || '').trim() === String(activeTemplate.version || '');
+
+    if (!selectedValue) {
+      statePill.className = 'pill warn';
+      statePill.textContent = 'Selection required';
+      headerState.className = 'pill warn';
+      headerState.textContent = 'Select a template';
+      templateNote.textContent = 'Select a template to preview how moderation policy changes would be described.';
+      return;
+    }
+
+    statePill.className = isActiveTemplate ? 'pill good' : 'pill warn';
+    statePill.textContent = isActiveTemplate ? 'Active' : 'Draft Change';
+    headerState.className = isActiveTemplate ? 'pill good' : 'pill warn';
+    headerState.textContent = isActiveTemplate ? 'Current template is active' : 'Template change pending review';
+
+    if (isActiveTemplate) {
+      templateNote.textContent = 'Template changes apply to the next snapshot only. Existing snapshots remain immutable, and each version stays visible in the audit trail.';
+      return;
+    }
+    templateNote.textContent = `Previewing "${selectedLabel}". If applied, this moderation posture will affect only future snapshots and will remain visible in the audit trail.`;
   }
-  
-  // Table scroll fade indicator
-  document.querySelectorAll('.table-wrap').forEach(wrap => {
-    wrap.classList.add('scrollable');
-    wrap.addEventListener('scroll', () => {
-      const isScrollable = wrap.scrollWidth > wrap.clientWidth;
-      const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
-      wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
-    });
-    wrap.dispatchEvent(new Event('scroll'));
+
+  async function injectHelpPanel() {
+    const placeholder = document.getElementById('shared-help-panel');
+    if (!placeholder) return;
+    try {
+      const response = await fetch('components/help-panel-admin.html');
+      if (response.ok) {
+        placeholder.outerHTML = await response.text();
+        if (window.BDA?.setupHelpPanel) {
+          window.BDA.setupHelpPanel();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load admin help panel:', error);
+    }
+  }
+
+  async function refreshAdminState() {
+    const [currentResponse, historyResponse] = await Promise.all([
+      BDA.api('/api/admin/moderation-template/current', { suppressAuthRedirect: true }),
+      BDA.api('/api/admin/moderation-template/history?limit=50', { suppressAuthRedirect: true }),
+    ]);
+
+    AdminState.availableBases = currentResponse.available_bases || [];
+    AdminState.history = historyResponse.history || [];
+
+    const activeTemplate = currentResponse.template || null;
+    populateBaseTemplateOptions(AdminState.availableBases, activeTemplate?.base_template_id);
+    if (activeTemplate) {
+      applyTemplateToForm(activeTemplate);
+    }
+    renderTemplateHistory(AdminState.history);
+    renderModerationOutcomes(currentResponse.moderation_outcomes || {});
+    loadFramePetitions();
+    loadTemplatePreview();
+  }
+
+  async function saveDraft() {
+    try {
+      const payload = collectTemplatePayload();
+      setActionButtonsDisabled(true);
+      setActionFeedback('Saving draft configuration...', 'loading');
+      const response = await BDA.api('/api/admin/moderation-template/draft', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      await refreshAdminState();
+      setActionFeedback(
+        `Draft saved: ${response.template?.template_name || payload.template_name} v${response.template?.version || payload.version}.`,
+        'success'
+      );
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to save draft configuration.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  async function applyTemplate() {
+    try {
+      const payload = collectTemplatePayload();
+      setActionButtonsDisabled(true);
+      setActionFeedback('Applying template and updating active version...', 'loading');
+      const response = await BDA.api('/api/admin/moderation-template/apply', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      await refreshAdminState();
+      setActionFeedback(
+        `Applied ${response.template?.template_name || payload.template_name} v${response.template?.version || payload.version}. It will take effect on the next snapshot.`,
+        'success'
+      );
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to apply template.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!Auth.isLoggedIn()) {
+      Auth.redirectToLogin('admin-login-required');
+      return;
+    }
+
+    await injectHelpPanel();
+    try {
+      setActionFeedback('Loading moderation template state...', 'loading');
+      await refreshAdminState();
+      setActionFeedback('Moderation template state loaded.', 'success');
+    } catch (error) {
+      const code = String(error?.code || '');
+      const status = Number(error?.status || 0);
+      if (status === 403 || code === 'ADMIN_FORBIDDEN') {
+        showAdminAccessDenied(error);
+        releaseRouteAuthGate();
+        return;
+      }
+      if (status === 401 || code === 'AUTH_REQUIRED' || code === 'AUTH_INVALID') {
+        if (typeof Auth.clearSession === 'function') {
+          Auth.clearSession();
+        }
+        Auth.redirectToLogin('admin-login-required');
+        return;
+      }
+      setActionFeedback(error.message || 'Failed to load moderation template state.', 'error');
+      releaseRouteAuthGate();
+      return;
+    }
+    try {
+      await loadProposals();
+    } catch (error) {
+      console.warn('Failed to load proposals:', error);
+    }
+    releaseRouteAuthGate();
   });
-  
-  // Mobile state strip toggle
-  if (window.innerWidth <= 640) {
-    document.querySelector('.state-wrap').style.display = 'none';
-    document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
-  }
 </script>
 </body>
 </html>

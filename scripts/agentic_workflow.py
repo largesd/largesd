@@ -32,7 +32,7 @@ REVIEW_DIR = WORKFLOW_DIR / "reviews"
 HUMAN_LOG_DIR = WORKFLOW_DIR / "human_logs"
 STATE_PATH = WORKFLOW_DIR / "state.json"
 PROMPT_LOG_PATH = WORKFLOW_DIR / "prompt_log.jsonl"
-WORKFLOW_DOC = REPO_ROOT / "WORKFLOW.md"
+WORKFLOW_DOC = REPO_ROOT / "docs/workflow/WORKFLOW.md"
 HUMAN_PROMPTS_PATH = HUMAN_LOG_DIR / "human_prompts.md"
 APPROVALS_PATH = HUMAN_LOG_DIR / "approvals.md"
 REJECTIONS_PATH = HUMAN_LOG_DIR / "rejections.md"
@@ -50,12 +50,12 @@ PHASES: List[Dict[str, Any]] = [
             "Updated open questions when scope is unclear.",
         ],
         "context_files": [
-            "WORKFLOW.md",
+            "docs/workflow/WORKFLOW.md",
             "workflow_state/scaffolding/project_summary.md",
             "workflow_state/scaffolding/module_map.md",
             "workflow_state/scaffolding/human_checkpoints.md",
             "README.md",
-            "README_v2.md",
+            "docs/archive/README_v2.md",
         ],
     },
     {
@@ -400,11 +400,11 @@ def scaffold_project_summary(goal: str) -> str:
         "",
         "## Recommended Starting Files",
         "",
-        "- `WORKFLOW.md`",
+        "- `docs/workflow/WORKFLOW.md`",
         "- `workflow_state/scaffolding/module_map.md`",
         "- `workflow_state/scaffolding/retrieval_index.md`",
         "- `README.md`",
-        "- `README_v2.md`",
+        "- `docs/archive/README_v2.md`",
     ]
     return "\n".join(lines)
 

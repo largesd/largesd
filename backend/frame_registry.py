@@ -26,6 +26,9 @@ class Frame:
     known_tensions: list  # 6) Known tensions
     prioritized_values: list  # 7) Prioritized values
     created_at: str
+    next_review_date: str = ""
+    review_cadence_months: int = 6
+    emergency_override_path: str = ""
     
     def compute_content_hash(self) -> str:
         """Compute tamper-evident hash of frame content."""
@@ -45,7 +48,10 @@ class Frame:
                 "inclusion_justification": self.inclusion_justification,
                 "exclusion_note": self.exclusion_note,
                 "known_tensions": self.known_tensions,
-                "prioritized_values": self.prioritized_values
+                "prioritized_values": self.prioritized_values,
+                "next_review_date": self.next_review_date,
+                "review_cadence_months": self.review_cadence_months,
+                "emergency_override_path": self.emergency_override_path,
             },
             "created_at": self.created_at
         }
@@ -109,7 +115,10 @@ class FrameRegistry:
                 "Transparency (auditability of reasoning)",
                 "Accountability (attribution of claims to sources)"
             ],
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.utcnow().isoformat(),
+            next_review_date="2026-10-28",
+            review_cadence_months=6,
+            emergency_override_path="Admin emergency override must publish a reason, affected outputs, and a remediation plan before any superseding snapshot."
         )
         
         registry.frames[default_frame.frame_id] = default_frame

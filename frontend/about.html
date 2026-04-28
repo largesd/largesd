@@ -6,27 +6,35 @@
   <title>About — Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
 </HEAD>
 <body>
-<header>
+<header class="site-header">
   <div class="nav">
     <div class="brand">
-      <div class="brand-dot" aria-hidden="true"></div>
       <div>
-        <div class="brand-title">Blind Debate Adjudicator</div>
-        <div class="brand-subtitle">LLM-adjudicated • auditable • identity-blind</div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
       </div>
     </div>
     <nav class="navlinks" aria-label="Primary">
       <a href="index.html">Home</a>
-      <a href="new_debate.html">New Debate / Post Point</a>
+      <a href="new_debate.html">Post Argument</a>
       <a href="snapshot.html">Snapshot</a>
-      <a href="topics.html">Topics</a>
-      <a href="audits.html">Audits</a>
       <a href="verdict.html">Verdict</a>
-      <a href="admin.html">Admin</a>
-      <a href="about.html" class="active" aria-current="page">About</a>
-      <button class="help-btn" onclick="toggleHelp()" aria-label="Open help and glossary">?</button>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
     </nav>
   </div>
 </header>
@@ -79,24 +87,59 @@
 
   <hr />
   <h3>Scoring Formula Reference</h3>
-  <div class="codebox">
-Factuality:     F_{t,s} = (1/K_{t,s}) × Σ_k p_{t,s,k}
-
-Reasoning:      Reason_{t,s,a} = median_j(Reason_{t,s,a,j})
-                Reason_{t,s} = median_a(Reason_{t,s,a})
-
-Coverage:       Cov_{t,s} = Σ(addressed) Lev_{t,s̄,a} / Σ(all) Lev_{t,s̄,a}
-
-Quality:        Q_{t,s} = (F_{t,s} × Reason_{t,s} × Cov_{t,s})^{1/3}
-
-Overall:        Overall_s = Σ_t (Rel_t × Q_{t,s})
-
-Margin:         D = Overall_FOR − Overall_AGAINST
-
-Verdict:        If CI(D) entirely > 0: FOR wins
-                If CI(D) entirely < 0: AGAINST wins
-                Else: NO VERDICT
-  </div>
+  <dl class="formula-reference" aria-label="Scoring formula reference">
+    <div class="formula-row">
+      <dt>Factuality</dt>
+      <dd>
+        <p class="formula-expression"><code>F_{t,s} = (1/K_{t,s}) × Σ_k p_{t,s,k}</code></p>
+        <p class="formula-note">Mean fact-check probability across claims for topic <code>t</code> and side <code>s</code>.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Reasoning</dt>
+      <dd>
+        <p class="formula-expression"><code>Reason_{t,s,a} = median_j(Reason_{t,s,a,j})</code></p>
+        <p class="formula-expression"><code>Reason_{t,s} = median_a(Reason_{t,s,a})</code></p>
+        <p class="formula-note">Judge medians per argument, then median across arguments.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Coverage</dt>
+      <dd>
+        <p class="formula-expression"><code>Cov_{t,s} = Σ(addressed) Lev_{t,s̄,a} / Σ(all) Lev_{t,s̄,a}</code></p>
+        <p class="formula-note">Share of the opposing side's argument load that is directly addressed.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Quality</dt>
+      <dd>
+        <p class="formula-expression"><code>Q_{t,s} = (F_{t,s} × Reason_{t,s} × Cov_{t,s})^{1/3}</code></p>
+        <p class="formula-note">Geometric mean that rewards balance across factuality, reasoning, and coverage.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Overall</dt>
+      <dd>
+        <p class="formula-expression"><code>Overall_s = Σ_t (Rel_t × Q_{t,s})</code></p>
+        <p class="formula-note">Topic relevance-weighted quality sum for side <code>s</code>.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Margin</dt>
+      <dd>
+        <p class="formula-expression"><code>D = Overall_FOR - Overall_AGAINST</code></p>
+        <p class="formula-note">Positive <code>D</code> favors FOR, negative <code>D</code> favors AGAINST.</p>
+      </dd>
+    </div>
+    <div class="formula-row">
+      <dt>Verdict</dt>
+      <dd>
+        <p class="formula-expression"><code>If CI(D) entirely &gt; 0: FOR wins</code></p>
+        <p class="formula-expression"><code>If CI(D) entirely &lt; 0: AGAINST wins</code></p>
+        <p class="formula-expression"><code>Else: NO VERDICT</code></p>
+      </dd>
+    </div>
+  </dl>
 
   <hr />
   <h3>Key Design Decisions</h3>
@@ -118,7 +161,7 @@ Verdict:        If CI(D) entirely > 0: FOR wins
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -126,90 +169,8 @@ Verdict:        If CI(D) entirely > 0: FOR wins
 <!-- Back to top button -->
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<!-- Help panel -->
-<div class="help-overlay" onclick="toggleHelp()"></div>
-<div class="help-panel" id="helpPanel">
-  <div class="help-panel-header">
-    <h3>Glossary & Help</h3>
-    <button class="close-help" onclick="toggleHelp()" aria-label="Close help">×</button>
-  </div>
-  <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
-    
-    <div class="glossary-term">F_{t,s}</div>
-    <div class="glossary-def">Factuality score for topic t, side s. Mean of P(true) across canonical facts.</div>
-    
-    <div class="glossary-term">Reason_{t,s}</div>
-    <div class="glossary-def">Reasoning strength for topic t, side s. Median across canonical arguments.</div>
-    
-    <div class="glossary-term">Cov_{t,s}</div>
-    <div class="glossary-def">Coverage score for topic t, side s. Proportion of opposing arguments addressed.</div>
-    
-    <div class="glossary-term">Q_{t,s}</div>
-    <div class="glossary-def">Quality score for topic t, side s. Geometric mean of F, Reason, Cov.</div>
-    
-    <div class="glossary-term">CI(D)</div>
-    <div class="glossary-def">Confidence Interval for the margin D. Verdict depends on whether this crosses zero.</div>
-    
-    <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see design document.</p>
-  </div>
-</div>
+<div id="shared-help-panel" data-panel="help-panel"></div>
 
-<script>
-  // Back to top button visibility
-  const backToTop = document.querySelector('.back-to-top');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 300) backToTop.classList.add('visible');
-    else backToTop.classList.remove('visible');
-  });
-  
-  // Help panel toggle
-  function toggleHelp() {
-    document.getElementById('helpPanel').classList.toggle('open');
-    document.querySelector('.help-overlay').classList.toggle('visible');
-  }
-  
-  // Table scroll fade indicator
-  document.querySelectorAll('.table-wrap').forEach(wrap => {
-    wrap.classList.add('scrollable');
-    wrap.addEventListener('scroll', () => {
-      const isScrollable = wrap.scrollWidth > wrap.clientWidth;
-      const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
-      wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
-    });
-    wrap.dispatchEvent(new Event('scroll'));
-  });
-  
-  // Mobile state strip toggle
-  if (window.innerWidth <= 640) {
-    document.querySelector('.state-wrap').style.display = 'none';
-    document.querySelector('.state-wrap:last-of-type').style.display = 'grid';
-  }
-  
-  // Tooltip system
-  const tooltipPopup = document.createElement('div');
-  tooltipPopup.className = 'tooltip-popup';
-  document.body.appendChild(tooltipPopup);
-  
-  document.querySelectorAll('.tooltip').forEach(el => {
-    el.addEventListener('mouseenter', (e) => {
-      const text = el.getAttribute('data-tooltip');
-      tooltipPopup.textContent = text;
-      tooltipPopup.classList.add('visible');
-      const rect = el.getBoundingClientRect();
-      const popupRect = tooltipPopup.getBoundingClientRect();
-      let top = rect.top - popupRect.height - 8;
-      let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
-      left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
-      if (top < 10) top = rect.bottom + 8;
-      tooltipPopup.style.top = top + 'px';
-      tooltipPopup.style.left = left + 'px';
-    });
-    el.addEventListener('mouseleave', () => {
-      tooltipPopup.classList.remove('visible');
-    });
-  });
-</script>
+
 </body>
 </html>

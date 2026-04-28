@@ -7,7 +7,8 @@ import os
 import json
 import tempfile
 import shutil
-from datetime import datetime
+import importlib
+from datetime import datetime, timedelta
 
 # Add paths for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
@@ -813,6 +814,366 @@ def test_visible_modulation():
     print(f"  Template has {len(template.rules)} rules")
 
 
+def test_admin_template_persistence_and_engine_sync():
+    """Ensure admin template drafts persist and active template syncs into runtime engine."""
+    print("\n=== Testing Admin Template Persistence + Engine Sync ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_admin_templates.db")
+    engine = None
+
+    try:
+        from backend.database import DebateDatabase
+
+        db = DebateDatabase(db_path)
+        active_before = db.get_active_moderation_template()
+        assert active_before is not None, "Database should seed an active moderation template"
+
+        draft = db.create_moderation_template_version(
+            base_template_id="minimal",
+            template_name="Minimal Acceptance Template",
+            version="9.9.1",
+            status="draft",
+            topic_requirements={
+                "required_keywords": ["audit"],
+                "relevance_threshold": "moderate",
+                "enforce_scope": True,
+            },
+            toxicity_settings={
+                "sensitivity_level": 2,
+                "block_personal_attacks": True,
+                "block_hate_speech": True,
+                "block_threats": True,
+                "block_sexual_harassment": True,
+                "block_mild_profanity": False,
+            },
+            pii_settings={
+                "detect_email": True,
+                "detect_phone": True,
+                "detect_address": True,
+                "detect_full_names": False,
+                "detect_social_handles": False,
+                "action": "block",
+            },
+            spam_rate_limit_settings={
+                "min_length": 20,
+                "max_length": 4000,
+                "flood_threshold_per_hour": 12,
+                "duplicate_detection": True,
+                "rate_limiting": True,
+            },
+            prompt_injection_settings={
+                "enabled": True,
+                "block_markdown_hiding": True,
+                "custom_patterns": ["ignore previous instructions"],
+            },
+            author_user_id="admin_test",
+            notes="Regression test draft",
+        )
+
+        assert draft["status"] == "draft", "Draft template should persist as draft"
+
+        activated = db.activate_moderation_template(draft["template_record_id"], author_user_id="admin_test")
+        assert activated is not None, "Activating a draft should return the activated row"
+        assert activated["is_current"] is True, "Activated template should become current pointer target"
+        assert activated["version"] == "9.9.1"
+
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+        engine.refresh_active_modulation_template(force=True)
+        modulation_info = engine.get_modulation_info()
+
+        assert modulation_info["template_version"] == "9.9.1", (
+            "Engine should reflect active moderation template version from DB"
+        )
+        assert modulation_info["template_name"] == "Minimal Acceptance Template", (
+            "Engine should reflect active moderation template name from DB"
+        )
+        print("✓ Admin template persistence and runtime sync verified")
+    finally:
+        if engine is not None:
+            engine.shutdown()
+        shutil.rmtree(temp_dir)
+
+
+def test_api_auth_session_and_admin_access_consistency():
+    """Verify API auth/session behavior for 401/403 and active-debate persistence."""
+    print("\n=== Testing API Auth + Session Consistency ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_api_auth_session.db")
+    env_keys = (
+        "DEBATE_DB_PATH",
+        "SECRET_KEY",
+        "ADMIN_ACCESS_MODE",
+        "ADMIN_USER_EMAILS",
+        "ADMIN_USER_IDS",
+    )
+    old_env = {key: os.environ.get(key) for key in env_keys}
+    app_module = None
+
+    try:
+        os.environ["DEBATE_DB_PATH"] = db_path
+        os.environ["SECRET_KEY"] = "test-secret-auth-session-32-bytes-min"
+        os.environ["ADMIN_ACCESS_MODE"] = "restricted"
+        os.environ["ADMIN_USER_EMAILS"] = ""
+        os.environ["ADMIN_USER_IDS"] = ""
+
+        try:
+            import backend.app_v3 as app_v3
+        except ModuleNotFoundError as exc:
+            if exc.name == "jwt":
+                print("⚠ Skipping API auth/session consistency test: PyJWT not available in this interpreter.")
+                return
+            raise
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        unauthorized_create = client.post(
+            "/api/debates",
+            json={
+                "resolution": "Resolved: Third-party AI audits should be mandatory.",
+                "scope": "Evaluate safety, governance, and implementation costs over five years.",
+            },
+        )
+        assert unauthorized_create.status_code == 401, "Unauthenticated debate creation should be rejected"
+        assert unauthorized_create.get_json().get("code") == "AUTH_REQUIRED"
+
+        registration_payload = {
+            "email": "auth.session.user@example.com",
+            "password": "password123",
+            "display_name": "Auth Session User",
+        }
+        registration = client.post("/api/auth/register", json=registration_payload)
+        assert registration.status_code == 201, f"Registration failed: {registration.get_data(as_text=True)}"
+        auth_data = registration.get_json()
+        token = auth_data["access_token"]
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        # Grant admin access so the authenticated user can create debates
+        # (POST /api/debates is admin_required)
+        os.environ["ADMIN_USER_EMAILS"] = registration_payload["email"]
+        # Reload app module to pick up new env
+        app_module = importlib.reload(app_module)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        create = client.post(
+            "/api/debates",
+            headers=auth_headers,
+            json={
+                "resolution": "Resolved: Mandatory audits improve frontier AI deployment safety.",
+                "scope": "Assess expected safety gains and compliance burdens for cross-border deployment.",
+            },
+        )
+        assert create.status_code == 201, f"Authenticated debate creation failed: {create.get_data(as_text=True)}"
+        debate_id = create.get_json()["debate_id"]
+
+        active_for_user = client.get("/api/debate", headers=auth_headers)
+        assert active_for_user.status_code == 200
+        active_payload = active_for_user.get_json()
+        assert active_payload.get("has_debate") is True
+        assert active_payload.get("debate_id") == debate_id, "Active debate should persist per authenticated user"
+
+        anonymous_view = client.get("/api/debate")
+        assert anonymous_view.status_code == 200
+        assert anonymous_view.get_json().get("has_debate") is False, (
+            "Anonymous viewer should not inherit authenticated user's active debate context"
+        )
+
+        # Temporarily clear allowlist to verify 403 for non-allowlisted users
+        os.environ["ADMIN_USER_EMAILS"] = ""
+        app_module = importlib.reload(app_module)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        admin_forbidden = client.get("/api/admin/moderation-template/current", headers=auth_headers)
+        assert admin_forbidden.status_code == 403, "Restricted admin mode should block non-allowlisted users"
+        assert admin_forbidden.get_json().get("code") == "ADMIN_FORBIDDEN"
+
+        os.environ["ADMIN_USER_EMAILS"] = registration_payload["email"]
+        app_module = importlib.reload(app_module)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        admin_allowed = client.get("/api/admin/moderation-template/current", headers=auth_headers)
+        assert admin_allowed.status_code == 200, "Allowlisted restricted admin user should gain access"
+        assert admin_allowed.get_json().get("template"), "Admin response should include active template"
+
+        logout = client.post("/api/auth/logout", headers=auth_headers)
+        assert logout.status_code == 200, "Logout endpoint should succeed for authenticated sessions"
+
+        expired_token_payload = {
+            "user_id": auth_data["user_id"],
+            "email": auth_data["email"],
+            "display_name": auth_data["display_name"],
+            "exp": datetime.utcnow() - timedelta(minutes=5),
+            "iat": datetime.utcnow() - timedelta(hours=1),
+            "type": "access",
+        }
+        expired_token = app_module.jwt.encode(
+            expired_token_payload,
+            app_module.app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+        expired_check = client.get("/api/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
+        assert expired_check.status_code == 401, "Expired token should be rejected"
+        assert expired_check.get_json().get("code") == "AUTH_INVALID", "Expired token should map to AUTH_INVALID"
+        print("✓ API auth/session/admin access checks are consistent")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+
+        shutil.rmtree(temp_dir)
+
+
+def test_debate_proposal_lifecycle():
+    """Test debate proposal submission, queue, accept, and reject."""
+    import uuid as _uuid
+    print("\n=== Testing Debate Proposal Lifecycle ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_proposals.db")
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+
+        # Simulate a proposer user
+        proposer_id = "user_proposer_001"
+        db = engine.db
+        db.save_user({
+            "user_id": proposer_id,
+            "email": "proposer@example.com",
+            "password_hash": "hash",
+            "display_name": "Proposer",
+            "created_at": datetime.now().isoformat(),
+        })
+
+        proposal_id = f"prop_{_uuid.uuid4().hex[:10]}"
+        now = datetime.now().isoformat()
+        db.save_debate_proposal({
+            "proposal_id": proposal_id,
+            "proposer_user_id": proposer_id,
+            "motion": "Should cities ban private cars downtown?",
+            "moderation_criteria": "Allow evidence-based arguments.",
+            "debate_frame": "Judge which side best balances access and emissions.",
+            "frame_payload_json": {"stage": "substantive"},
+            "status": "pending",
+            "created_at": now,
+            "updated_at": now,
+        })
+
+        proposal = db.get_debate_proposal(proposal_id)
+        assert proposal is not None, "Proposal should be retrievable"
+        assert proposal["status"] == "pending", "New proposal should be pending"
+
+        user_proposals = db.get_debate_proposals_by_user(proposer_id)
+        assert any(p["proposal_id"] == proposal_id for p in user_proposals), "Proposal should be in user's list"
+
+        pending_queue = db.get_debate_proposals_by_status("pending")
+        assert any(p["proposal_id"] == proposal_id for p in pending_queue), "Proposal should be in pending queue"
+
+        # Accept the proposal
+        debate = engine.create_debate({
+            "motion": proposal["motion"],
+            "moderation_criteria": proposal["moderation_criteria"],
+            "debate_frame": proposal["debate_frame"],
+            "frame": proposal.get("frame_payload_json", {}),
+        }, user_id=proposer_id)
+
+        db.update_debate_proposal_status(
+            proposal_id,
+            status="accepted",
+            reviewer_user_id="admin_001",
+            accepted_debate_id=debate["debate_id"],
+        )
+
+        updated = db.get_debate_proposal(proposal_id)
+        assert updated["status"] == "accepted", "Proposal should be accepted"
+        assert updated["accepted_debate_id"] == debate["debate_id"], "Accepted debate ID should be stored"
+
+        print("✓ Debate proposal lifecycle works end-to-end")
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+def test_snapshot_append_only_and_integrity_fields():
+    """Test snapshots reject duplicates and include integrity fields."""
+    print("\n=== Testing Snapshot Append-Only + Integrity Fields ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_snapshot_integrity.db")
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+
+        debate = engine.create_debate({
+            "motion": "Resolved: Test motion for snapshot integrity.",
+            "moderation_criteria": "Allow on-topic arguments.",
+            "debate_frame": "Judge strength of case.",
+        })
+
+        # Submit posts to have non-empty input bundle
+        engine.submit_post(debate["debate_id"], "FOR", "t1",
+                           "Fact one.", "Therefore one.")
+        engine.submit_post(debate["debate_id"], "AGAINST", "t1",
+                           "Fact two.", "Therefore two.")
+
+        snapshot = engine.generate_snapshot(debate["debate_id"], trigger_type="manual")
+
+        # Verify integrity fields present
+        assert "replay_manifest_json" in snapshot or "replay_manifest" in snapshot, "Snapshot should include replay manifest"
+        assert snapshot.get("input_hash_root"), "Snapshot should include input_hash_root"
+        assert snapshot.get("output_hash_root"), "Snapshot should include output_hash_root"
+        assert snapshot.get("recipe_versions_json") or snapshot.get("recipe_versions"), "Snapshot should include recipe_versions"
+
+        # Verify append-only: duplicate save should raise
+        from backend.database import DebateDatabase
+        db = DebateDatabase(db_path)
+        duplicate_raised = False
+        try:
+            db.save_snapshot({
+                "snapshot_id": snapshot["snapshot_id"],
+                "debate_id": debate["debate_id"],
+                "timestamp": datetime.now().isoformat(),
+                "trigger_type": "manual",
+                "template_name": "test",
+                "template_version": "1.0",
+            })
+        except ValueError as exc:
+            if "already exists" in str(exc):
+                duplicate_raised = True
+        assert duplicate_raised, "Duplicate snapshot_id should raise ValueError"
+
+        print("✓ Snapshot append-only and integrity fields verified")
+    finally:
+        shutil.rmtree(temp_dir)
+
+
 # =============================================================================
 # MAIN TEST RUNNER
 # =============================================================================
@@ -848,6 +1209,10 @@ def run_all_tests():
         ("Identity Blindness", test_identity_blindness),
         ("Snapshot Immutability", test_snapshot_immutability),
         ("Visible Modulation", test_visible_modulation),
+        ("Admin Template Persistence + Engine Sync", test_admin_template_persistence_and_engine_sync),
+        ("API Auth + Session Consistency", test_api_auth_session_and_admin_access_consistency),
+        ("Debate Proposal Lifecycle", test_debate_proposal_lifecycle),
+        ("Snapshot Append-Only + Integrity", test_snapshot_append_only_and_integrity_fields),
     ]
     
     passed = 0

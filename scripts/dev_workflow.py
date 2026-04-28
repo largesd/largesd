@@ -292,7 +292,7 @@ def run_smoke(args: argparse.Namespace) -> None:
 
 
 def run_acceptance(args: argparse.Namespace) -> None:
-    """Start a temporary v2 server and run the browser-driven acceptance suite."""
+    """Start a temporary v3 server and run the browser-driven acceptance suite."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
     env = project_env({"PYTHONUNBUFFERED": "1"})
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_acceptance_{args.port}.db"
@@ -302,7 +302,7 @@ def run_acceptance(args: argparse.Namespace) -> None:
 
     command = [
         active_python(),
-        "start_server_v2.py",
+        "start_server_v3.py",
         "--host",
         DEFAULT_HOST,
         "--port",
@@ -401,7 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     acceptance_parser = subparsers.add_parser(
         "acceptance",
-        help="Start a temporary v2 server and run browser-based acceptance checks.",
+        help="Start a temporary v3 server and run browser-based acceptance checks.",
     )
     acceptance_parser.add_argument("--port", type=int, default=DEFAULT_ACCEPTANCE_PORT)
     acceptance_parser.add_argument("--timeout", type=int, default=45)

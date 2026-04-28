@@ -9,110 +9,201 @@
       "section": "2.1",
       "title": "User-facing blindness",
       "channel": "ui_e2e",
-      "status": "partial",
+      "status": "deferred",
       "requirement": "Public debate surfaces expose no identity signals, likes, follower counts, contribution totals, leaderboards, or top-contributor affordances.",
-      "current_surface": ["frontend/index.html", "frontend/new_debate.html", "frontend/topics.html", "frontend/verdict.html"],
+      "current_surface": [
+        "frontend/index.html",
+        "frontend/new_debate.html",
+        "frontend/topics.html",
+        "frontend/verdict.html"
+      ],
       "current_coverage": "Partially covered by the current browser suite and visual design review.",
-      "next_test": "Add explicit negative assertions for forbidden identity/social strings on public pages."
+      "next_test": "Add explicit negative assertions for forbidden identity/social strings on public pages.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "deferral": {
+        "rationale": "Out of scope for this implementation run: Phase 3 user-facing blindness hardening remains deferred to v1.3.",
+        "target_version": "v1.3"
+      }
     },
     {
       "id": "LSD-UI-02",
       "section": "3",
       "title": "Visible moderation metadata",
       "channel": "ui_e2e",
-      "status": "partial",
+      "status": "pass",
       "requirement": "Snapshots publish moderation template version, allowed/blocked counts, block-reason histogram, borderline rate, and suppression rules.",
-      "current_surface": ["frontend/new_debate.html", "frontend/index.html", "frontend/snapshot.html"],
-      "current_coverage": "Template/version and allowed-vs-blocked basics are visible; borderline-rate and suppression rules are not surfaced yet.",
-      "next_test": "Extend the snapshot and home-page UI assertions once borderline-rate data exists."
+      "current_surface": [
+        "frontend/new_debate.html",
+        "frontend/index.html",
+        "frontend/snapshot.html"
+      ],
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/debate_engine_v2.py",
+        "backend/database.py",
+        "frontend/snapshot.html",
+        "frontend/admin.html",
+        "test_lsd_v1_2_contracts.py"
+      ]
     },
     {
       "id": "LSD-UI-03",
       "section": "4",
       "title": "Immutable snapshot dossier",
       "channel": "api_plus_ui",
-      "status": "partial",
+      "status": "deferred",
       "requirement": "Each snapshot publishes id, timestamp, trigger, moderation version, frame mode, deterministic recipes, replay manifest, and tamper-evident hashes.",
-      "current_surface": ["backend/app_v2.py", "frontend/index.html", "frontend/verdict.html", "frontend/topics.html"],
+      "current_surface": [
+        "backend/app_v2.py",
+        "frontend/index.html",
+        "frontend/verdict.html",
+        "frontend/topics.html"
+      ],
       "current_coverage": "Id, timestamp, trigger, and moderation version are present; frame metadata, replay manifest, and hashes are missing.",
-      "next_test": "Add API assertions first, then expose the missing fields in snapshot/detail UI."
+      "next_test": "Add API assertions first, then expose the missing fields in snapshot/detail UI.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "deferral": {
+        "rationale": "Out of scope for this implementation run: Phases 0.5 and 1 snapshot immutability/replay expansion are tracked separately.",
+        "target_version": "v1.3"
+      }
     },
     {
       "id": "LSD-UI-04",
       "section": "5",
       "title": "Frame transparency",
       "channel": "ui_e2e",
-      "status": "missing",
+      "status": "pass",
       "requirement": "The system exposes single-frame or multi-frame mode, frame set version, review cadence, justification dossier, and petition track outputs.",
       "current_surface": [],
-      "current_coverage": "No frame UI or API is implemented in the current app.",
-      "next_test": "Create a dedicated frame dossier page and frame-sensitive verdict surfaces before enforcing in CI."
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/app_v3.py",
+        "backend/database.py",
+        "frontend/governance.html",
+        "frontend/frame-dossier.html"
+      ]
     },
     {
       "id": "LSD-UI-05",
       "section": "6",
       "title": "Topic diagnostics",
       "channel": "ui_e2e",
-      "status": "partial",
+      "status": "pass",
       "requirement": "Topics are neutral, bounded, and publish relevance plus fragmentation, merge sensitivity, mass concentration, and dominance indicators.",
-      "current_surface": ["frontend/topics.html", "frontend/audits.html"],
-      "current_coverage": "Topic rows, relevance, drift, coherence, and distinctness exist; dominance and merge-sensitivity outputs are incomplete.",
-      "next_test": "Add dominance-share and merge-sensitivity widgets, then cover them in browser tests."
+      "current_surface": [
+        "frontend/topics.html",
+        "frontend/audits.html"
+      ],
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/scoring_engine.py",
+        "backend/lsd_v1_2.py",
+        "frontend/topics.html",
+        "frontend/audits.html"
+      ]
     },
     {
       "id": "LSD-UI-06",
       "section": "8.1",
       "title": "AU completeness proxy",
       "channel": "api",
-      "status": "missing",
+      "status": "pass",
       "requirement": "Each argument unit gets a structural completeness proxy used for selection diagnostics.",
       "current_surface": [],
-      "current_coverage": "Not represented in current APIs or UI.",
-      "next_test": "Implement at extraction/selection layer and expose diagnostics in audit pages."
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/extraction.py",
+        "backend/selection_engine.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ]
     },
     {
       "id": "LSD-UI-07",
       "section": "10 and 11",
       "title": "Integrity and selection transparency",
       "channel": "api_plus_ui",
-      "status": "missing",
+      "status": "pass",
       "requirement": "The system publishes aggregate integrity indicators, selection recipes, centrality cap behavior, rarity slice diagnostics, and budget adequacy indicators.",
       "current_surface": [],
-      "current_coverage": "The current app does not expose these diagnostics.",
-      "next_test": "Implement audit endpoints first, then surface them in the audits page."
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/lsd_v1_2.py",
+        "backend/debate_engine_v2.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ]
     },
     {
       "id": "LSD-UI-08",
       "section": "13 to 17",
       "title": "Decision dossier outputs",
       "channel": "ui_e2e",
-      "status": "partial",
+      "status": "pass",
       "requirement": "The verdict surface publishes D distribution, verdict/confidence, topic contributions, decisive premises/arguments, remove-topic counterfactuals, evidence-gap summaries, and frame sensitivity when applicable.",
-      "current_surface": ["frontend/verdict.html", "frontend/evidence.html"],
-      "current_coverage": "Verdict, confidence, D distribution, and topic contributions exist; decisive-premise lists, remove-topic counterfactuals, frame sensitivity, and evidence-gap summaries are still missing.",
-      "next_test": "Expand verdict/evidence views and then add browser assertions."
+      "current_surface": [
+        "frontend/verdict.html",
+        "frontend/evidence.html"
+      ],
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/app_v3.py",
+        "backend/debate_engine_v2.py",
+        "frontend/verdict.html",
+        "frontend/dossier.html",
+        "test_lsd_v1_2_contracts.py"
+      ]
     },
     {
       "id": "LSD-UI-09",
       "section": "18 and 19",
       "title": "Replicates and audits",
       "channel": "ui_e2e",
-      "status": "partial",
+      "status": "pass",
       "requirement": "The system publishes replicate composition and the minimal high-leverage audit set, including label swap, extraction overlap, judge dispersion, frame sensitivity, integrity indicators, rarity impact, merge sensitivity, budget adequacy, and centrality cap effect.",
-      "current_surface": ["frontend/audits.html", "frontend/verdict.html"],
-      "current_coverage": "Label symmetry, extraction stability, and some audit scaffolding exist; the full v1.2 audit set does not.",
-      "next_test": "Implement missing audit data first, then add API and browser checks."
+      "current_surface": [
+        "frontend/audits.html",
+        "frontend/verdict.html"
+      ],
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/debate_engine_v2.py",
+        "backend/app_v3.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ]
     },
     {
       "id": "LSD-UI-10",
       "section": "20",
       "title": "Governance and incident hooks",
       "channel": "manual_plus_ui",
-      "status": "missing",
+      "status": "pass",
       "requirement": "The system publishes changelogs, fairness audits, appeal pathways, judge-pool governance summaries, and additive incident snapshots.",
       "current_surface": [],
-      "current_coverage": "No governance or incident-reporting surface is implemented today.",
-      "next_test": "Add a governance page and incident model before enforcing acceptance."
+      "current_coverage": "Implemented in LSD v1.2 gap closure run with API, UI, and deterministic contract/formula tests.",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
+      "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
+      "evidence_links": [
+        "backend/governance.py",
+        "backend/app_v3.py",
+        "frontend/governance.html",
+        "frontend/dossier.html"
+      ]
     }
   ]
 }

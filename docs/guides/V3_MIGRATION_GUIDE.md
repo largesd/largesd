@@ -27,7 +27,7 @@ frontend/
 │   ├── common.js          # NEW: Shared utilities (BDA object)
 │   └── auth.js            # EXISTING: Authentication utilities
 ├── topic.html             # NEW: Dynamic topic page
-└── new_debate_v3.html     # NEW: Updated debate page using v3 features
+└── new_debate.html     # NEW: Updated debate page using v3 features
 ```
 
 ### Scripts
@@ -294,7 +294,7 @@ curl -X POST http://localhost:5000/api/debates \
 ```
 
 ### UI Test
-1. Open http://localhost:5000/new_debate_v3.html
+1. Open http://localhost:5000/new_debate.html
 2. Register/Login
 3. Create a debate
 4. Submit posts
