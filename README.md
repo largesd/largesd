@@ -1,215 +1,260 @@
-## Large Scale Discussion - Agent for Debate / Discussion Modulation Project
+# Blind Debate Adjudicator (`debate_system`)
+
+A v3 prototype for **identity-blind, auditable debate adjudication**.
+
+The system ingests structured arguments, applies visible moderation rules, builds canonical fact/argument layers, scores each side with multi-judge evaluation, and produces immutable snapshots with audits.
+
+## What This Repository Implements
+
+- **Identity-blind public surfaces** (no likes/profiles/reputation signals in debate views)
+- **JWT auth + per-user debate session context**
+- **Debate proposal workflow** (user submission -> admin accept/reject)
+- **Versioned moderation templates** with draft/apply history
+- **Snapshot pipeline**:
+  - post modulation
+  - extraction and canonicalization
+  - fact checking (OFFLINE or ONLINE_ALLOWLIST)
+  - scoring (Factuality, Reasoning, Coverage, Quality)
+  - verdict with confidence interval logic
+- **Governance endpoints** (frames, changelog, appeals, judge pool, fairness summaries)
+- **Snapshot integrity metadata** (`replay_manifest`, input/output hash roots, recipe versions)
+- **Optional GitHub publication** of consolidated results JSON
+- **Email ingestion daemon** for processing structured email submissions
+
+## Architecture At A Glance
+
+```
+Participants -> Post Submission (API or Email)
+             -> Modulation Engine (versioned template)
+             -> Extraction + Canonicalization
+             -> Fact Check Layer
+             -> Multi-judge Scoring
+             -> Immutable Snapshot + Audits
+             -> Optional GitHub publish (consolidated_results.json)
+             -> Frontend reads live API and/or GitHub cache
+```
+
+## Project Layout
+
+- `backend/app_v3.py`: Flask API (auth, debates, snapshots, governance, admin)
+- `backend/debate_engine_v2.py`: core orchestration pipeline
+- `backend/database.py`, `backend/database_v3.py`: SQLite schema + v3 extensions
+- `backend/modulation.py`: built-in moderation templates and rule engine
+- `backend/scoring_engine.py`: scoring, replicates, verdict logic
+- `backend/email_processor.py`: IMAP -> parse -> snapshot -> GitHub publish loop
+- `backend/published_results.py`: consolidated JSON bundle builder
+- `frontend/`: UI pages and shared JS
+- `frontend/static/js/data_bridge.js`: GitHub-cached read mode + email submission bridge
+- `acceptance/run_ui_acceptance.py`: browser acceptance suite
+
+## Quick Start (Local API Development)
+
+### 1. Install
+
+```bash
+cd debate_system
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+```
+
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env and set at minimum:
+#   SECRET_KEY=your-strong-random-key
+#   LLM_PROVIDER=mock   # or openrouter with OPENROUTER_API_KEY
+```
+
+### 3. Start Server
+
+```bash
+python start_server.py --host 127.0.0.1 --port 5000
+```
+
+Or with explicit runtime options:
+
+```bash
+python start_server.py \
+  --host 127.0.0.1 \
+  --port 5000 \
+  --fact-mode OFFLINE \
+  --llm-provider mock \
+  --num-judges 5
+```
+
+### Docker Quick Start
+
+```bash
+cp .env.example .env
+# Edit .env with production values
+docker-compose up --build -d
+```
+
+### 3. Validate Health
+
+```bash
+curl http://127.0.0.1:5000/api/health
+```
 
-## Motivation
+Expected shape:
 
-Online debates today are chaotic, repetitive, and hard to follow. Strong arguments get buried, weak arguments get repeated, and readers struggle to determine:
+```json
+{
+  "status": "healthy",
+  "version": "3.0",
+  "auth_enabled": true,
+  "timestamp": "..."
+}
+```
 
-* what points actually matter
-* which claims have been refuted
-* where the real disagreements are
-* which side is currently stronger
+## Auth + Debate Flow (API)
 
-Most platforms optimize for engagement, not clarity. They reward volume over substance, speed over reasoning, and confidence over evidence.
+1. Register: `POST /api/auth/register`
+2. Login: `POST /api/auth/login`
+3. Submit proposal: `POST /api/debate-proposals`
+4. Admin accepts proposal: `POST /api/admin/debate-proposals/{proposal_id}/accept`
+5. Submit posts: `POST /api/debate/posts`
+6. Generate snapshot: `POST /api/debate/snapshot`
+7. Inspect results:
+   - `GET /api/debate/verdict`
+   - `GET /api/debate/topics`
+   - `GET /api/debate/audits`
+   - `GET /api/debate/evidence-targets`
 
-This agent is an attempt to fix that.
+## Frontend Operating Modes
 
-Instead of acting as a participant, it acts as a *neutral reasoning engine* that continuously organizes discussion into a structured, transparent, and evaluable argument map.
+### Mode A: Live API mode (backend-first)
 
-It transforms messy discourse into something closer to a living research document or judge’s flow sheet.
+Use local API endpoints for authenticated actions and dynamic state.
 
----
+### Mode B: GitHub cached mode (DataBridge)
 
-## Objective
+Frontend can read debate state from a published JSON file (`consolidated_results.json`) and generate **email-based** submissions via `mailto:`.
 
-The system’s core objective is to provide **real-time structured understanding of a debate** after every new post.
+Setup page:
 
-It does this by:
+- `frontend/setup.html`
+- Requires:
+  - Raw GitHub URL for consolidated results JSON
+  - Destination email for submissions
 
-1. Parsing each submission.
-2. Classifying it (point, counterpoint, clarification, etc.).
-3. Linking counters to targets.
-4. Updating an internal argument ledger.
-5. Publishing a fresh **Snapshot** that shows:
+## Email + GitHub Publication Workflow
 
-   * the current state of the debate
-   * strongest arguments on each side
-   * active clashes
-   * unresolved issues
-   * a provisional leaning based on rubric scoring
+The email processor supports asynchronous ingestion:
 
-### Design Principles
+1. Poll IMAP inbox
+2. Parse structured submission body (`BDA Submission v1`)
+3. Submit to debate engine
+4. Generate snapshot
+5. Publish updated consolidated JSON to GitHub
 
-* **Neutral consolidation, not persuasion**
-* **Traceable reasoning**
-* **Spam-resistant scoring**
-* **Evidence-sensitive evaluation**
-* **Scalable for long debates**
-* **Human-readable outputs**
+Run:
 
-The AI does not decide truth.
-It continuously evaluates *argument strength* given current information.
+```bash
+python -m backend.email_processor --poll-interval 60
+```
 
----
+Key env vars for this workflow:
 
-## Problem This Solves
+- `IMAP_HOST`, `IMAP_USER`, `IMAP_PASSWORD`
+- `GITHUB_REPO`, `GITHUB_TOKEN`
+- Optional: `GITHUB_BRANCH`, `GITHUB_RESULTS_PATH`
+- Optional: `PROCESSOR_DEST_EMAIL`, `SENDER_WHITELIST`
 
-Traditional debates fail because:
+## LLM and Fact-Check Configuration
 
-| Problem      | Result                                   |
-| ------------ | ---------------------------------------- |
-| No structure | Arguments get lost                       |
-| No memory    | Same claims repeated                     |
-| No linking   | Counters miss targets                    |
-| No scoring   | Strength is subjective                   |
-| No synthesis | Readers must reconstruct debate manually |
+From `.env.example`:
 
-The agent introduces:
+- `LLM_PROVIDER`: `mock`, `openai`, `openrouter`, `openrouter-multi`
+- `NUM_JUDGES`: judge count for evaluation replicates
+- `FACT_CHECK_MODE`: `OFFLINE` or `ONLINE_ALLOWLIST`
+- `OPENAI_API_KEY` (if `openai`)
+- `OPENROUTER_API_KEY` (required if provider is `openrouter`)
+- `OPENROUTER_MODEL` (required if provider is `openrouter`, e.g. `anthropic/claude-3.5-sonnet`)
+- `OPENROUTER_TIMEOUT_SECONDS` (optional, default 60)
+- `ALLOW_MOCK_FALLBACK` (optional, default `false`)
+- `SITE_URL` / `SITE_NAME` (optional, for OpenRouter rankings)
 
-* structured claims
-* canonical points
-* tracked refutations
-* weighted scoring
-* live synthesis
+### OpenRouter Setup
 
----
+```bash
+python setup_openrouter.py
+```
 
-## Use Cases
+This interactive script will prompt for your API key, model, and judge count, then write a `.env` file.
 
-### 1. Public Policy Debates
+## Async Snapshot Pipeline
 
-Journalists, students, or researchers can follow complex policy discussions and instantly see:
+Snapshot generation is now asynchronous to avoid HTTP timeouts during long-running evaluations:
 
-* strongest arguments for/against
-* which claims lack evidence
-* which questions remain unresolved
+1. `POST /api/debate/snapshot` returns immediately with a `job_id`
+2. Poll `GET /api/debate/snapshot-jobs/<job_id>` for progress
+3. On completion, the job result includes `snapshot_summary`
 
----
+The background worker is started automatically when the server boots.
 
-### 2. Classroom Debate Platforms
+## Admin Access Policy
 
-Teachers can run asynchronous debates without moderating turn order.
-The system automatically:
+`ADMIN_ACCESS_MODE` controls admin endpoints:
 
-* organizes arguments
-* detects duplicates
-* tracks refutations
-* evaluates quality
+- `open`: no auth checks
+- `authenticated`: any logged-in user
+- `restricted`: only users in `ADMIN_USER_EMAILS` / `ADMIN_USER_IDS`
 
-This encourages reasoning instead of rhetorical dominance.
+## Testing
 
----
+### Unit + Fact Check
 
-### 3. Online Forums / Communities
+```bash
+python test_debate_system.py
+python test_fact_check_skill.py
+```
 
-Integrates as a moderation + synthesis layer.
+### Manual Scenarios
 
-Instead of long threads, users see:
+```bash
+python test_manual.py server-check --base-url http://127.0.0.1:5000
+python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+```
 
-> “Current state of the discussion”
+### UI Acceptance
 
-This drastically improves signal-to-noise ratio.
+```bash
+python scripts/dev_workflow.py acceptance
+```
 
----
+Artifacts:
 
-### 4. Decision-Making Teams
+- `artifacts/acceptance/ui_acceptance_report.json`
+- `artifacts/acceptance/ui_acceptance_report.md`
+- `artifacts/acceptance/screenshots/`
 
-Product teams, research groups, or executives can use it to structure internal deliberations.
+## Core Scoring Concepts
 
-It becomes a **decision audit trail** showing:
+Per topic-side:
 
-* why a decision was made
-* what objections existed
-* which concerns were resolved
+- `F`: factuality from canonical fact `p_true`
+- `Reason`: median judge reasoning score
+- `Cov`: how well arguments address opposing leverage
+- `Q = (F * Reason * Cov)^(1/3)`
 
----
+Debate-level margin:
 
-### 5. Research & Knowledge Aggregation
+- `D = Overall_FOR - Overall_AGAINST`
+- Verdict is driven by confidence interval behavior and replicate stability.
 
-Useful for:
+## Documentation
 
-* literature disputes
-* scientific controversies
-* philosophical debates
-* ethics panels
+- Full docs index: `docs/README.md`
+- Workflow contract: `docs/workflow/WORKFLOW.md`
+- Testing guide: `docs/guides/TESTING.md`
 
-Over time it forms a structured argument database.
+## Notes
 
----
-
-### 6. Competitive Debate Training
-
-Debaters can practice posting arguments and immediately see:
-
-* whether their point is strong
-* whether a counter successfully weakened an opponent
-* what evidence they still need
-
-This functions like an automated judge + flow sheet.
-
----
-
-## What Makes It Different
-
-Typical AI debate tools:
-
-* generate arguments
-* take sides
-* simulate discussion
-
-**This agent instead:**
-
-* tracks arguments
-* scores reasoning
-* maps claims
-* evaluates strength
-
-It is not a debater.
-It is a **debate infrastructure layer**.
-
----
-
-## Core Value Proposition
-
-> Turn any freeform discussion into a structured, evolving map of reasoning.
-
-Users gain:
-
-* clarity
-* fairness
-* accountability
-* traceability
-* signal over noise
-
----
-
-## Ideal Users
-
-* educators
-* debate platforms
-* online communities
-* research teams
-* policy analysts
-* critical thinkers
-* anyone tired of messy arguments
-
----
-
-## Vision
-
-Long term, this agent could enable:
-
-* searchable global argument maps
-* structured public discourse archives
-* transparent reasoning in politics
-* evidence-weighted social discussion
-
-In short:
-
-> A world where arguments compete on merit, not volume.
-
----
-
-## One-Sentence Summary
-
-**The project aims to create a neutral real-time system that turns chaotic discussions into structured, scored, and traceable debates.**
-
+- `start_server.py` delegates to `start_server_v3.py`.
+- Database defaults to `data/debate_system.db`.
+- For deterministic local development, `LLM_PROVIDER=mock` and `FACT_CHECK_MODE=OFFLINE` are recommended.
