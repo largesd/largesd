@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verdict — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
+  <style>
+    .verdict-for { color: var(--good); }
+    .verdict-against { color: var(--bad); }
+    .verdict-neutral { color: var(--warn); }
+    .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .range-track {
+      position: relative;
+      height: 10px;
+      background: color-mix(in oklch, var(--surface-muted), white 26%);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 24px 0 10px 0;
+    }
+    .range-ci {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      background: color-mix(in oklch, var(--accent), white 56%);
+      border-radius: 999px;
+    }
+    .range-zero,
+    .range-point {
+      position: absolute;
+      top: -6px;
+      width: 2px;
+      height: 22px;
+      background: color-mix(in oklch, var(--ink-soft), white 18%);
+    }
+    .range-point {
+      background: var(--accent);
+    }
+    .range-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+  </style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="verdict.html" class="active" aria-current="page">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
+  </div>
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main id="main-content">
+
+<section class="card">
+  <div class="section-head">
+    <div>
+      <h1>Verdict</h1>
+      <p class="lede">The system stays conservative: it only commits when the live interval around the margin is clearly on one side of zero.</p>
+    </div>
+    <span class="pill warn" id="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
+  </div>
+
+  <div class="callout soft" id="verdict-empty" style="display:none;"></div>
+
+  <div id="verdict-content" style="display:none;">
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Overall FOR</div>
+        <div class="value mono" id="overall-for">-</div>
+        <div class="hint">weighted quality sum</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Overall AGAINST</div>
+        <div class="value mono" id="overall-against">-</div>
+        <div class="hint">weighted quality sum</div>
+      </div>
+      <div class="kpi">
+        <div class="label">D (Margin)</div>
+        <div class="value mono" id="margin-d">-</div>
+        <div class="hint">FOR minus AGAINST</div>
+      </div>
+    </div>
+
+    <hr />
+    <h3>Confidence interval of D</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">This interval is live snapshot data, not a schematic placeholder.</p>
+    <div class="callout soft">
+      <div class="range-track" role="img" aria-label="Confidence interval visualization. Exact values are provided in text nearby.">
+        <div class="range-ci" id="ci-band"></div>
+        <div class="range-zero" id="ci-zero"></div>
+        <div class="range-point" id="ci-point"></div>
+      </div>
+      <div class="range-axis">
+        <span id="axis-min">-</span>
+        <span>0</span>
+        <span id="axis-max">-</span>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <span class="pill">CI(D): <span class="mono" id="ci-d">-</span></span>
+        <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
+        <span class="pill">Confidence: <span class="mono" id="confidence-badge">-</span></span>
+      </div>
+      <small style="display:block;margin-top:12px" id="dist-explanation">Loading interval explanation...</small>
+    </div>
+
+    <hr />
+    <div class="callout soft" id="plain-readout"><strong>Plain-language readout:</strong> Loading...</div>
+
+    <hr />
+    <h3>Per-topic contributions</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">How each topic contributes to the overall margin D.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Rel<sub>t</sub></th>
+            <th>Q<sub>FOR</sub></th>
+            <th>Q<sub>AGAINST</sub></th>
+            <th>Contribution to D</th>
+          </tr>
+        </thead>
+        <tbody id="contributions-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <h3>Replicate + formula metadata</h3>
+    <div class="callout soft">
+      <div class="row">
+        <span class="pill">D samples: <span class="mono" id="d-sample-count">-</span></span>
+        <span class="pill">Judges: <span class="mono" id="replicate-judges">-</span></span>
+        <span class="pill">Rel formula: <span class="mono" id="verdict-rel-formula">-</span></span>
+        <span class="pill">Coverage mode: <span class="mono" id="verdict-coverage-mode">-</span></span>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show formula metadata</summary>
+        <div class="codebox" id="verdict-formula-raw">No formula metadata loaded.</div>
+      </details>
+    </div>
+
+    <hr />
+    <div class="row">
+      <a class="pill" href="evidence.html">What evidence would change this →</a>
+      <a class="pill" href="audits.html">Back to Audits</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
+  <div class="help-panel-header">
+    <h3 id="help-panel-title">Glossary & Help</h3>
+    <button class="close-help" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+
+    <div class="glossary-term">D (Margin)</div>
+    <div class="glossary-def">Difference between the overall FOR and AGAINST scores. Positive means FOR leads; negative means AGAINST leads.</div>
+
+    <div class="glossary-term">CI(D)</div>
+    <div class="glossary-def">Confidence interval around the margin D. If it crosses zero, the system keeps the verdict at NO VERDICT.</div>
+
+    <div class="glossary-term">Topic contribution</div>
+    <div class="glossary-def">How much a topic's quality gap, weighted by relevance, moves the overall margin.</div>
+
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>
+
+<script>
+function toggleHelp() {
+  BDA.toggleHelp();
+}
+
+function showVerdictEmpty(messageHtml) {
+  const empty = document.getElementById('verdict-empty');
+  document.getElementById('verdict-content').style.display = 'none';
+  empty.innerHTML = messageHtml;
+  empty.style.display = 'block';
+}
+
+function showVerdictContent() {
+  document.getElementById('verdict-empty').style.display = 'none';
+  document.getElementById('verdict-content').style.display = 'block';
+}
+
+function renderDebateChoices(debates) {
+  if (!debates.length) {
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to compute a live verdict.';
+  }
+
+  const buttons = debates.map((debate) => `
+    <button class="pill" data-debate-id="${BDA.escapeHtml(debate.debate_id)}">${BDA.escapeHtml(debate.resolution)}</button>
+  `).join('');
+
+  return `
+    <strong>No active debate selected.</strong> Choose a public debate to inspect its live verdict.
+    <div class="choice-list">${buttons}</div>
+  `;
+}
+
+function verdictClass(verdict) {
+  if (verdict === 'FOR') return 'verdict-for';
+  if (verdict === 'AGAINST') return 'verdict-against';
+  return 'verdict-neutral';
+}
+
+function renderInterval(ciLow, ciHigh, margin) {
+  const min = Math.min(ciLow, 0, margin);
+  const max = Math.max(ciHigh, 0, margin);
+  const span = Math.max(max - min, 0.001);
+  const percent = (value) => ((value - min) / span) * 100;
+
+  document.getElementById('axis-min').textContent = BDA.formatNumber(min, 4);
+  document.getElementById('axis-max').textContent = BDA.formatNumber(max, 4);
+  document.getElementById('ci-band').style.left = `${percent(ciLow)}%`;
+  document.getElementById('ci-band').style.width = `${Math.max(percent(ciHigh) - percent(ciLow), 1)}%`;
+  document.getElementById('ci-zero').style.left = `${percent(0)}%`;
+  document.getElementById('ci-point').style.left = `${percent(margin)}%`;
+}
+
+function buildReadout(verdict, contributions, ci) {
+  if (!contributions.length) {
+    return 'No topic contributions are available yet.';
+  }
+
+  const sorted = contributions.slice().sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d));
+  const top = sorted[0];
+  const direction = top.contribution_to_d >= 0 ? 'FOR' : 'AGAINST';
+  const second = sorted[1];
+
+  if (verdict === 'NO VERDICT') {
+    return `The interval still crosses zero. ${top.topic_id} contributes the strongest movement toward ${direction}, but the lead is not stable enough to commit.`;
+  }
+
+  const secondText = second
+    ? ` The next-largest mover is ${second.topic_id}, which pushes ${second.contribution_to_d >= 0 ? 'FOR' : 'AGAINST'}.`
+    : '';
+
+  return `Current live verdict: ${verdict}. ${top.topic_id} is the strongest driver of the margin, and CI(D) stays on the ${verdict === 'FOR' ? 'positive' : 'negative'} side of zero.${secondText}`;
+}
+
+function buildIntervalExplanation(ciLow, ciHigh, verdict) {
+  if (ciLow <= 0 && ciHigh >= 0) {
+    return 'The confidence interval still spans both sides of zero, so the system keeps the verdict at NO VERDICT.';
+  }
+  if (verdict === 'FOR') {
+    return 'The entire interval stays above zero, so the current evidence supports a FOR verdict.';
+  }
+  if (verdict === 'AGAINST') {
+    return 'The entire interval stays below zero, so the current evidence supports an AGAINST verdict.';
+  }
+  return 'The system is using the live interval to decide whether the margin is truly separated from zero.';
+}
+
+function renderVerdict(snapshot, verdictData) {
+  const verdict = snapshot.verdict || verdictData.verdict || 'NO VERDICT';
+  const verdictCss = verdictClass(verdict);
+  const ciLow = snapshot.ci_d?.[0] ?? verdictData.ci_d?.[0] ?? 0;
+  const ciHigh = snapshot.ci_d?.[1] ?? verdictData.ci_d?.[1] ?? 0;
+  const margin = snapshot.margin_d ?? verdictData.margin_d ?? 0;
+
+  document.getElementById('overall-for').textContent = BDA.formatNumber(snapshot.overall_for, 2);
+  document.getElementById('overall-against').textContent = BDA.formatNumber(snapshot.overall_against, 2);
+  document.getElementById('margin-d').textContent = BDA.formatNumber(margin, 4);
+  document.getElementById('ci-d').textContent = `[${BDA.formatNumber(ciLow, 4)}, ${BDA.formatNumber(ciHigh, 4)}]`;
+  document.getElementById('confidence-badge').textContent = BDA.formatNumber(snapshot.confidence, 2);
+  document.getElementById('verdict-pill').innerHTML = `Current state: <strong class="${verdictCss}">${verdict}</strong>`;
+  document.getElementById('verdict-badge').innerHTML = `Verdict: <b>${verdict}</b>`;
+  document.getElementById('dist-explanation').textContent = buildIntervalExplanation(ciLow, ciHigh, verdict);
+
+  renderInterval(ciLow, ciHigh, margin);
+
+  const contributions = verdictData.topic_contributions || [];
+  document.getElementById('plain-readout').innerHTML = `<strong>Plain-language readout:</strong> ${BDA.escapeHtml(buildReadout(verdict, contributions, [ciLow, ciHigh]))}`;
+  renderVerdictMetadata(verdictData);
+
+  renderContributions(contributions);
+}
+
+function renderVerdictMetadata(verdictData) {
+  const replicate = verdictData.replicate_composition_metadata || {};
+  const formulas = verdictData.formula_metadata || {};
+  document.getElementById('d-sample-count').textContent = (verdictData.d_distribution || []).length;
+  document.getElementById('replicate-judges').textContent = replicate.judge_count ?? '-';
+  document.getElementById('verdict-rel-formula').textContent = formulas.relevance?.active_mode || '-';
+  document.getElementById('verdict-coverage-mode').textContent = formulas.feature_flags?.COVERAGE_MODE || '-';
+  document.getElementById('verdict-formula-raw').textContent = JSON.stringify(formulas, null, 2);
+}
+
+function renderContributions(contributions) {
+  const tbody = document.getElementById('contributions-tbody');
+  if (!contributions.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No contribution data available.</td></tr>';
+    return;
+  }
+
+  const rows = contributions
+    .slice()
+    .sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d))
+    .map((item) => {
+      const style = item.contribution_to_d > 0
+        ? 'style="color:var(--good)"'
+        : item.contribution_to_d < 0
+          ? 'style="color:var(--warn)"'
+          : '';
+      return `
+        <tr>
+          <td><a href="topic.html?id=${encodeURIComponent(item.topic_id)}">${BDA.escapeHtml(item.topic_id)} ${BDA.escapeHtml(item.name || '')}</a></td>
+          <td class="mono">${BDA.formatNumber(item.relevance, 2)}</td>
+          <td class="mono">${BDA.formatNumber(item.q_for, 2)}</td>
+          <td class="mono">${BDA.formatNumber(item.q_against, 2)}</td>
+          <td class="mono" ${style}>${item.contribution_to_d > 0 ? '+' : ''}${BDA.formatNumber(item.contribution_to_d, 4)}</td>
+        </tr>
+      `;
+    });
+
+  tbody.innerHTML = rows.join('');
+}
+
+async function initVerdictPage() {
+  const debate = await BDA.loadDebate();
+  if (!debate.has_debate) {
+    const debates = await BDA.loadDebates();
+    showVerdictEmpty(renderDebateChoices(debates));
+    document.querySelectorAll('#verdict-empty [data-debate-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        BDA.setActiveDebateId(button.getAttribute('data-debate-id'));
+        window.location.reload();
+      });
+    });
+    return;
+  }
+
+  const snapshot = await BDA.loadSnapshot();
+  if (!snapshot || !snapshot.has_snapshot) {
+    showVerdictEmpty('This debate does not have a snapshot yet. Generate one from <a href="new_debate.html">New Debate / Post Point</a> first.');
+    return;
+  }
+
+  BDA.updateStateStrip(snapshot);
+
+  try {
+    const verdictData = await BDA.api('/api/debate/verdict');
+    renderVerdict(snapshot, verdictData);
+    showVerdictContent();
+    BDA.setupTableScroll();
+  } catch (error) {
+    showVerdictEmpty(`Unable to load live verdict data right now: ${BDA.escapeHtml(error.message)}`);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initVerdictPage);
+</script>
+</body>
+</html>
