@@ -14,27 +14,36 @@ class OpenRouterProvider(LLMProvider):
     
     def __init__(self, 
                  api_key: Optional[str] = None, 
-                 model: str = "anthropic/claude-3.5-sonnet",
+                 model: Optional[str] = None,
                  site_url: Optional[str] = None,
-                 site_name: Optional[str] = None):
+                 site_name: Optional[str] = None,
+                 timeout_seconds: Optional[int] = None):
         """
         Initialize OpenRouter provider.
         
         Args:
             api_key: OpenRouter API key (or set OPENROUTER_API_KEY env var)
-            model: Model string (e.g., "anthropic/claude-3.5-sonnet", "openai/gpt-4o")
+            model: Model string (e.g., "anthropic/claude-3.5-sonnet", "openai/gpt-4o").
+                   Reads from OPENROUTER_MODEL env var if not provided.
             site_url: Your site URL (for OpenRouter rankings)
             site_name: Your site name (for OpenRouter rankings)
+            timeout_seconds: Request timeout. Reads from OPENROUTER_TIMEOUT_SECONDS env var.
         """
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.model = model
+        self.model = model or os.getenv("OPENROUTER_MODEL")
         self.site_url = site_url or os.getenv("SITE_URL", "")
         self.site_name = site_name or os.getenv("SITE_NAME", "Debate System")
+        self.timeout_seconds = timeout_seconds or int(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "60"))
         
         if not self.api_key:
             raise ValueError(
                 "OpenRouter API key required. Set OPENROUTER_API_KEY env var "
                 "or pass api_key parameter."
+            )
+        if not self.model:
+            raise ValueError(
+                "OpenRouter model required. Set OPENROUTER_MODEL env var "
+                "or pass model parameter."
             )
         
         try:
@@ -77,10 +86,13 @@ class OpenRouterProvider(LLMProvider):
             )
             
         except Exception as e:
-            print(f"OpenRouter API error: {e}")
-            # Fall back to mock
-            from llm_client import MockLLMProvider
-            return MockLLMProvider().generate(prompt, temperature, max_tokens)
+            # Fail loudly when provider=openrouter; never silently fall back to mock.
+            allow_fallback = os.getenv("ALLOW_MOCK_FALLBACK", "false").lower() in ("1", "true", "yes")
+            if allow_fallback:
+                print(f"OpenRouter API error: {e}. ALLOW_MOCK_FALLBACK=true, falling back to mock.")
+                from llm_client import MockLLMProvider
+                return MockLLMProvider().generate(prompt, temperature, max_tokens)
+            raise RuntimeError(f"OpenRouter API call failed: {e}") from e
     
     def get_model_pricing(self) -> dict:
         """Get pricing info for current model (requires OpenRouter account)"""

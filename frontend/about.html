@@ -10,6 +10,7 @@
   <script src="static/js/data_bridge.js"></script>
 </HEAD>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -39,10 +40,10 @@
   </div>
 </header>
 
-<main>
+<main id="main-content">
 
 <section class="card">
-  <h2>Blind LLM-Adjudicated Debate System</h2>
+  <h1>Blind LLM-Adjudicated Debate System</h1>
   <p class="lede">Canonical Design Specification (abridged)</p>
   
   <hr />
@@ -161,7 +162,7 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="BDA.toggleHelp(); return false;">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>

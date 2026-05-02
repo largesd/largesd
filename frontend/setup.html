@@ -32,7 +32,7 @@
 </head>
 <body>
 
-<main class="setup-main">
+<main id="main-content" class="setup-main">
   <div class="setup-logo">
     <div class="brand-title">Blind Debate Adjudicator</div>
     <div class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></div>
@@ -60,7 +60,7 @@
         <button type="button" class="btn-secondary" id="test-btn" onclick="handleTest()">Test Fetch</button>
       </div>
 
-      <div id="status-msg" class="status-msg"></div>
+      <div id="status-msg" class="status-msg" role="status" aria-live="polite"></div>
     </form>
   </div>
 </main>

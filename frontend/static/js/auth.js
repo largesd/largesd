@@ -40,6 +40,14 @@ const Auth = {
   },
 
   /**
+   * Check if the current user is an admin
+   */
+  isAdmin() {
+    const user = this.getUser();
+    return !!(user && user.is_admin);
+  },
+
+  /**
    * Clear auth and session-related local state
    */
   clearSession() {

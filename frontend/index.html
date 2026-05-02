@@ -4,12 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Blind Debate Adjudicator - Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="assets/styles.css" />
-  <script src="static/js/auth.js"></script>
-  <script src="static/js/common.js"></script>
-  <script src="static/js/data_bridge.js"></script>
+  <script defer src="static/js/auth.js"></script>
+  <script defer src="static/js/common.js"></script>
+  <script defer src="static/js/data_bridge.js"></script>
+  <script defer src="static/js/index.js"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -25,12 +29,12 @@
       <a href="verdict.html">Verdict</a>
       <details class="nav-more">
         <summary>More</summary>
-        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
-          <a href="topics.html" role="menuitem">Topics</a>
-          <a href="audits.html" role="menuitem">Audits</a>
-          <a href="evidence.html" role="menuitem">Evidence</a>
-          <a href="admin.html" role="menuitem">Admin</a>
-          <a href="about.html" role="menuitem">About</a>
+        <div class="nav-more-menu">
+          <a href="topics.html">Topics</a>
+          <a href="audits.html">Audits</a>
+          <a href="evidence.html">Evidence</a>
+          <a href="admin.html">Admin</a>
+          <a href="about.html">About</a>
         </div>
       </details>
       <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
@@ -41,17 +45,17 @@
 
 <section class="state-strip" aria-label="Current debate state">
   <div class="state-wrap" id="state-wrap-desktop" aria-live="polite" aria-atomic="true">
-    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
+    <div class="state-item" data-state-tone="warn"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="confidence-display">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title="">Loading...</strong></div>
   </div>
   <div class="state-wrap" id="state-wrap-mobile" hidden aria-live="polite" aria-atomic="true">
-    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact" data-state-tone="warn"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
 </section>
 
-<main class="home-main layout-home">
+<main id="main-content" class="home-main layout-home">
   <section class="panel panel-current-state">
     <div class="panel-head panel-head-home">
       <div>
@@ -80,7 +84,7 @@
         <div class="signal-list" aria-label="Snapshot signals">
           <article class="signal-row">
             <p class="signal-label">Verdict status</p>
-            <p class="signal-value" id="kpi-verdict">NO VERDICT</p>
+            <p class="signal-value" id="kpi-verdict" data-state-tone="warn">NO VERDICT</p>
             <p class="signal-note"><span class="tooltip" data-tooltip="Confidence interval of D (FOR - AGAINST) crosses zero">CI(D) crosses 0</span> across replicates.</p>
           </article>
           <article class="signal-row">
@@ -99,7 +103,7 @@
       <section class="panel panel-latest-changes">
         <h2>What changed in the latest snapshot</h2>
         <p class="lede">Use this summary before opening detailed scoring pages.</p>
-        <ul class="compact-list update-list" id="changes-list">
+        <ul class="compact-list update-list" id="changes-list" aria-live="polite" aria-busy="true">
           <li>Loading snapshot changes...</li>
         </ul>
       </section>
@@ -146,8 +150,9 @@
       <section class="panel snapshot-essentials-panel">
         <div class="panel-head">
           <h3>Snapshot essentials</h3>
-          <button type="button" class="refresh-btn" id="refresh-data-btn" onclick="loadData()">Refresh</button>
-          <button type="button" class="refresh-btn" id="github-refresh-btn" onclick="refreshFromGitHub()" style="display:none;">Refresh from GitHub</button>
+          <button type="button" class="refresh-btn" id="refresh-data-btn" hidden>Refresh snapshot</button>
+          <button type="button" class="refresh-btn" id="generate-snapshot-btn" hidden>Generate snapshot</button>
+          <button type="button" class="refresh-btn" id="github-refresh-btn" hidden>Refresh from GitHub</button>
         </div>
 
         <dl class="snapshot-meta">
@@ -192,7 +197,7 @@
         <h3>Need help?</h3>
         <p class="lede">Use the glossary for term definitions and the About page for system rules.</p>
         <div class="row">
-          <button class="button" type="button" onclick="BDA.toggleHelp()">Open Glossary</button>
+          <button class="button" type="button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Open Glossary</button>
           <a class="button" href="about.html">Open About</a>
         </div>
       </section>
@@ -202,18 +207,18 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
+<button type="button" class="back-to-top" aria-label="Back to top">&uarr;</button>
 
 <div class="help-overlay" aria-hidden="true"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
   <div class="help-panel-header">
     <h3 id="help-panel-title">Glossary and Help</h3>
-    <button type="button" class="close-help" aria-label="Close help">x</button>
+    <button type="button" class="close-help" aria-label="Close help">&times;</button>
   </div>
   <div class="help-panel-body">
     <p class="help-panel-note help-panel-note-top">Key terms used across snapshot, topic, and verdict pages.</p>
@@ -256,298 +261,5 @@
   </div>
 </div>
 
-<script>
-// Load data from DataBridge (GitHub cache) or fallback to API
-async function loadData() {
-  const statusEl = document.getElementById('api-status');
-  const refreshBtn = document.getElementById('refresh-data-btn');
-  const ghRefreshBtn = document.getElementById('github-refresh-btn');
-  const resolutionEl = document.getElementById('resolution-display');
-  const frameDisplay = document.getElementById('frame-display');
-  const frameMetaDisplay = document.getElementById('frame-meta-display');
-  const sidesDisplay = document.getElementById('sides-display');
-  const criteriaDisplay = document.getElementById('criteria-display');
-
-  if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.setAttribute('aria-busy', 'true'); }
-  statusEl.textContent = 'Loading...';
-  statusEl.className = 'api-status';
-
-  try {
-    // Hard cutover: prefer DataBridge (GitHub mode)
-    DataBridge.loadConfig();
-    if (DataBridge.isConfigured()) {
-      ghRefreshBtn.style.display = 'inline-block';
-      refreshBtn.style.display = 'none';
-      await DataBridge.ensureData();
-      const debateData = DataBridge.getDebate();
-      const snapshotData = DataBridge.getSnapshot();
-
-      if (debateData.has_debate && debateData.resolution) {
-        const frame = DataBridge.getFrame();
-        resolutionEl.textContent = debateData.resolution;
-        resolutionEl.classList.remove('is-empty');
-        frameDisplay.textContent = debateData.motion ? `Motion: ${debateData.motion}` : '';
-        frameDisplay.hidden = !debateData.motion;
-        frameMetaDisplay.textContent = frame ? `Active frame: v${frame.version || 1} | ${frame.stage || 'substantive'}` : '';
-        frameMetaDisplay.hidden = !frame;
-        const hasSides = frame && Array.isArray(frame.sides) && frame.sides.length > 0;
-        sidesDisplay.textContent = hasSides ? `Sides: ${frame.sides.map(s => s.label || s).join(', ')}` : '';
-        sidesDisplay.hidden = !hasSides;
-        criteriaDisplay.hidden = true;
-        if (debateData.debate_id) { BDA.setActiveDebateId(debateData.debate_id); }
-      } else {
-        resolutionEl.textContent = 'No debate started yet.';
-        resolutionEl.classList.add('is-empty');
-        frameDisplay.hidden = true; frameMetaDisplay.hidden = true;
-        sidesDisplay.hidden = true; criteriaDisplay.hidden = true;
-      }
-
-      if (snapshotData && snapshotData.has_snapshot) {
-        updateSnapshotDisplay(snapshotData);
-        await loadLatestChanges(snapshotData);
-      } else if (!debateData.has_debate) {
-        resetToEmptyState();
-      }
-
-      statusEl.textContent = 'GitHub mode';
-      statusEl.className = 'api-status connected';
-      statusEl.title = 'Cached ' + DataBridge.formatCacheAge();
-    } else {
-      // Not configured — show empty state with setup prompt
-      statusEl.textContent = 'Setup required';
-      statusEl.className = 'api-status error';
-      resolutionEl.textContent = 'Welcome to Blind Debate Adjudicator. Configure a data source to get started.';
-      resolutionEl.classList.remove('is-empty');
-      document.getElementById('changes-list').innerHTML = '<li>Open <a href="setup.html">Setup</a> to configure your debate source.</li>';
-      return;
-    }
-  } catch (error) {
-    console.error('Error loading data:', error);
-    statusEl.textContent = 'Offline';
-    statusEl.className = 'api-status error';
-    // Try to show cached data even on error
-    if (DataBridge.hasCache()) {
-      const debateData = DataBridge.getDebate();
-      const snapshotData = DataBridge.getSnapshot();
-      if (debateData.has_debate && debateData.resolution) {
-        resolutionEl.textContent = debateData.resolution;
-        resolutionEl.classList.remove('is-empty');
-      }
-      if (snapshotData && snapshotData.has_snapshot) {
-        updateSnapshotDisplay(snapshotData);
-      }
-    }
-  } finally {
-    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.setAttribute('aria-busy', 'false'); }
-  }
-}
-
-async function loadLatestChanges(snapshotData) {
-  const list = document.getElementById('changes-list');
-  if (!list) return;
-
-  // Try to get diff data from cache
-  let changes = [];
-  try {
-    const diff = DataBridge.getSnapshotDiff();
-    if (diff && diff.changes && diff.changes.length > 0) {
-      changes = diff.changes.slice(0, 3).map(c => c.description || String(c));
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  // Fallback: generate meaningful messages from snapshot data
-  if (changes.length === 0 && snapshotData) {
-    const verdict = snapshotData.verdict || 'NO VERDICT';
-    const confidence = snapshotData.confidence !== null && snapshotData.confidence !== undefined ? snapshotData.confidence.toFixed(2) : '-';
-    const trigger = snapshotData.trigger_type || 'Activity';
-
-    if (verdict === 'FOR') {
-      changes.push(`Verdict is <strong>FOR</strong> with confidence ${confidence}.`);
-    } else if (verdict === 'AGAINST') {
-      changes.push(`Verdict is <strong>AGAINST</strong> with confidence ${confidence}.`);
-    } else {
-      changes.push(`The overall decision remains <strong>NO VERDICT</strong> because CI(D) still crosses 0.`);
-    }
-    changes.push(`Latest snapshot triggered by <strong>${BDA.escapeHtml(trigger)}</strong>.`);
-    if (snapshotData.topic_contributions && snapshotData.topic_contributions.length > 0) {
-      const top = snapshotData.topic_contributions[0];
-      changes.push(`<strong>${BDA.escapeHtml(top.topic_id || 'Top topic')}</strong> contributes the largest movement toward ${top.side || 'FOR'}.`);
-    }
-  }
-
-  if (changes.length === 0) {
-    changes.push('No snapshot data available yet. Generate a snapshot to see changes.');
-  }
-
-  list.innerHTML = changes.map(c => `<li>${c}</li>`).join('');
-}
-
-async function refreshFromGitHub() {
-  const statusEl = document.getElementById('api-status');
-  const btn = document.getElementById('github-refresh-btn');
-  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
-  statusEl.textContent = 'Refreshing from GitHub...';
-  try {
-    await DataBridge.refreshFromGitHub();
-    await loadData();
-    statusEl.textContent = 'Updated from GitHub';
-  } catch (err) {
-    statusEl.textContent = 'Refresh failed';
-    BDA.showStatus('Failed to refresh from GitHub: ' + err.message, true);
-  } finally {
-    if (btn) { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); }
-  }
-}
-
-function updateSnapshotDisplay(data) {
-  // Update state strip
-  document.getElementById('verdict-display').textContent = data.verdict || 'NO VERDICT';
-  document.getElementById('verdict-display').className = 'state-value verdict-neutral' + (data.verdict === 'FOR' ? ' good' : data.verdict === 'AGAINST' ? ' bad' : '');
-  document.getElementById('confidence-display').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
-  document.getElementById('snapshot-display').textContent = data.snapshot_id || '-';
-  document.getElementById('snapshot-display').title = data.snapshot_id || '';
-
-  // Mobile
-  document.getElementById('verdict-mobile').textContent = data.verdict || 'NO VERDICT';
-  document.getElementById('confidence-mobile').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
-
-  // Update KPIs
-  document.getElementById('kpi-verdict').textContent = data.verdict || 'NO VERDICT';
-  document.getElementById('kpi-confidence').textContent = data.confidence !== null && data.confidence !== undefined ? data.confidence.toFixed(2) : '-';
-  document.getElementById('kpi-trigger').textContent = data.trigger_type || '-';
-
-  // Update badges
-  document.getElementById('badge-snapshot-id').textContent = data.snapshot_id || '-';
-  document.getElementById('badge-timestamp').textContent = data.timestamp ? new Date(data.timestamp).toLocaleString() : '-';
-  document.getElementById('badge-trigger').textContent = data.trigger_type || '-';
-
-  document.getElementById('template-name').textContent = data.template_name || '-';
-  document.getElementById('template-version').textContent = data.template_version || '-';
-
-  document.getElementById('allowed-count').textContent = data.allowed_count !== undefined ? data.allowed_count : '-';
-  document.getElementById('blocked-count').textContent = data.blocked_count !== undefined ? data.blocked_count : '-';
-
-  // Block reasons
-  const blockReasonsEl = document.getElementById('block-reasons');
-  if (data.block_reasons && Object.keys(data.block_reasons).length > 0) {
-    blockReasonsEl.textContent = '';
-    Object.entries(data.block_reasons).forEach(([reason, count]) => {
-      const pill = document.createElement('span');
-      pill.className = 'pill warn';
-      pill.textContent = `${reason}: ${count}`;
-      blockReasonsEl.appendChild(pill);
-    });
-  } else {
-    const emptyPill = document.createElement('span');
-    emptyPill.className = 'pill';
-    emptyPill.textContent = '-';
-    blockReasonsEl.textContent = '';
-    blockReasonsEl.appendChild(emptyPill);
-  }
-}
-
-function resetToEmptyState() {
-  // Reset all displays to empty state when no debate exists
-  document.getElementById('verdict-display').textContent = 'NO VERDICT';
-  document.getElementById('verdict-display').className = 'state-value verdict-neutral';
-  document.getElementById('confidence-display').textContent = '-';
-  document.getElementById('snapshot-display').textContent = '-';
-  document.getElementById('snapshot-display').title = '';
-
-  // Mobile
-  document.getElementById('verdict-mobile').textContent = 'NO VERDICT';
-  document.getElementById('confidence-mobile').textContent = '-';
-
-  // KPIs
-  document.getElementById('kpi-verdict').textContent = 'NO VERDICT';
-  document.getElementById('kpi-confidence').textContent = '-';
-  document.getElementById('kpi-trigger').textContent = '-';
-
-  // Badges
-  document.getElementById('badge-snapshot-id').textContent = '-';
-  document.getElementById('badge-timestamp').textContent = '-';
-  document.getElementById('badge-trigger').textContent = '-';
-
-  document.getElementById('template-name').textContent = '-';
-  document.getElementById('template-version').textContent = '-';
-
-  document.getElementById('allowed-count').textContent = '-';
-  document.getElementById('blocked-count').textContent = '-';
-  const blockReasonsEl = document.getElementById('block-reasons');
-  const emptyPill = document.createElement('span');
-  emptyPill.className = 'pill';
-  emptyPill.textContent = '-';
-  blockReasonsEl.textContent = '';
-  blockReasonsEl.appendChild(emptyPill);
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  loadData();
-
-  // Show login notice if not logged in
-  if (!Auth.isLoggedIn()) {
-    const notice = document.getElementById('login-notice');
-    if (notice) notice.hidden = false;
-  }
-});
-
-// Override shared helpers with page-specific accessibility behavior before BDA.init runs.
-if (window.BDA) {
-  BDA.toggleHelp = function () {
-    const panel = document.getElementById('helpPanel');
-    const overlay = document.querySelector('.help-overlay');
-    const helpButtons = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
-    if (!panel || !overlay) return;
-
-    const shouldOpen = !panel.classList.contains('open');
-    panel.classList.toggle('open', shouldOpen);
-    overlay.classList.toggle('visible', shouldOpen);
-    panel.setAttribute('aria-hidden', String(!shouldOpen));
-    overlay.setAttribute('aria-hidden', String(!shouldOpen));
-    if (shouldOpen) {
-      panel.removeAttribute('inert');
-    } else {
-      panel.setAttribute('inert', '');
-    }
-    helpButtons.forEach(btn => btn.setAttribute('aria-expanded', String(shouldOpen)));
-  };
-
-  BDA.setupMobileState = function () {
-    const desktop = document.getElementById('state-wrap-desktop');
-    const mobile = document.getElementById('state-wrap-mobile');
-    if (!desktop || !mobile) return;
-
-    const applyLayout = () => {
-      const isMobile = window.innerWidth <= 640;
-      desktop.hidden = isMobile;
-      mobile.hidden = !isMobile;
-    };
-
-    applyLayout();
-    window.addEventListener('resize', BDA.debounce(applyLayout, 120));
-  };
-}
-
-// Close help panel on Escape and close nav "More" menu on outside click.
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    const panel = document.getElementById('helpPanel');
-    if (panel && panel.classList.contains('open')) {
-      BDA.toggleHelp();
-    }
-  }
-});
-
-document.addEventListener('click', (event) => {
-  document.querySelectorAll('.nav-more').forEach((menu) => {
-    if (!menu.contains(event.target)) {
-      menu.removeAttribute('open');
-    }
-  });
-});
-</script>
 </body>
 </html>

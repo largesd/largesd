@@ -2,15 +2,15 @@
 Fact Checking Agentic Skill
 
 A deterministic, cacheable, auditable skill for evaluating factual claims.
-Supports OFFLINE and ONLINE_ALLOWLIST modes.
+Supports OFFLINE, ONLINE_ALLOWLIST, PERFECT_CHECKER, and PERFECT modes.
 
 Usage:
-    from debate_system.skills.fact_checking import FactCheckingSkill
+    from skills.fact_checking import FactCheckingSkill
     
-    skill = FactCheckingSkill(mode="ONLINE_ALLOWLIST", allowlist_version="v1")
+    skill = FactCheckingSkill(mode="PERFECT", allowlist_version="v1")
     
     # For async operation
-    result = await skill.check_fact_async(claim_text, request_context={...})
+    job = await skill.check_fact_async(claim_text, request_context={...})
     
     # For sync operation (returns immediately with PENDING if async)
     result = skill.check_fact(claim_text)
@@ -29,8 +29,22 @@ from .models import (
     TemporalContext,
     RequestContext,
     CacheResult,
+    SourceConfidence,
+    SourceResult,
 )
 from .config import FactCheckConfig
+from .connectors import SourceConnector, GroundTruthDB, SimulatedSourceConnector
+from .policy import EvidencePolicy, default_policy, strict_policy, apply_policy
+from .wikidata_connector import WikidataConnector
+from .web_rag_connector import WebRAGConnector, SearchBackend, LLMClient
+from .template_adapters import (
+    ClaimTypeDetector,
+    ClaimAnalysis,
+    ClaimType,
+    SourceCredibilityAnalyzer,
+    MisinformationScanner,
+    ConsensusAnalyzer,
+)
 
 __all__ = [
     'FactCheckingSkill',
@@ -46,4 +60,23 @@ __all__ = [
     'RequestContext',
     'CacheResult',
     'FactCheckConfig',
+    'SourceConfidence',
+    'SourceResult',
+    'SourceConnector',
+    'GroundTruthDB',
+    'SimulatedSourceConnector',
+    'EvidencePolicy',
+    'default_policy',
+    'strict_policy',
+    'apply_policy',
+    'WikidataConnector',
+    'WebRAGConnector',
+    'SearchBackend',
+    'LLMClient',
+    'ClaimTypeDetector',
+    'ClaimAnalysis',
+    'ClaimType',
+    'SourceCredibilityAnalyzer',
+    'MisinformationScanner',
+    'ConsensusAnalyzer',
 ]

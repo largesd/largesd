@@ -9,6 +9,7 @@
   <script src="static/js/common.js"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -39,12 +40,12 @@
   </div>
 </header>
 
-<main class="propose-main">
+<main id="main-content" class="propose-main">
 
 <section class="card propose-section" id="propose-form-section">
   <div class="section-head">
     <div>
-      <h2>Propose a New Debate</h2>
+      <h1>Propose a New Debate</h1>
       <p class="lede">Submit a motion, moderation criteria, and debate frame for admin review. If accepted, the debate will be created and you can start posting arguments.</p>
     </div>
   </div>
@@ -110,9 +111,9 @@
 <button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
 
 <div class="help-overlay"></div>
-<div class="help-panel" id="helpPanel">
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
   <div class="help-panel-header">
-    <h3>Glossary & Help</h3>
+    <h3 id="help-panel-title">Glossary & Help</h3>
     <button type="button" class="close-help" aria-label="Close help">x</button>
   </div>
   <div class="help-panel-body">

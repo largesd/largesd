@@ -10,6 +10,7 @@
   <script src="static/js/data_bridge.js"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -51,11 +52,11 @@
   </div>
 </section>
 
-<main>
+<main id="main-content">
   <section class="card">
     <div class="section-head">
       <div>
-        <h2>Decision Dossier</h2>
+        <h1>Decision Dossier</h1>
         <p class="lede">Expose decisive evidence gaps and selection diagnostics without leaving the product UI.</p>
       </div>
       <a class="button secondary" href="snapshot.html">Back to snapshot</a>
@@ -161,7 +162,7 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="BDA.toggleHelp(); return false;">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>

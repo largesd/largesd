@@ -38,6 +38,7 @@
   <script src="static/js/common.js"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -67,7 +68,7 @@
   </div>
 </header>
 
-<main>
+<main id="main-content">
   <div class="auth-container">
     <div class="auth-card">
       <div class="auth-header">
@@ -81,12 +82,12 @@
       <form id="login-form">
         <div class="form-group">
           <label for="email">Email Address</label>
-          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" aria-describedby="error-alert" aria-invalid="false">
         </div>
         
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+          <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password" aria-describedby="error-alert" aria-invalid="false">
         </div>
         
         <button type="submit" class="submit-btn" id="submit-btn">
@@ -206,7 +207,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       localStorage.setItem('user', JSON.stringify({
         user_id: data.user_id,
         email: data.email,
-        display_name: data.display_name
+        display_name: data.display_name,
+        is_admin: data.is_admin
       }));
       
       // Show success message
@@ -221,6 +223,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       // Show error
       errorAlert.textContent = data.error || 'Login failed. Please try again.';
       errorAlert.classList.add('visible');
+      document.getElementById('email').setAttribute('aria-invalid', 'true');
+      document.getElementById('password').setAttribute('aria-invalid', 'true');
       submitBtn.disabled = false;
       submitBtn.textContent = 'Sign In';
     }

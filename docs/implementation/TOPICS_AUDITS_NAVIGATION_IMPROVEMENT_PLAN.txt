@@ -1,0 +1,642 @@
+Topics and Audits Navigation Improvement Plan
+============================================
+
+Document purpose
+----------------
+This document describes a single-pass implementation for improving navigation on:
+
+1. frontend/topics.html
+2. frontend/audits.html
+
+Scope requested for this pass
+-----------------------------
+1. Lightweight search + filters on topics.html
+2. Topic-focused audit filtering on audits.html
+3. Both pages implemented together as one coherent navigation pass
+
+Current-state observations
+--------------------------
+The current topics and audits pages are technically functional, but they are still optimized for short tables rather than fast navigation.
+
+Observed issues in frontend/topics.html
+--------------------------------------
+1. The page is table-first and scan-heavy.
+   - The main interaction surface starts immediately with the full topic table.
+   - There is no search box, no real sort control, and no real filter control.
+
+2. The existing sort/filter pills are static text, not interactive controls.
+   - Current placeholders appear in the section header area:
+     - "Sort: Relevance"
+     - "Filter: All topics"
+
+3. Topic ID has too much visual weight.
+   - The first visible column is "Topic ID".
+   - Rows currently render the machine identifier before the human-readable topic name.
+   - This encourages ID-based scanning even though users care more about name, scope, and review priority.
+
+4. The page does not help the user answer the most important question:
+   - "Which topics should I inspect first?"
+   - The current highlight links help somewhat, but the full table still requires manual scanning.
+
+Observed issues in frontend/audits.html
+--------------------------------------
+1. The audits page is also table-first.
+   - Topic geometry, lineage, and symmetry sections all require manual scanning.
+
+2. There is no topic-level focus mode.
+   - Users cannot select one topic and narrow the audit view to that topic.
+
+3. The page mixes global audits and topic-specific audits without a narrowing mechanism.
+   - Some audits are inherently topic-specific:
+     - topic geometry
+     - lineage
+     - topic-level symmetry deltas
+   - Some audits are global to the snapshot:
+     - extraction stability
+     - evaluator disagreement
+     - relevance sensitivity
+     - v1.2 audit matrix
+   - Right now the page treats them all as one flat review surface.
+
+4. The topics page and audits page are not connected tightly enough.
+   - A user can inspect a topic on topics.html, but there is no direct topic-focused handoff into audits.html.
+
+Implementation goal
+-------------------
+Make topic navigation feel search-first and decision-first, without adding a large framework or rewriting both pages into a new architecture.
+
+Guiding principles for this pass
+--------------------------------
+1. Keep the implementation lightweight.
+2. Reuse the current pages and current API endpoints.
+3. Avoid introducing a new build system, component framework, or complex state library.
+4. Improve discoverability and drill-down without changing the underlying topic model.
+5. Make topics.html the "find the right topic" page.
+6. Make audits.html the "inspect this topic deeply" page.
+
+
+Part 1: topics.html improvements
+================================
+
+Primary UX change
+-----------------
+Convert topics.html from a passive table into a search/filter/sort view with a small priority summary above the full list.
+
+Recommended UI additions
+------------------------
+Add a new control strip between the diagnostics summary and the table.
+
+Suggested controls:
+1. Search input
+   - Placeholder: "Search topic name, scope, or topic ID"
+   - Matches against:
+     - topic.name
+     - topic.scope
+     - topic.topic_id
+   - Substring match (case-insensitive).
+
+2. Sort select
+   - Default: Relevance descending
+   - Options:
+     - Relevance
+     - Drift
+     - Most contested
+     - Lowest coherence
+     - Lowest distinctness
+     - Alphabetical
+   - Sort direction is baked into the option value (e.g. "relevance_desc").
+   - Tiebreaker when values are equal: topic name ascending, then topic_id ascending.
+
+3. Filter chips or checkbox pills
+   - High relevance
+   - High drift
+   - Low coherence
+   - Low distinctness
+   - Needs review
+   - Multiple flags are combined with OR logic (a topic matches if ANY selected flag is true).
+
+4. Clear filters button
+   - Resets search text, filters, and sort to defaults
+
+5. Results summary line
+   - Example:
+     - "Showing 5 of 12 topics"
+     - "2 flagged as needs review"
+
+Recommended row presentation changes
+------------------------------------
+Change the row hierarchy so users scan the human label first.
+
+Current row layout:
+1. Topic ID column first
+2. Name and scope second
+
+Recommended row layout:
+1. Name and scope become the primary reading anchor
+2. Topic ID becomes muted metadata
+3. Add inline badges only when useful
+
+Suggested visible structure inside each row:
+1. Topic name as the primary link
+2. Scope as a muted secondary line
+3. Small metadata line:
+   - topic_id
+   - operation, if useful
+   - optional review badges
+
+Suggested "needs review" heuristic
+----------------------------------
+Do not block this pass on backend changes. Compute a lightweight front-end flag using existing fields.
+
+Use a `REVIEW_THRESHOLDS` constant object so thresholds are explicit and easy to adjust:
+
+```js
+const REVIEW_THRESHOLDS = {
+  drift: 0.50,
+  coherence: 0.50,
+  distinctness: 0.50,
+  highRelevance: 0.30,      // relevance above this is "high"
+  smallLeadMargin: 0.05,    // lead margin below this is "very small"
+};
+```
+
+Mark a topic as "Needs review" if any of these are true:
+1. drift_score >= REVIEW_THRESHOLDS.drift
+2. coherence <= REVIEW_THRESHOLDS.coherence
+3. distinctness <= REVIEW_THRESHOLDS.distinctness
+4. relevance >= REVIEW_THRESHOLDS.highRelevance AND lead_margin <= REVIEW_THRESHOLDS.smallLeadMargin
+
+This lets the page surface:
+1. unstable topics
+2. overlapping topics
+3. important but contested topics
+
+Recommended summary panel above the table
+-----------------------------------------
+Add a small "Review first" panel above the full results. This panel supplements (and may eventually replace) the existing highlight links row.
+
+Suggested contents:
+1. Most contested topic
+2. Biggest verdict mover
+3. Highest drift topic
+4. Lowest coherence topic
+
+Each item should link directly to:
+1. topic.html?id=...
+2. audits.html?tab=audits&topic=...#topic-geometry
+
+Suggested URL behavior
+----------------------
+Keep the page state shareable.
+
+Use URL params such as:
+1. q
+2. sort
+3. flags
+
+Example:
+topics.html?q=safety&sort=drift&flags=needs_review,high_relevance
+
+This is valuable because:
+1. the user can bookmark filtered views
+2. the same logic can be reused from cross-links
+
+Use history.replaceState (not pushState) so the back button is not cluttered.
+
+Recommended client-side state model
+-----------------------------------
+Inside frontend/topics.html, introduce a small state object:
+
+```js
+const TOPICS_STATE = {
+  rawTopics: [],
+  query: "",
+  sort: "relevance_desc",
+  flags: new Set(),
+};
+```
+
+Derived helpers:
+1. getFilteredTopics()
+2. sortTopics(items, mode)
+3. matchesQuery(topic, query)
+4. getTopicReviewFlags(topic)
+5. syncTopicControlsFromUrl()
+6. syncTopicUrlFromState()
+
+Recommended refactor for the existing script
+--------------------------------------------
+Current flow:
+1. loadData()
+2. renderTopicDiagnostics()
+3. renderTopics()
+4. updateTopicHighlights()
+
+Recommended flow after the change:
+1. loadData()
+2. store raw topics in TOPICS_STATE.rawTopics
+3. sync controls from URL
+4. renderTopicDiagnostics()
+5. renderTopicHighlights()
+6. renderTopicsSummary()
+7. renderTopicsTable(applyTopicViewState())
+8. bind topic control events
+
+Specific code targets in topics.html
+------------------------------------
+Use these current areas as insertion points:
+
+1. Section header and placeholder pills
+   - frontend/topics.html
+   - current static sort/filter display near the section head
+
+2. Table shell
+   - frontend/topics.html
+   - topics-table-container
+   - topics-tbody
+
+3. Existing highlight links
+   - most-contested-link
+   - verdict-mover-link
+
+4. Current render functions
+   - loadData()
+   - updateTopicHighlights()
+   - renderTopics()
+   - renderTopicDiagnostics()
+
+Recommended acceptance criteria for topics.html
+-----------------------------------------------
+1. A user can search by topic name, scope, or ID.
+2. A user can filter topics down to likely problem areas.
+3. A user can sort by different review goals.
+4. The page defaults to a useful order without requiring interaction.
+5. Topic names are easier to scan than IDs.
+6. Every topic row provides a direct path into topic-focused audits.
+7. Empty filter results show a friendly message instead of a blank table.
+8. Search input is debounced (150ms) using BDA.debounce().
+
+
+Part 2: audits.html improvements
+================================
+
+Primary UX change
+-----------------
+Add topic-focused filtering to the audits tab so a user can choose one topic and inspect only the rows that matter to that topic.
+
+Recommended UI additions
+------------------------
+Add a topic focus bar near the top of the audits tab, above "Topic geometry audit".
+
+Suggested controls:
+1. Topic select dropdown
+   - Default option: All topics
+   - Remaining options: topic name with optional ID suffix
+   - Options are built from the union of:
+     - topics fetched from /api/debate/topics
+     - topic IDs present in audits.topic_geometry
+     - topic IDs present in audits.label_symmetry.topic_deltas
+   - This ensures the dropdown is complete even if data sources differ.
+
+2. Search input for topic selector
+   - Optional for this pass if the dropdown remains short
+   - Can be omitted if current snapshot topic counts stay low
+
+3. Quick focus pills
+   - Most contested
+   - Biggest verdict mover
+   - Highest drift
+   - These pills set the dropdown to the corresponding topic.
+
+4. Clear topic focus button
+   - Returns to global "All topics" mode
+
+Suggested URL behavior
+----------------------
+Persist topic focus in the URL.
+
+Use:
+1. tab=audits
+2. topic=<topic_id>
+
+Example:
+audits.html?tab=audits&topic=topic_529b33b9#topic-geometry
+
+This enables:
+1. direct links from topics.html
+2. direct links from topic.html
+3. stable page reload behavior
+
+Important: preserve the existing `tab` param when updating topic. Use URLSearchParams, not string concatenation.
+
+Recommended filtering behavior by section
+-----------------------------------------
+Not every section should behave the same way. Some sections should filter; some should stay global but contextual.
+
+Sections that should filter to the selected topic:
+1. Lineage map
+2. Content mass share + geometry quality
+3. Topic-level symmetry deltas
+
+Sections that should remain global but show contextual messaging:
+1. Extraction stability
+2. Evaluator disagreement
+3. Relevance sensitivity
+4. v1.2 audit matrix
+
+Example contextual message:
+"Topic focus is set to Safety and Risk Management. The sections below remain snapshot-wide because they are not topic-specific."
+
+The contextual message should appear once, below the topic focus bar, when a topic is selected.
+
+Recommended rendering behavior
+------------------------------
+When a topic is selected:
+1. Lineage table shows only the selected topic row
+2. Geometry table shows only the selected topic row
+3. Symmetry topic deltas show only the selected topic row
+4. Summary chips above geometry should be replaced or supplemented with a selected-topic summary
+
+Suggested selected-topic summary block
+--------------------------------------
+Add a small callout when a topic is focused:
+1. Topic name
+2. Topic ID
+3. Relevance
+4. Drift
+5. Coherence
+6. Distinctness
+7. Links:
+   - Open topic detail
+   - Back to full topics list
+
+Recommended client-side state model
+-----------------------------------
+Inside frontend/audits.html, add:
+
+```js
+const AUDITS_STATE = {
+  topics: [],
+  selectedTopicId: null,
+  audits: null,
+};
+```
+
+Suggested helpers:
+1. getRequestedTopicId()
+2. setSelectedTopic(topicId, options)
+3. syncTopicFilterUrl(topicId)
+4. getSelectedTopicMeta()
+5. filterTopicGeometry(items, topicId)
+6. filterSymmetryTopicDeltas(topicDeltas, topicId)
+7. renderTopicAuditFocus()
+
+Recommended data loading flow
+-----------------------------
+Current flow:
+1. load debate
+2. load snapshot
+3. load evidence
+4. load audits
+5. render everything once
+
+Recommended flow after the change:
+1. load debate
+2. load snapshot
+3. load topics from /api/debate/topics
+4. load evidence
+5. load audits
+6. derive selectedTopicId from URL
+7. render topic focus bar
+8. render audits with current topic filter
+
+Specific code targets in audits.html
+------------------------------------
+Use these current areas as insertion points:
+
+1. audits panel shell
+   - the audits tab section near "Topic geometry audit"
+
+2. renderTopicGeometry(items)
+   - currently renders lineage and geometry tables together
+   - should accept selectedTopicId or read from AUDITS_STATE
+
+3. renderSymmetry(symmetry)
+   - currently renders all topic deltas
+   - should narrow to selected topic when topic focus is active
+
+4. initAnalysisPage()
+   - currently loads evidence and audits only
+   - should also fetch topics and restore topic focus from the URL
+
+Recommended structural refactor
+-------------------------------
+This page does not need a large rewrite. A modest split is enough:
+
+1. Add "global audit data" state (AUDITS_STATE.audits)
+2. Add "topic focus state" (AUDITS_STATE.selectedTopicId)
+3. Replace direct render calls with a single rerender function
+
+Suggested function split:
+1. loadAuditDependencies()
+2. bindAuditTopicControls()
+3. rerenderAuditPanels()
+4. renderTopicGeometrySection()
+5. renderSymmetrySection()
+6. renderGlobalAuditSections()
+
+The rerender function must be idempotent and must not re-fetch data.
+
+Recommended acceptance criteria for audits.html
+-----------------------------------------------
+1. A user can focus audits on a single topic.
+2. The chosen topic survives reload via URL params.
+3. Topic geometry rows narrow immediately when the selection changes.
+4. Topic symmetry rows narrow immediately when the selection changes.
+5. Snapshot-wide audit sections remain visible and understandable.
+6. A user can jump into a focused audit view directly from topics.html.
+7. Empty topic-specific sections show a friendly message when the selected topic has no data.
+
+
+Part 3: both pages together as one pass
+=======================================
+
+Why these two changes should ship together
+------------------------------------------
+These pages are part of one navigation workflow:
+
+1. topics.html answers:
+   - "Which topic should I look at?"
+
+2. audits.html answers:
+   - "What is happening with that topic under the current snapshot?"
+
+If only one page changes, the experience still breaks:
+1. topics.html without audit focus still forces scanning on the next step
+2. audits.html without topics search still makes the user hunt for the topic to begin with
+
+Recommended end-to-end user flow after this pass
+------------------------------------------------
+1. User opens topics.html
+2. User searches "safety"
+3. User sees filtered topics
+4. User notices one topic tagged "Needs review"
+5. User clicks "Open audit"
+6. audits.html opens with:
+   - tab=audits
+   - topic=<topic_id>
+7. Geometry and symmetry sections are already focused on that topic
+8. User can clear focus and return to whole-snapshot mode if needed
+
+Cross-page linking requirements
+-------------------------------
+Add direct cross-links in the following places:
+
+1. topics.html row actions
+   - Open topic detail
+   - Open topic audit
+
+2. topics.html summary cards
+   - Most contested -> focused audit
+   - Biggest mover -> focused audit
+   - Highest drift -> focused audit
+
+3. audits.html selected-topic summary
+   - Open topic detail
+   - Back to topics list
+
+4. topic.html
+   - Add a pill linking to audits.html?tab=audits&topic=<id>
+   - This is promoted from "optional follow-up" to main scope because it completes the navigation loop.
+
+Minimal API expectations for this pass
+--------------------------------------
+No new backend endpoint is required if the existing APIs continue to provide:
+
+1. /api/debate/topics
+2. /api/debate/audits
+
+Assumption for this plan:
+The topics endpoint should represent the current snapshot topic set, not historical topic accumulation.
+
+If this assumption is not true in a target environment, fix that first before building new filtering UI.
+
+Recommended implementation order
+--------------------------------
+Implement both pages in one branch, but in this sequence:
+
+1. Topics page state and controls
+2. Topics page filtered render
+3. Topics page cross-links into audits
+4. Audits page topic focus state
+5. Audits page filtered geometry and symmetry rendering
+6. URL synchronization for both pages
+7. topic.html cross-link pill
+8. Manual QA pass across both pages
+
+Suggested technical task breakdown
+----------------------------------
+Task 1: topics.html controls
+1. Add control strip markup
+2. Add styles for search, select, filter chips, and summary area
+3. Add state object and helper functions
+4. Add URL sync helpers
+
+Task 2: topics.html rendering
+1. Keep original topic dataset in memory
+2. Filter and sort in the browser
+3. Re-render the table on every state change
+4. Re-render review summary and result count
+5. Demote topic ID visually
+6. Add empty-state message when no topics match filters.
+
+Task 3: topics-to-audits navigation
+1. Add "Open audit" links per row
+2. Add summary-card links to focused audits
+3. Preserve tab=audits and topic=<id>
+
+Task 4: audits.html controls
+1. Add topic focus bar above topic geometry
+2. Load topics in initAnalysisPage()
+3. Restore selected topic from URL
+4. Add clear focus behavior
+
+Task 5: audits.html filtered rendering
+1. Pass selectedTopicId into geometry rendering
+2. Filter lineage rows
+3. Filter geometry rows
+4. Filter symmetry topic deltas
+5. Render selected-topic summary callout
+6. Add empty-state messages for filtered sections.
+
+Task 6: global-audit context behavior
+1. Keep global sections visible
+2. Add a small note explaining that those sections remain snapshot-wide
+
+Task 7: topic.html cross-link
+1. Add a pill on topic.html linking to focused audits.
+
+Task 8: QA and polish
+1. Desktop and mobile verification
+2. Empty state verification
+3. No-debate and no-snapshot verification
+4. URL reload verification
+5. Long scope text and long topic name verification
+
+Testing checklist
+-----------------
+Manual test cases for topics.html:
+1. Search by exact topic name
+2. Search by partial scope phrase
+3. Search by topic ID
+4. Toggle one filter
+5. Toggle multiple filters
+6. Change sort order
+7. Reload and confirm URL state restores
+8. Click focused audit links and confirm deep-link works
+
+Manual test cases for audits.html:
+1. Open audits page with no topic param
+2. Open audits page with a valid topic param
+3. Switch topic from the focus dropdown
+4. Clear focus and confirm full tables return
+5. Reload and confirm topic param persists
+6. Confirm geometry tables filter correctly
+7. Confirm symmetry topic-delta table filters correctly
+8. Confirm global sections still render normally
+
+Regression checks:
+1. No active debate
+2. Debate with no snapshot
+3. Debate with very few topics
+4. Debate with topic names that repeat semantically but differ by ID
+5. Debate with missing symmetry topic deltas
+
+Out-of-scope items for this pass
+--------------------------------
+These are useful, but should not block the requested lightweight implementation:
+
+1. Full pagination or virtualization
+2. New backend search endpoints
+3. Permanent stable semantic topic identifiers
+4. Historical topic explorer across snapshots
+5. Full redesign of topic cards or audits layout
+6. Converting topics/audits pages into a reusable JS module structure
+
+Recommended future follow-ups
+-----------------------------
+1. Add a dedicated "Topic Explorer" page if historical or cross-debate topic browsing becomes important.
+2. Add stable topic lineage IDs if topics should persist semantically across snapshots.
+3. Add topic-specific evidence filtering inside the evidence tab.
+4. Add "review queue" badges generated from backend diagnostics rather than front-end heuristics.
+
+Definition of done
+------------------
+This pass is complete when:
+
+1. topics.html allows users to quickly find and narrow topics
+2. topics.html promotes topic name and scope over raw IDs
+3. audits.html supports direct topic-focused inspection
+4. topics.html and audits.html link cleanly into one another
+5. topic.html links into the focused audit view
+6. the implementation remains lightweight and stays within the current page architecture

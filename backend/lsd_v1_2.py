@@ -54,7 +54,7 @@ def fact_checker_mode() -> str:
     return feature_flag(
         "FACT_CHECKER_MODE",
         os.getenv("FACT_CHECK_MODE", "simulated").lower(),
-        ("simulated", "perfect_checker", "online_allowlist", "OFFLINE", "ONLINE_ALLOWLIST"),
+        ("simulated", "perfect_checker", "perfect", "online_allowlist", "OFFLINE", "ONLINE_ALLOWLIST"),
     )
 
 

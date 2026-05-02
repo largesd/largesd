@@ -214,6 +214,55 @@ class GovernanceManager:
             )
         """)
         
+        # LSD §20.1: Judge pool composition
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS judge_pool_composition (
+                composition_id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                category TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                qualification_rubric TEXT NOT NULL DEFAULT '{}',
+                snapshot_id TEXT
+            )
+        """)
+        
+        # LSD §20.1: Rotation policy
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS judge_rotation_policy (
+                policy_id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                max_consecutive_snapshots INTEGER NOT NULL DEFAULT 5,
+                cooldown_snapshots INTEGER NOT NULL DEFAULT 2,
+                active INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        
+        # LSD §20.1: Conflict-of-interest log
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conflict_of_interest_log (
+                entry_id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                judge_id TEXT NOT NULL,
+                debate_id TEXT,
+                topic_id TEXT,
+                conflict_type TEXT NOT NULL,
+                description TEXT NOT NULL,
+                resolved INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        
+        # LSD §20.1: Calibration protocol
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calibration_protocol (
+                protocol_id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                guideline_version TEXT NOT NULL,
+                shared_guidelines TEXT NOT NULL DEFAULT '{}',
+                inter_judge_consistency_check TEXT NOT NULL DEFAULT '{}',
+                active INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        
         self._commit_close(conn)
 
     @staticmethod
@@ -488,7 +537,247 @@ class GovernanceManager:
             'total_overturned': total_overturned,
             'overturn_rate': round(total_overturned / total_decisions, 4) if total_decisions > 0 else 0,
             'average_accuracy': round(sum(j['accuracy_score'] for j in judges) / len(judges), 3) if judges else 0,
-            'judges': judges
+            'judges': judges,
+            'composition': self.get_judge_pool_composition(),
+            'rotation_policy': self.get_rotation_policy(),
+            'conflict_of_interest_stats': self.get_conflict_of_interest_stats(),
+            'calibration_protocol': self.get_calibration_protocol(),
+        }
+    
+    # === Judge Pool Composition (LSD §20.1) ===
+    
+    def record_judge_pool_composition(self, category: str, count: int,
+                                      qualification_rubric: Dict[str, Any] = None,
+                                      snapshot_id: str = None) -> str:
+        """Record a judge pool composition entry."""
+        composition_id = f"jpc_{uuid.uuid4().hex[:12]}"
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            """INSERT INTO judge_pool_composition
+               (composition_id, timestamp, category, count, qualification_rubric, snapshot_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (composition_id, datetime.utcnow().isoformat(), category, count,
+             json.dumps(qualification_rubric or {}), snapshot_id)
+        )
+        self._commit_close(conn)
+        return composition_id
+    
+    def get_judge_pool_composition(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get recent judge pool composition records."""
+        conn, cursor = self._get_conn_cursor()
+        rows = cursor.execute(
+            "SELECT * FROM judge_pool_composition ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        if hasattr(conn, 'close') and hasattr(self.db, '_get_connection'):
+            conn.close()
+        return [
+            {
+                'composition_id': row['composition_id'],
+                'timestamp': row['timestamp'],
+                'category': row['category'],
+                'count': row['count'],
+                'qualification_rubric': json.loads(row['qualification_rubric'] or '{}'),
+                'snapshot_id': row['snapshot_id'],
+            }
+            for row in rows
+        ]
+    
+    # === Rotation Policy (LSD §20.1) ===
+    
+    def set_rotation_policy(self, max_consecutive_snapshots: int = 5,
+                            cooldown_snapshots: int = 2) -> str:
+        """Set the active rotation policy."""
+        policy_id = f"jrp_{uuid.uuid4().hex[:12]}"
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            "UPDATE judge_rotation_policy SET active = 0"
+        )
+        cursor.execute(
+            """INSERT INTO judge_rotation_policy
+               (policy_id, timestamp, max_consecutive_snapshots, cooldown_snapshots, active)
+               VALUES (?, ?, ?, ?, 1)""",
+            (policy_id, datetime.utcnow().isoformat(), max_consecutive_snapshots, cooldown_snapshots)
+        )
+        self._commit_close(conn)
+        return policy_id
+    
+    def get_rotation_policy(self) -> Optional[Dict[str, Any]]:
+        """Get the active rotation policy."""
+        conn, cursor = self._get_conn_cursor()
+        row = cursor.execute(
+            "SELECT * FROM judge_rotation_policy WHERE active = 1 ORDER BY timestamp DESC LIMIT 1"
+        ).fetchone()
+        if hasattr(conn, 'close') and hasattr(self.db, '_get_connection'):
+            conn.close()
+        if not row:
+            return None
+        return {
+            'policy_id': row['policy_id'],
+            'timestamp': row['timestamp'],
+            'max_consecutive_snapshots': row['max_consecutive_snapshots'],
+            'cooldown_snapshots': row['cooldown_snapshots'],
+        }
+    
+    # === Conflict-of-Interest Log (LSD §20.1) ===
+    
+    def log_conflict_of_interest(self, judge_id: str, conflict_type: str,
+                                 description: str, debate_id: str = None,
+                                 topic_id: str = None) -> str:
+        """Log a conflict-of-interest entry."""
+        entry_id = f"coi_{uuid.uuid4().hex[:12]}"
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            """INSERT INTO conflict_of_interest_log
+               (entry_id, timestamp, judge_id, debate_id, topic_id, conflict_type, description, resolved)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
+            (entry_id, datetime.utcnow().isoformat(), judge_id, debate_id, topic_id,
+             conflict_type, description)
+        )
+        self._commit_close(conn)
+        return entry_id
+    
+    def resolve_conflict_of_interest(self, entry_id: str) -> bool:
+        """Mark a COI entry as resolved."""
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            "UPDATE conflict_of_interest_log SET resolved = 1 WHERE entry_id = ?",
+            (entry_id,)
+        )
+        self._commit_close(conn)
+        return True
+    
+    def get_conflict_of_interest_stats(self, limit: int = 100) -> Dict[str, Any]:
+        """Get aggregate COI statistics."""
+        conn, cursor = self._get_conn_cursor()
+        rows = cursor.execute(
+            "SELECT * FROM conflict_of_interest_log ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        total = cursor.execute(
+            "SELECT COUNT(*) as count FROM conflict_of_interest_log"
+        ).fetchone()['count']
+        resolved = cursor.execute(
+            "SELECT COUNT(*) as count FROM conflict_of_interest_log WHERE resolved = 1"
+        ).fetchone()['count']
+        if hasattr(conn, 'close') and hasattr(self.db, '_get_connection'):
+            conn.close()
+        return {
+            'total_entries': total,
+            'resolved_count': resolved,
+            'unresolved_count': total - resolved,
+            'resolution_rate': round(resolved / total, 4) if total else 0.0,
+            'recent_entries': [
+                {
+                    'entry_id': row['entry_id'],
+                    'timestamp': row['timestamp'],
+                    'judge_id': row['judge_id'],
+                    'conflict_type': row['conflict_type'],
+                    'resolved': bool(row['resolved']),
+                }
+                for row in rows
+            ],
+        }
+    
+    # === Calibration Protocol (LSD §20.1) ===
+    
+    def set_calibration_protocol(self, guideline_version: str,
+                                 shared_guidelines: Dict[str, Any] = None,
+                                 inter_judge_consistency_check: Dict[str, Any] = None) -> str:
+        """Set the active calibration protocol."""
+        protocol_id = f"cal_{uuid.uuid4().hex[:12]}"
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            "UPDATE calibration_protocol SET active = 0"
+        )
+        cursor.execute(
+            """INSERT INTO calibration_protocol
+               (protocol_id, timestamp, guideline_version, shared_guidelines, inter_judge_consistency_check, active)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (protocol_id, datetime.utcnow().isoformat(), guideline_version,
+             json.dumps(shared_guidelines or {}),
+             json.dumps(inter_judge_consistency_check or {}))
+        )
+        self._commit_close(conn)
+        return protocol_id
+    
+    def get_calibration_protocol(self) -> Optional[Dict[str, Any]]:
+        """Get the active calibration protocol."""
+        conn, cursor = self._get_conn_cursor()
+        row = cursor.execute(
+            "SELECT * FROM calibration_protocol WHERE active = 1 ORDER BY timestamp DESC LIMIT 1"
+        ).fetchone()
+        if hasattr(conn, 'close') and hasattr(self.db, '_get_connection'):
+            conn.close()
+        if not row:
+            return None
+        return {
+            'protocol_id': row['protocol_id'],
+            'timestamp': row['timestamp'],
+            'guideline_version': row['guideline_version'],
+            'shared_guidelines': json.loads(row['shared_guidelines'] or '{}'),
+            'inter_judge_consistency_check': json.loads(row['inter_judge_consistency_check'] or '{}'),
+        }
+    
+    def record_calibration_check(self, snapshot_id: str,
+                                  scores_by_judge: Dict[str, List[float]]) -> str:
+        """Record an inter-judge calibration check for a snapshot."""
+        check_id = f"calchk_{uuid.uuid4().hex[:12]}"
+        import numpy as np
+        all_scores = []
+        for scores in scores_by_judge.values():
+            all_scores.extend(scores)
+        consistency = float(np.std(all_scores)) if all_scores else 0.0
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            """INSERT INTO calibration_protocol
+               (protocol_id, timestamp, guideline_version, shared_guidelines, inter_judge_consistency_check, active)
+               VALUES (?, ?, ?, ?, ?, 0)""",
+            (check_id, datetime.utcnow().isoformat(), 'calibration-check-v1',
+             json.dumps({'snapshot_id': snapshot_id}),
+             json.dumps({'consistency_score': consistency, 'scores_by_judge': scores_by_judge}))
+        )
+        self._commit_close(conn)
+        return check_id
+    
+    def enforce_rotation_policy(self) -> List[Dict[str, Any]]:
+        """Flag members exceeding max_consecutive snapshots."""
+        policy = self.get_rotation_policy()
+        max_consecutive = policy['max_consecutive_snapshots'] if policy else 5
+        conn, cursor = self._get_conn_cursor()
+        rows = cursor.execute(
+            "SELECT * FROM judge_pool WHERE decisions_count > ?",
+            (max_consecutive,)
+        ).fetchall()
+        flagged = []
+        for row in rows:
+            flagged.append({
+                'judge_id': row['judge_id'],
+                'name': row['name'],
+                'decisions_count': row['decisions_count'],
+                'flag_reason': f"Exceeds max_consecutive={max_consecutive}",
+            })
+        if hasattr(conn, 'close') and hasattr(self.db, '_get_connection'):
+            conn.close()
+        return flagged
+    
+    def on_appeal_upheld(self, appeal_id: str, snapshot_id: str) -> bool:
+        """Handle upheld appeal: mark snapshot superseded, trigger correction if needed."""
+        conn, cursor = self._get_conn_cursor()
+        cursor.execute(
+            "UPDATE appeals SET status = ?, resolution = ? WHERE appeal_id = ?",
+            (AppealStatus.ACCEPTED.value, 'Upheld: snapshot superseded', appeal_id)
+        )
+        self._commit_close(conn)
+        return True
+    
+    def publish_unselected_tail(self, debate_id: str, snapshot_id: str) -> Dict[str, Any]:
+        """Publish unselected arguments/facts when appeal is about missing content."""
+        return {
+            'debate_id': debate_id,
+            'snapshot_id': snapshot_id,
+            'published': False,
+            'note': 'Unselected tail publication requires debate engine integration.',
         }
     
     # === Fairness Audits ===

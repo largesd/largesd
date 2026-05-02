@@ -255,7 +255,7 @@ def run_server(args: argparse.Namespace) -> None:
 def run_smoke(args: argparse.Namespace) -> None:
     """Start a temporary v3 server and run a lightweight API scenario."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
-    env = project_env({"PYTHONUNBUFFERED": "1"})
+    env = project_env({"PYTHONUNBUFFERED": "1", "ENABLE_RATE_LIMITER": "false"})
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_smoke_{args.port}.db"
 
     if temp_db_path.exists():
@@ -294,7 +294,7 @@ def run_smoke(args: argparse.Namespace) -> None:
 def run_acceptance(args: argparse.Namespace) -> None:
     """Start a temporary v3 server and run the browser-driven acceptance suite."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
-    env = project_env({"PYTHONUNBUFFERED": "1"})
+    env = project_env({"PYTHONUNBUFFERED": "1", "ENABLE_RATE_LIMITER": "false"})
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_acceptance_{args.port}.db"
 
     if temp_db_path.exists():

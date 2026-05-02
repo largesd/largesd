@@ -39,9 +39,55 @@
     @media(min-width:900px) {
       .audit-grid { grid-template-columns: 1fr 1fr; }
     }
+
+    /* Topic focus bar */
+    .topic-focus-bar {
+      display: grid;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+    .topic-focus-bar .row {
+      margin-bottom: 0;
+    }
+    .topic-focus-select {
+      min-width: 0;
+      flex: 1 1 280px;
+      padding: 8px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface-raised);
+      color: var(--ink-default);
+      font-family: var(--sans);
+      font-size: 0.88rem;
+    }
+    .topic-focus-pill {
+      cursor: pointer;
+    }
+    .topic-focus-summary {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-raised);
+      padding: var(--space-sm);
+    }
+    .topic-focus-summary h4 {
+      margin: 0 0 6px;
+      font-size: 0.86rem;
+    }
+    .topic-focus-summary .row {
+      margin-bottom: 0;
+    }
+    .topic-focus-context {
+      color: var(--ink-soft);
+      font-size: 0.82rem;
+      margin-top: 8px;
+    }
+    .section-break-heading {
+      margin-top: var(--space-lg);
+    }
   </style>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -59,7 +105,7 @@
         <summary>More</summary>
         <div class="nav-more-menu" role="menu" aria-label="Additional pages">
           <a href="topics.html" role="menuitem">Topics</a>
-          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="audits.html" role="menuitem" class="active" aria-current="page">Audits</a>
           <a href="admin.html" role="menuitem">Admin</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
@@ -82,11 +128,11 @@
   </div>
 </section>
 
-<main>
+<main id="main-content">
 <section class="card" id="analysis-shell">
   <div class="section-head">
     <div>
-      <h2>Evidence & Audits</h2>
+      <h1>Evidence & Audits</h1>
       <p class="lede">Inspect high-impact evidence targets and stress-test robustness from a single review surface.</p>
     </div>
     <a class="button secondary" href="verdict.html">Jump to verdict</a>
@@ -156,9 +202,24 @@
 
       <p><small>Audit outputs are live calculations tied to the current snapshot rather than canned examples.</small></p>
 
+      <!-- Topic focus bar -->
+      <div class="topic-focus-bar" id="topic-focus-bar">
+        <div class="row" style="align-items:stretch;">
+          <select class="topic-focus-select" id="topic-focus-select" aria-label="Focus audits on a topic">
+            <option value="">All topics</option>
+          </select>
+          <button type="button" class="pill" id="topic-focus-clear" style="display:none;">Clear focus</button>
+        </div>
+        <div class="row" id="topic-focus-pills"></div>
+        <div class="topic-focus-context" id="topic-focus-context" style="display:none;"></div>
+      </div>
+
       <hr />
-      <h3>Topic geometry audit</h3>
+      <h3 id="topic-geometry">Topic geometry audit</h3>
       <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
+
+      <!-- Selected topic summary -->
+      <div class="topic-focus-summary" id="selected-topic-summary" style="display:none;"></div>
 
       <h4>Lineage map</h4>
       <div class="table-wrap">
@@ -170,7 +231,7 @@
         </table>
       </div>
 
-      <h4>Content mass share + geometry quality</h4>
+      <h4 class="section-break-heading">Content mass share + geometry quality</h4>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
@@ -307,7 +368,7 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -315,9 +376,9 @@
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
-<div class="help-panel" id="helpPanel">
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
   <div class="help-panel-header">
-    <h3>Glossary & Help</h3>
+    <h3 id="help-panel-title">Glossary & Help</h3>
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
@@ -346,6 +407,12 @@
 <script>
 const ANALYSIS_TABS = ['evidence', 'audits'];
 
+const AUDITS_STATE = {
+  topics: [],
+  selectedTopicId: null,
+  audits: null,
+};
+
 function toggleHelp() {
   BDA.toggleHelp();
 }
@@ -353,6 +420,10 @@ function toggleHelp() {
 function getRequestedTab() {
   const tab = new URLSearchParams(window.location.search).get('tab');
   return ANALYSIS_TABS.includes(tab) ? tab : 'audits';
+}
+
+function getRequestedTopicId() {
+  return new URLSearchParams(window.location.search).get('topic') || null;
 }
 
 function setAnalysisTab(tab, options = {}) {
@@ -491,13 +562,52 @@ function quantiles(values) {
   return [pick(0.1), pick(0.5), pick(0.9)].map((value) => BDA.formatNumber(value, 2));
 }
 
-function renderTopicGeometry(items) {
+function toFiniteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function computeLeadMargin(scores) {
+  if (!scores || typeof scores !== 'object') return null;
+  const qualities = Object.values(scores)
+    .map((sideScore) => toFiniteNumber(sideScore && sideScore.quality, Number.NaN))
+    .filter((quality) => Number.isFinite(quality))
+    .sort((a, b) => b - a);
+
+  if (qualities.length < 2) return null;
+  return Math.abs(qualities[0] - qualities[1]);
+}
+
+function getSelectedTopicMeta() {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return null;
+  return AUDITS_STATE.topics.find((t) => String(t.topic_id) === id) || null;
+}
+
+function filterTopicGeometry(items) {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return items;
+  return items.filter((item) => String(item.topic_id) === id);
+}
+
+function filterSymmetryTopicDeltas(topicDeltas) {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return topicDeltas;
+  const filtered = {};
+  Object.entries(topicDeltas).forEach(([topicId, delta]) => {
+    if (String(topicId) === id) filtered[topicId] = delta;
+  });
+  return filtered;
+}
+
+function renderTopicGeometrySection() {
+  const items = filterTopicGeometry(AUDITS_STATE.audits?.topic_geometry || []);
   const lineageTbody = document.getElementById('lineage-tbody');
   const geometryTbody = document.getElementById('geometry-tbody');
 
   if (!items.length) {
-    lineageTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic geometry available.</td></tr>';
-    geometryTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic geometry available.</td></tr>';
+    lineageTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No lineage data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
+    geometryTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No geometry data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
     document.getElementById('geometry-summary-row').innerHTML = '';
     return;
   }
@@ -530,17 +640,18 @@ function renderTopicGeometry(items) {
   `;
 }
 
-function renderSymmetry(symmetry) {
+function renderSymmetrySection() {
+  const symmetry = AUDITS_STATE.audits?.label_symmetry || {};
   document.getElementById('symmetry-median-delta').textContent = BDA.formatNumber(symmetry.median_delta_d, 4);
   document.getElementById('symmetry-abs-delta').textContent = BDA.formatNumber(symmetry.abs_delta_d, 4);
   document.getElementById('symmetry-original-d').textContent = BDA.formatNumber(symmetry.original_d, 4);
   document.getElementById('symmetry-swapped-d').textContent = BDA.formatNumber(symmetry.swapped_d, 4);
   document.getElementById('symmetry-interpretation').textContent = symmetry.interpretation || 'No symmetry interpretation available.';
 
-  const topicDeltas = Object.entries(symmetry.topic_deltas || {});
+  const topicDeltas = Object.entries(filterSymmetryTopicDeltas(symmetry.topic_deltas || {}));
   const tbody = document.getElementById('symmetry-topics-tbody');
   if (!topicDeltas.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic-level symmetry deltas available.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No symmetry deltas for the selected topic.' : 'No topic-level symmetry deltas available.'}</td></tr>`;
     return;
   }
 
@@ -552,6 +663,180 @@ function renderSymmetry(symmetry) {
       <td class="mono">${BDA.formatNumber(delta.asymmetry_score, 3)}</td>
     </tr>
   `).join('');
+}
+
+function renderGlobalAuditSections() {
+  const audits = AUDITS_STATE.audits || {};
+  renderStability(audits.extraction_stability || {});
+  renderDisagreement(audits.evaluator_disagreement || {});
+  renderRelevanceSensitivity(audits.relevance_sensitivity || {});
+  renderV12AuditMatrix(audits);
+}
+
+function renderSelectedTopicSummary() {
+  const container = document.getElementById('selected-topic-summary');
+  const meta = getSelectedTopicMeta();
+  if (!meta || !AUDITS_STATE.selectedTopicId) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = `
+    <h4>${BDA.escapeHtml(meta.name || 'Untitled')}</h4>
+    <div class="row">
+      <span class="pill">ID: <span class="mono">${BDA.escapeHtml(meta.topic_id)}</span></span>
+      <span class="pill">Rel: <span class="mono">${BDA.formatNumber(meta.relevance, 2)}</span></span>
+      <span class="pill">Drift: <span class="mono">${BDA.formatNumber(meta.drift_score, 2)}</span></span>
+      <span class="pill">Coherence: <span class="mono">${BDA.formatNumber(meta.coherence, 2)}</span></span>
+      <span class="pill">Distinctness: <span class="mono">${BDA.formatNumber(meta.distinctness, 2)}</span></span>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <a class="pill" href="topic.html?id=${encodeURIComponent(meta.topic_id)}">Open topic detail</a>
+      <a class="pill" href="topics.html">Back to full topics list</a>
+    </div>
+  `;
+  container.style.display = 'block';
+}
+
+function renderTopicFocusContext() {
+  const contextEl = document.getElementById('topic-focus-context');
+  const meta = getSelectedTopicMeta();
+  if (!meta || !AUDITS_STATE.selectedTopicId) {
+    contextEl.style.display = 'none';
+    contextEl.textContent = '';
+    return;
+  }
+  contextEl.innerHTML = `Topic focus is set to <strong>${BDA.escapeHtml(meta.name || meta.topic_id)}</strong>. The sections below (Extraction stability, Evaluator disagreement, Relevance sensitivity, v1.2 audit matrix) remain snapshot-wide because they are not topic-specific.`;
+  contextEl.style.display = 'block';
+}
+
+function renderTopicFocusBar() {
+  const select = document.getElementById('topic-focus-select');
+  const clearBtn = document.getElementById('topic-focus-clear');
+  const pillsRow = document.getElementById('topic-focus-pills');
+
+  // Build dropdown options from union of topics, geometry, and symmetry
+  const allIds = new Set();
+  AUDITS_STATE.topics.forEach((t) => allIds.add(String(t.topic_id)));
+  (AUDITS_STATE.audits?.topic_geometry || []).forEach((t) => allIds.add(String(t.topic_id)));
+  Object.keys(AUDITS_STATE.audits?.label_symmetry?.topic_deltas || {}).forEach((id) => allIds.add(String(id)));
+
+  const idToName = new Map();
+  AUDITS_STATE.topics.forEach((t) => idToName.set(String(t.topic_id), t.name || t.topic_id));
+  (AUDITS_STATE.audits?.topic_geometry || []).forEach((t) => {
+    if (!idToName.has(String(t.topic_id))) idToName.set(String(t.topic_id), t.name || t.topic_id);
+  });
+
+  const options = Array.from(allIds)
+    .sort((a, b) => {
+      const nameA = String(idToName.get(a) || a).toLowerCase();
+      const nameB = String(idToName.get(b) || b).toLowerCase();
+      return nameA.localeCompare(nameB) || a.localeCompare(b);
+    })
+    .map((id) => {
+      const name = idToName.get(id) || id;
+      const label = name !== id ? `${BDA.escapeHtml(name)} (${BDA.escapeHtml(id)})` : BDA.escapeHtml(id);
+      const selected = AUDITS_STATE.selectedTopicId === id ? ' selected' : '';
+      return `<option value="${BDA.escapeHtml(id)}"${selected}>${label}</option>`;
+    });
+
+  select.innerHTML = `<option value="">All topics</option>` + options.join('');
+  clearBtn.style.display = AUDITS_STATE.selectedTopicId ? 'inline-flex' : 'none';
+
+  // Quick focus pills: most contested, biggest mover, highest drift
+  const normalized = AUDITS_STATE.topics.map((topic) => ({
+    ...topic,
+    _topicId: String(topic.topic_id || ''),
+    _relevance: toFiniteNumber(topic.relevance, 0),
+    _leadMargin: computeLeadMargin(topic.scores),
+    _drift: toFiniteNumber(topic.drift_score, 0),
+  }));
+
+  const withMargin = normalized.filter((t) => Number.isFinite(t._leadMargin));
+  const mostContested = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      toFiniteNumber(a._leadMargin, 1) - toFiniteNumber(b._leadMargin, 1)
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  const biggestMover = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      (b._relevance * toFiniteNumber(b._leadMargin, 1))
+      - (a._relevance * toFiniteNumber(a._leadMargin, 1))
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  const highestDrift = normalized.slice().sort((a, b) => b._drift - a._drift || a._topicId.localeCompare(b._topicId))[0];
+
+  const pills = [];
+  if (mostContested) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(mostContested._topicId)}">Most contested: ${BDA.escapeHtml(mostContested.name || mostContested._topicId)}</button>`);
+  }
+  if (biggestMover) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(biggestMover._topicId)}">Biggest mover: ${BDA.escapeHtml(biggestMover.name || biggestMover._topicId)}</button>`);
+  }
+  if (highestDrift) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(highestDrift._topicId)}">Highest drift: ${BDA.escapeHtml(highestDrift.name || highestDrift._topicId)}</button>`);
+  }
+  pillsRow.innerHTML = pills.join('');
+}
+
+function setSelectedTopic(topicId, options = {}) {
+  const { updateUrl = true } = options;
+  AUDITS_STATE.selectedTopicId = topicId || null;
+  renderTopicFocusBar();
+  renderSelectedTopicSummary();
+  renderTopicFocusContext();
+  renderTopicGeometrySection();
+  renderSymmetrySection();
+  if (updateUrl) syncTopicFilterUrl();
+}
+
+function syncTopicFilterUrl() {
+  const url = new URL(window.location.href);
+  if (AUDITS_STATE.selectedTopicId) url.searchParams.set('topic', AUDITS_STATE.selectedTopicId);
+  else url.searchParams.delete('topic');
+  window.history.replaceState({}, '', url);
+}
+
+function bindAuditTopicControls() {
+  const select = document.getElementById('topic-focus-select');
+  const clearBtn = document.getElementById('topic-focus-clear');
+  const pillsRow = document.getElementById('topic-focus-pills');
+
+  if (select) {
+    select.addEventListener('change', (e) => {
+      setSelectedTopic(e.target.value || null);
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      setSelectedTopic(null);
+    });
+  }
+
+  if (pillsRow) {
+    pillsRow.addEventListener('click', (e) => {
+      const pill = e.target.closest('.topic-focus-pill');
+      if (!pill) return;
+      setSelectedTopic(pill.dataset.topicId || null);
+    });
+  }
+}
+
+function rerenderAuditPanels() {
+  renderTopicFocusBar();
+  renderSelectedTopicSummary();
+  renderTopicFocusContext();
+  renderTopicGeometrySection();
+  renderSymmetrySection();
+  renderGlobalAuditSections();
 }
 
 function renderStability(stability) {
@@ -638,10 +923,7 @@ function renderV12AuditMatrix(audits) {
   }, null, 2);
 }
 
-async function initAnalysisPage() {
-  bindTabEvents();
-  setAnalysisTab(getRequestedTab(), { updateUrl: false });
-
+async function loadAuditDependencies() {
   const debate = await BDA.loadDebate();
   if (!debate.has_debate) {
     const debates = await BDA.loadDebates();
@@ -652,16 +934,38 @@ async function initAnalysisPage() {
         window.location.reload();
       });
     });
-    return;
+    return false;
   }
 
   const snapshot = await BDA.loadSnapshot();
   if (!snapshot || !snapshot.has_snapshot) {
     showAnalysisEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate.html">New Debate / Post Point</a> first.');
-    return;
+    return false;
   }
 
   BDA.updateStateStrip(snapshot);
+  return true;
+}
+
+async function initAnalysisPage() {
+  bindTabEvents();
+  setAnalysisTab(getRequestedTab(), { updateUrl: false });
+
+  const ready = await loadAuditDependencies();
+  if (!ready) return;
+
+  // Load topics first so the focus bar can populate
+  try {
+    const topicsData = await BDA.api('/api/debate/topics');
+    AUDITS_STATE.topics = topicsData.topics || [];
+  } catch (error) {
+    console.warn('Unable to load topics for audit focus bar:', error);
+    AUDITS_STATE.topics = [];
+  }
+
+  // Restore topic focus from URL
+  const urlTopicId = getRequestedTopicId();
+  if (urlTopicId) AUDITS_STATE.selectedTopicId = urlTopicId;
 
   let evidenceOk = false;
   let auditsOk = false;
@@ -678,18 +982,16 @@ async function initAnalysisPage() {
 
   try {
     const audits = await BDA.api('/api/debate/audits');
-    renderTopicGeometry(audits.topic_geometry || []);
-    renderSymmetry(audits.label_symmetry || {});
-    renderStability(audits.extraction_stability || {});
-    renderDisagreement(audits.evaluator_disagreement || {});
-    renderRelevanceSensitivity(audits.relevance_sensitivity || {});
-    renderV12AuditMatrix(audits);
+    AUDITS_STATE.audits = audits;
+    rerenderAuditPanels();
     auditsOk = true;
   } catch (error) {
     const callout = document.getElementById('audits-panel-error');
     callout.innerHTML = `Unable to load live audits right now: ${BDA.escapeHtml(error.message)}`;
     callout.style.display = 'block';
   }
+
+  bindAuditTopicControls();
 
   if (!evidenceOk && !auditsOk) {
     showAnalysisEmpty('Unable to load live evidence or audits right now. Please try again.');

@@ -32,10 +32,14 @@ def create_env_file(api_key, provider, num_judges):
 LLM_PROVIDER={provider}
 NUM_JUDGES={num_judges}
 OPENROUTER_API_KEY={api_key}
+OPENROUTER_MODEL={model}
 
 # Optional site info for OpenRouter rankings
 # SITE_URL=https://your-site.com
 # SITE_NAME=Debate System
+
+# Safety: set to true only for testing without an API key
+ALLOW_MOCK_FALLBACK=false
 
 FACT_CHECK_MODE=OFFLINE
 """
@@ -73,7 +77,16 @@ def main():
             return
     
     print()
-    print("Step 2: Choose provider mode")
+    print("Step 2: Choose OpenRouter model")
+    print("-" * 60)
+    print("Enter the model ID to use (e.g., anthropic/claude-3.5-sonnet)")
+    print("Leave blank to decide later and set OPENROUTER_MODEL manually.")
+    print()
+    
+    model = input("Model ID [anthropic/claude-3.5-sonnet]: ").strip() or "anthropic/claude-3.5-sonnet"
+    
+    print()
+    print("Step 3: Choose provider mode")
     print("-" * 60)
     print("1. openrouter - Single model (cheaper, consistent)")
     print("2. openrouter-multi - Multiple models (expensive, diverse)")

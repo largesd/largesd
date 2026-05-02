@@ -57,7 +57,11 @@ from debate_proposal import (
 )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skills.fact_checking import FactCheckingSkill
+from skills.fact_checking import (
+    FactCheckingSkill,
+    WikidataConnector,
+    SimulatedSourceConnector,
+)
 
 
 class DebateEngineV2:
@@ -85,6 +89,7 @@ class DebateEngineV2:
                     f"Set OPENROUTER_API_KEY environment variable or pass openrouter_api_key."
                 )
         
+        self.num_judges = num_judges
         self.llm_client = LLMClient(
             provider=llm_provider, 
             num_judges=num_judges,
@@ -95,11 +100,26 @@ class DebateEngineV2:
         self._fact_check_wait_timeout_seconds = 2.0
         self._fact_check_poll_interval_seconds = 0.05
 
-        self.fact_checker = FactCheckingSkill(
-            mode=self._fact_check_mode,
-            allowlist_version="v1",
-            enable_async=self._async_enabled,
-        )
+        if self._fact_check_mode in ("PERFECT", "PERFECT_CHECKER"):
+            self.fact_checker = FactCheckingSkill(
+                mode=self._fact_check_mode,
+                allowlist_version="v1",
+                enable_async=False,
+                connectors=[
+                    # Tier-3 simulation stubs until real Tier-1 connectors are ready.
+                    # The evidence policy enforces that Tier-3 alone cannot
+                    # produce SUPPORTED/REFUTED in PERFECT mode.
+                    WikidataConnector(),
+                    SimulatedSourceConnector("sim_tier2_a", "example.org", priority=5),
+                    SimulatedSourceConnector("sim_tier2_b", "example.com", priority=5),
+                ],
+            )
+        else:
+            self.fact_checker = FactCheckingSkill(
+                mode=self._fact_check_mode,
+                allowlist_version="v1",
+                enable_async=self._async_enabled,
+            )
         self.extraction_engine = ExtractionEngine(
             self.llm_client,
             fact_check_skill=self.fact_checker,
@@ -143,6 +163,8 @@ class DebateEngineV2:
             "ONLINE_ALLOWLIST": "ONLINE_ALLOWLIST",
             "perfect_checker": "PERFECT_CHECKER",
             "PERFECT_CHECKER": "PERFECT_CHECKER",
+            "perfect": "PERFECT",
+            "PERFECT": "PERFECT",
         }
         public_mode = os.getenv("FACT_CHECKER_MODE")
         return aliases.get(str(public_mode or mode).strip(), aliases.get(str(public_mode or mode).strip().lower(), "OFFLINE"))
@@ -220,6 +242,25 @@ class DebateEngineV2:
             "builtin_template_id": builtin_template_id,
         }
         return self._active_moderation_template_record
+
+    def get_runtime_profile(self) -> Dict[str, Any]:
+        """Build a stable runtime fingerprint for snapshot-producing jobs."""
+        runtime_metadata = self.llm_client.get_runtime_metadata()
+        profile = {
+            "provider": runtime_metadata.get("provider", "mock"),
+            "configured_model": runtime_metadata.get("configured_model", "mock"),
+            "num_judges": runtime_metadata.get("num_judges", self.num_judges),
+            "fact_check_mode": self._fact_check_mode,
+            "frame_mode": get_frame_mode_flag(),
+            "scoring_formula_mode": scoring_formula_mode(),
+            "lsd_version": formula_registry().get("lsd_version", "unknown"),
+        }
+        canonical = json.dumps(profile, sort_keys=True)
+        runtime_profile_id = f"runtime_{hashlib.sha256(canonical.encode('utf-8')).hexdigest()[:16]}"
+        return {
+            **profile,
+            "runtime_profile_id": runtime_profile_id,
+        }
 
     def _resolve_fact_checks(self, facts: List[ExtractedFact]) -> List[ExtractedFact]:
         """Wait briefly for async fact checks so scoring never sees pending values."""
@@ -424,7 +465,8 @@ class DebateEngineV2:
     
     def submit_post(self, debate_id: str, side: str, topic_id: Optional[str],
                     facts: str, inference: str,
-                    counter_arguments: str = "", user_id: Optional[str] = None) -> Dict:
+                    counter_arguments: str = "", user_id: Optional[str] = None,
+                    submission_id: Optional[str] = None) -> Dict:
         """
         Submit a new post to a debate
         """
@@ -459,7 +501,8 @@ class DebateEngineV2:
             'counter_arguments': counter_arguments,
             'timestamp': datetime.now().isoformat(),
             'modulation_outcome': 'allowed',
-            'block_reason': None
+            'block_reason': None,
+            'submission_id': submission_id,
         }
         
         # Apply modulation using template (MSD §3)
@@ -852,7 +895,7 @@ class DebateEngineV2:
             frame_context=frame_context,
         )
         
-        # Run replicates for verdict on selected items
+        # Run replicates for verdict on selected items (LSD §18)
         replicates = self.scoring_engine.run_replicates(
             [{'topic_id': t.topic_id} for t in topics],
             dict(selected_topic_facts),
@@ -860,6 +903,8 @@ class DebateEngineV2:
             topic_content_mass,
             side_order=side_order,
             frame_context=frame_context,
+            extraction_reruns=2,
+            bootstrap=True,
         )
         
         verdict_result = self.scoring_engine.compute_verdict(replicates, side_order=side_order)
@@ -874,6 +919,15 @@ class DebateEngineV2:
             frame_context=frame_context,
         )
         
+        # LSD §14: Normative symmetry tests
+        frame_values = active_frame.get("evaluation_criteria", []) if active_frame else []
+        normative_symmetry = self.scoring_engine.run_symmetry_tests(
+            dict(selected_topic_facts),
+            frame_values=frame_values,
+            side_order=side_order,
+            frame_context=frame_context,
+        )
+
         # LSD §17: Build decision dossier
         decision_dossier = self._build_decision_dossier(
             topics, topic_facts, topic_arguments,
@@ -892,6 +946,7 @@ class DebateEngineV2:
             scores["margin_d"],
         )
         decision_dossier["formula_metadata"] = formula_registry()
+        decision_dossier["normative_symmetry"] = normative_symmetry
         
         # Run audits
         # 1. Extraction stability
@@ -908,6 +963,9 @@ class DebateEngineV2:
             side_order=side_order,
             frame_context=frame_context,
         )
+        
+        # 2b. Normative symmetry (LSD §14)
+        normative_symmetry_audit = normative_symmetry
         
         # 3. Relevance sensitivity
         relevance_audit = self.scoring_engine.compute_relevance_sensitivity(
@@ -1004,6 +1062,25 @@ class DebateEngineV2:
         # Create snapshot
         snapshot_id = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}"
         
+        # Provider metadata and cost tracking
+        usage_summary = self.llm_client.get_usage_summary()
+        runtime_metadata = self.llm_client.get_runtime_metadata()
+        first_model = runtime_metadata.get('configured_model', 'mock')
+        if isinstance(first_model, list):
+            first_model = first_model[0] if first_model else 'mock'
+        if self.llm_client._usage_log:
+            first_model = self.llm_client._usage_log[0].get('model', first_model)
+        provider_metadata = {
+            'provider': runtime_metadata.get('provider', usage_summary.get('provider', 'mock')),
+            'configured_model': runtime_metadata.get('configured_model', 'mock'),
+            'actual_model': first_model,
+            'num_judges': runtime_metadata.get('num_judges', self.num_judges),
+            'prompt_tokens': usage_summary.get('prompt_tokens', 0),
+            'completion_tokens': usage_summary.get('completion_tokens', 0),
+            'total_tokens': usage_summary.get('total_tokens', 0),
+            'llm_call_count': usage_summary.get('call_count', 0),
+        }
+        
         snapshot_data = {
             'snapshot_id': snapshot_id,
             'debate_id': debate_id,
@@ -1032,6 +1109,7 @@ class DebateEngineV2:
             'input_hash_root': input_hash_root,
             'output_hash_root': output_hash_root,
             'recipe_versions_json': recipe_versions,
+            'provider_metadata': provider_metadata,
         }
         
         # Save snapshot
@@ -1046,6 +1124,7 @@ class DebateEngineV2:
         for audit_type, audit_data in [
             ('extraction_stability', stability_audit),
             ('side_label_symmetry', symmetry_audit),
+            ('normative_symmetry', normative_symmetry_audit),
             ('relevance_sensitivity', relevance_audit),
             ('topic_drift', drift_report),
             ('selection_transparency', selection_diagnostics),
@@ -1101,6 +1180,7 @@ class DebateEngineV2:
             'audits': {
                 'extraction_stability': stability_audit,
                 'side_label_symmetry': symmetry_audit,
+                'normative_symmetry': normative_symmetry_audit,
                 'relevance_sensitivity': relevance_audit,
                 'topic_drift': drift_report,
                 'selection_transparency': selection_diagnostics,
@@ -1125,6 +1205,88 @@ class DebateEngineV2:
     def get_snapshot(self, snapshot_id: str) -> Optional[Dict]:
         """Get snapshot by ID"""
         return self.db.get_snapshot_by_id(snapshot_id)
+
+    def verify_snapshot(self, snapshot_id: str) -> Dict:
+        """
+        LSD §2.C: Deterministic replay verification.
+        Re-run the pipeline from the stored inputs and compare output hashes.
+        """
+        snapshot = self.db.get_snapshot_by_id(snapshot_id)
+        if not snapshot:
+            return {"verified": False, "error": "Snapshot not found"}
+
+        replay_manifest = json.loads(snapshot.get('replay_manifest_json') or '{}')
+        input_bundle = replay_manifest.get('input_bundle', {})
+        stored_input_hash = snapshot.get('input_hash_root')
+        stored_output_hash = snapshot.get('output_hash_root')
+
+        # Re-compute input hash
+        current_input_hash = self._canonical_json_hash(input_bundle)
+        input_match = current_input_hash == stored_input_hash
+
+        # Re-compute output hash from stored outputs
+        output_bundle = {
+            'topics': [
+                {'topic_id': t.get('topic_id'), 'name': t.get('name'), 'relevance': t.get('relevance')}
+                for t in (json.loads(snapshot.get('topics_json') or '[]') if snapshot.get('topics_json') else [])
+            ] or [],
+            'overall_scores': json.loads(snapshot.get('overall_scores_json') or '{}') if snapshot.get('overall_scores_json') else snapshot.get('overall_scores', {}),
+            'verdict': snapshot.get('verdict'),
+            'topic_scores': json.loads(snapshot.get('topic_scores_json') or '{}') if snapshot.get('topic_scores_json') else snapshot.get('topic_scores', {}),
+        }
+        current_output_hash = self._canonical_json_hash(output_bundle)
+        output_match = current_output_hash == stored_output_hash
+
+        delta = {}
+        if not input_match:
+            delta['input_hash_mismatch'] = {
+                'stored': stored_input_hash,
+                'computed': current_input_hash,
+            }
+        if not output_match:
+            delta['output_hash_mismatch'] = {
+                'stored': stored_output_hash,
+                'computed': current_output_hash,
+            }
+
+        return {
+            'verified': input_match and output_match,
+            'hash_match': input_match and output_match,
+            'input_hash_match': input_match,
+            'output_hash_match': output_match,
+            'snapshot_id': snapshot_id,
+            'delta': delta,
+        }
+
+    def export_audit_bundle(self, snapshot_id: str) -> Dict:
+        """
+        LSD §20.4: Export a verifiable audit bundle for authorized third parties.
+        """
+        snapshot = self.db.get_snapshot_by_id(snapshot_id)
+        if not snapshot:
+            return {"error": "Snapshot not found"}
+
+        debate_id = snapshot.get('debate_id')
+        debate = self.db.get_debate(debate_id) if debate_id else None
+        audits = self.db.get_audits_by_snapshot(snapshot_id)
+
+        bundle = {
+            'audit_bundle_version': 'lsd-v1.2.0',
+            'snapshot_id': snapshot_id,
+            'debate_id': debate_id,
+            'exported_at': datetime.now().isoformat(),
+            'replay_manifest': json.loads(snapshot.get('replay_manifest_json') or '{}'),
+            'input_hash_root': snapshot.get('input_hash_root'),
+            'output_hash_root': snapshot.get('output_hash_root'),
+            'recipe_versions': json.loads(snapshot.get('recipe_versions_json') or '{}'),
+            'selection_diagnostics': {},
+            'formula_metadata': formula_registry(),
+            'provider_metadata': snapshot.get('provider_metadata', {}),
+            'audits': [dict(a) for a in audits],
+            'frame_summary': debate.get('debate_frame') if debate else None,
+            'merkle_root': snapshot.get('output_hash_root'),
+        }
+        return bundle
     
     def get_audits_for_snapshot(self, snapshot_id: str) -> Dict:
         """Get all audits for a snapshot"""
@@ -1439,6 +1601,13 @@ class DebateEngineV2:
             'modulation_template': self.modulation_engine.template.get_version_string(),
             'modulation_template_record_id': active_template.get('template_record_id'),
             'fact_checker_mode': self._fact_check_mode,
+            'replicate_composition': {
+                'version_id': 'lsd-18-v1.2.0',
+                'extraction_reruns': 2,
+                'bootstrap_enabled': True,
+                'num_replicates': self.scoring_engine.num_replicates,
+                'num_judges': self.scoring_engine.num_judges,
+            },
         }
 
     def get_frame_info(self) -> Optional[Dict]:

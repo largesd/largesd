@@ -294,7 +294,7 @@ def test_async_pii_propagation():
     """Test that async processing preserves PII context and sanitizes retrieval queries"""
     print("\n=== Testing Async PII Propagation ===")
 
-    from skills.fact_checking.queue import reset_global_queue
+    from skills.fact_checking.fc_queue import reset_global_queue
     import uuid
 
     reset_global_queue()

@@ -6,20 +6,887 @@
   <title>Appeals - Blind Debate Adjudicator</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <style>
-    html.route-auth-pending .state-strip,
+    html.route-auth-pending {
+      cursor: progress;
+    }
+
+    .appeals-main {
+      display: grid;
+      gap: clamp(28px, 1.4rem + 1vw, 44px);
+      padding-top: clamp(8px, 0.45rem + 0.45vw, 16px);
+      font-kerning: normal;
+    }
+
+    .appeals-page-head {
+      display: grid;
+      gap: var(--space-lg);
+      align-items: start;
+      padding-bottom: var(--space-sm);
+      border-bottom: 1px solid color-mix(in oklch, var(--line), white 18%);
+    }
+
+    .appeals-page-copy {
+      display: grid;
+      gap: var(--space-xs);
+      align-content: start;
+      min-width: 0;
+      max-width: 60ch;
+    }
+
+    .appeals-page-copy .eyebrow,
+    .appeals-panel-intro .eyebrow {
+      font-size: 0.72rem;
+      letter-spacing: 0.085em;
+      font-weight: 650;
+    }
+
+    .appeals-page-copy .lede,
+    .appeals-panel-intro .lede {
+      margin-top: 0;
+      font-size: 1rem;
+      line-height: 1.62;
+      max-width: 58ch;
+    }
+
+    .appeals-page-copy h1,
+    .appeals-panel-intro h2 {
+      font-family: var(--sans);
+      color: var(--ink-strong);
+      letter-spacing: -0.024em;
+      text-wrap: balance;
+    }
+
+    .appeals-page-copy h1 {
+      margin-top: 2px;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.04;
+      max-width: 16ch;
+    }
+
+    .appeals-panel-intro h2 {
+      font-size: 1.3rem;
+      font-weight: 680;
+      line-height: 1.12;
+      max-width: 22ch;
+    }
+
+    .appeals-page-note {
+      margin: 0;
+      max-width: 42ch;
+      color: var(--ink-soft);
+      font-size: 0.94rem;
+      line-height: 1.62;
+    }
+
+    .appeals-page-meta {
+      display: grid;
+      gap: var(--space-md);
+      align-content: start;
+      min-width: 0;
+      padding-top: 4px;
+    }
+
+    .appeals-page-checklist {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+    }
+
+    .appeals-page-checklist-item {
+      display: grid;
+      grid-template-columns: minmax(0, 82px) minmax(0, 1fr);
+      gap: var(--space-sm);
+      padding-top: 10px;
+      border-top: 1px solid color-mix(in oklch, var(--line), white 28%);
+    }
+
+    .appeals-page-checklist-item dt {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.72rem;
+      letter-spacing: 0.075em;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .appeals-page-checklist-item dd {
+      margin: 0;
+      color: var(--ink-default);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    #appeals-message {
+      margin-top: 0;
+      max-width: 72ch;
+      font-size: 0.93rem;
+      line-height: 1.5;
+    }
+
+    .appeals-workspace {
+      display: grid;
+      gap: clamp(20px, 1rem + 0.85vw, 32px);
+      align-items: start;
+    }
+
+    .appeals-form-panel {
+      display: grid;
+      gap: var(--space-lg);
+      align-content: start;
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-base) 18%);
+    }
+
+    .appeals-status-panel {
+      display: grid;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .appeals-panel-intro {
+      display: grid;
+      gap: var(--space-xs);
+      min-width: 0;
+    }
+
+    .appeals-form-header {
+      display: grid;
+      gap: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid color-mix(in oklch, var(--line), white 18%);
+    }
+
+    .appeals-filing-checklist {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .appeals-filing-item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: var(--space-sm);
+      align-items: start;
+    }
+
+    .appeals-filing-step {
+      display: grid;
+      place-items: center;
+      width: 1.75rem;
+      height: 1.75rem;
+      border: 1px solid color-mix(in oklch, var(--line-strong), white 20%);
+      border-radius: 999px;
+      background: var(--surface-base);
+      color: var(--ink-strong);
+      font-size: 0.74rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .appeals-filing-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .appeals-filing-copy strong {
+      color: var(--ink-strong);
+      font-size: 0.9rem;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+
+    .appeals-filing-copy span {
+      color: var(--ink-soft);
+      font-size: 0.84rem;
+      line-height: 1.52;
+    }
+
+    .appeals-form {
+      display: grid;
+      gap: var(--space-lg);
+    }
+
+    .appeals-form .form-group {
+      margin-bottom: 0;
+    }
+
+    .appeals-form label {
+      font-size: 0.72rem;
+      letter-spacing: 0.075em;
+      font-weight: 650;
+    }
+
+    .appeals-form input,
+    .appeals-form textarea {
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+
+    .appeals-form textarea {
+      resize: none;
+    }
+
+    .appeals-form #appeal-grounds {
+      min-height: 10rem;
+    }
+
+    .appeals-form #appeal-evidence {
+      min-height: 7.5rem;
+    }
+
+    .appeals-form .form-hint,
+    .appeals-form .form-error {
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .appeals-form-grid {
+      display: grid;
+      gap: var(--space-lg);
+      align-items: start;
+    }
+
+    .appeals-form-actions {
+      align-items: flex-start;
+      gap: var(--space-md);
+      margin-bottom: 0;
+      padding-top: var(--space-md);
+      border-top: 1px solid color-mix(in oklch, var(--line), white 18%);
+    }
+
+    .appeals-action-note {
+      margin: 0;
+      max-width: 30ch;
+      color: var(--ink-soft);
+      font-size: 0.84rem;
+      line-height: 1.58;
+    }
+
+    .appeals-status-top {
+      display: grid;
+      gap: var(--space-md);
+      padding: var(--space-lg);
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-base) 12%);
+    }
+
+    .appeals-status-head {
+      margin-bottom: 0;
+    }
+
+    .appeals-status-meta {
+      margin-top: var(--space-sm);
+      align-items: center;
+    }
+
+    .appeals-status-meta .pill {
+      background: var(--surface-raised);
+    }
+
+    .appeals-status-note {
+      margin: 0;
+      max-width: 48ch;
+      color: var(--ink-soft);
+      font-size: 0.86rem;
+      line-height: 1.58;
+    }
+
+    .appeals-status-data {
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--line);
+      background: color-mix(in oklch, var(--surface-muted), white 18%);
+    }
+
+    .appeals-status-panel .table {
+      font-size: 0.9rem;
+      min-width: 0;
+      table-layout: fixed;
+    }
+
+    .appeals-status-panel .table th,
+    .appeals-status-panel .table td {
+      padding: 12px 16px;
+    }
+
+    .appeals-status-panel .table th {
+      font-size: 0.71rem;
+      letter-spacing: 0.075em;
+      font-weight: 650;
+    }
+
+    .appeals-status-panel .table th:nth-child(1),
+    .appeals-status-panel .table td:nth-child(1) {
+      width: 34%;
+    }
+
+    .appeals-status-panel .table th:nth-child(2),
+    .appeals-status-panel .table td:nth-child(2) {
+      width: 20%;
+    }
+
+    .appeals-status-panel .table th:nth-child(3),
+    .appeals-status-panel .table td:nth-child(3) {
+      width: 24%;
+    }
+
+    .appeals-status-panel .table th:nth-child(4),
+    .appeals-status-panel .table td:nth-child(4) {
+      width: 22%;
+    }
+
+    .appeals-status-panel .table td,
+    .appeals-mobile-item-id,
+    .appeals-mobile-meta-row dd {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .appeals-status-panel .table tbody td {
+      transition: background-color 180ms ease-out;
+    }
+
+    .appeals-status-panel .table-wrap {
+      min-height: 22rem;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .appeals-status-panel .table-wrap.is-empty {
+      min-height: 17.5rem;
+    }
+
+    .appeals-status-panel .table-wrap.is-empty .table {
+      height: 100%;
+    }
+
+    .appeals-status-panel .table th:first-child,
+    .appeals-status-panel .table td:first-child {
+      background: color-mix(in oklch, var(--surface-muted), var(--surface-raised) 42%);
+    }
+
+    .appeals-empty-row td {
+      padding: 0;
+      background: color-mix(in oklch, var(--surface-muted), white 24%);
+    }
+
+    .appeals-empty-state {
+      display: grid;
+      place-items: center;
+      gap: 8px;
+      min-height: 17.5rem;
+      padding: clamp(2.5rem, 6vw, 4rem) clamp(1.5rem, 4vw, 2.5rem);
+      text-align: center;
+    }
+
+    .appeals-empty-state strong,
+    .appeals-empty-state span {
+      display: block;
+    }
+
+    .appeals-empty-state strong {
+      color: var(--ink-strong);
+      font-size: 0.95rem;
+      font-weight: 650;
+    }
+
+    .appeals-empty-state span {
+      color: var(--ink-soft);
+      font-size: 0.86rem;
+      line-height: 1.58;
+      max-width: 32ch;
+    }
+
+    .appeals-mobile-list {
+      display: none;
+      padding: var(--space-lg);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .appeals-mobile-item {
+      display: grid;
+      gap: var(--space-sm);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-base) 14%);
+      padding: var(--space-md);
+      transition: background-color 180ms ease-out, border-color 180ms ease-out;
+    }
+
+    .appeals-mobile-item-head {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-sm);
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .appeals-mobile-item-heading {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .appeals-mobile-item-title {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink-strong);
+      font-size: 0.96rem;
+      font-weight: 680;
+      letter-spacing: -0.01em;
+      min-width: 0;
+    }
+
+    .appeals-mobile-item-id {
+      color: var(--ink-soft);
+      font-size: 0.74rem;
+      white-space: nowrap;
+    }
+
+    .appeals-mobile-meta {
+      display: grid;
+      gap: var(--space-xs);
+      margin: 0;
+    }
+
+    .appeals-mobile-meta-row {
+      display: grid;
+      grid-template-columns: minmax(0, 88px) minmax(0, 1fr);
+      gap: var(--space-sm);
+      align-items: start;
+    }
+
+    .appeals-mobile-meta-row dt {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.71rem;
+      letter-spacing: 0.075em;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .appeals-mobile-meta-row dd {
+      margin: 0;
+      min-width: 0;
+      color: var(--ink-default);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .appeals-mobile-empty,
+    .appeals-mobile-error {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      padding: var(--space-md);
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+      line-height: 1.58;
+      text-align: center;
+    }
+
+    .appeals-mobile-error {
+      color: color-mix(in oklch, var(--bad), black 16%);
+    }
+
+    .appeals-appeal-cell {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .appeals-appeal-cell small {
+      margin-top: 0;
+      color: var(--ink-soft);
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+
+    .appeals-status-cell .pill {
+      white-space: nowrap;
+    }
+
+    @media (hover: hover) {
+      .appeals-status-panel .table tbody tr:hover td {
+        background: color-mix(in oklch, var(--surface-accent), white 38%);
+      }
+
+      .appeals-mobile-item:hover {
+        border-color: color-mix(in oklch, var(--accent), white 54%);
+        background: color-mix(in oklch, var(--surface-accent), white 40%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .appeals-status-panel .table tbody td,
+      .appeals-mobile-item {
+        transition: none;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .appeals-page-head {
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.75fr);
+        gap: clamp(24px, 1.2rem + 0.85vw, 34px);
+      }
+
+      .appeals-workspace {
+        grid-template-columns: minmax(320px, 0.84fr) minmax(0, 1.26fr);
+      }
+    }
+
+    @media (min-width: 1121px) {
+      .appeals-workspace[data-queue-state="rows"] .appeals-form-panel {
+        position: sticky;
+        top: 138px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .appeals-main {
+        gap: var(--space-lg);
+        padding-top: 0;
+      }
+
+      .appeals-page-copy h1 {
+        font-size: 1.72rem;
+      }
+
+      .appeals-panel-intro h2 {
+        font-size: 1.18rem;
+      }
+
+      .appeals-page-head {
+        gap: var(--space-sm);
+      }
+
+      .appeals-page-meta {
+        padding-top: 0;
+      }
+
+      .appeals-page-checklist-item {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .appeals-form-header {
+        gap: var(--space-sm);
+        padding-bottom: var(--space-sm);
+      }
+
+      .appeals-status-top {
+        padding: var(--space-md);
+      }
+
+      .appeals-form-actions {
+        align-items: stretch;
+      }
+
+      .appeals-form-actions .button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .appeals-action-note,
+      .appeals-page-note {
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .appeals-status-head {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-sm);
+      }
+
+      .appeals-status-head .refresh-btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .appeals-status-panel .table-wrap {
+        display: none;
+      }
+
+      .appeals-mobile-list {
+        display: grid;
+        gap: var(--space-sm);
+        padding: var(--space-md);
+      }
+    }
+
     html.route-auth-pending main {
       visibility: hidden;
+    }
+
+    /* Match the top-of-page hero composition used on Admin. */
+    .appeals-main {
+      gap: var(--space-lg);
+      padding-top: var(--space-xl);
+    }
+
+    .appeals-hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(var(--space-lg), 2.4vw, var(--space-2xl));
+      border: 1px solid color-mix(in oklch, var(--accent), white 72%);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(
+          160deg,
+          color-mix(in oklch, var(--surface-accent), white 58%) 0%,
+          var(--surface-raised) 42%,
+          var(--surface-raised) 100%
+        );
+      box-shadow: var(--shadow);
+    }
+
+    .appeals-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--accent), white 86%) 0%, transparent 56%);
+    }
+
+    .appeals-hero-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .appeals-hero-title {
+      margin: 0;
+      color: var(--ink-strong);
+      font-family: var(--serif);
+      font-size: 1.44rem;
+      line-height: 1.2;
+      max-width: 24ch;
+    }
+
+    .appeals-hero-copy {
+      margin: 8px 0 0;
+      max-width: 60ch;
+    }
+
+    .appeals-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .appeals-status-tile {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--surface-muted);
+    }
+
+    .appeals-status-tile span {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.045em;
+      font-weight: 600;
+    }
+
+    .appeals-status-tile strong {
+      display: block;
+      margin-top: 6px;
+      color: var(--ink-strong);
+      font-size: 1.04rem;
+      line-height: 1.2;
+      font-family: var(--mono);
+    }
+
+    .appeals-hero-grid {
+      display: grid;
+      gap: clamp(var(--space-lg), 2.2vw, var(--space-2xl));
+      margin-top: clamp(var(--space-lg), 2.2vw, var(--space-2xl));
+    }
+
+    .appeals-hero-panel {
+      display: grid;
+      gap: var(--space-sm);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .appeals-hero-panel + .appeals-hero-panel {
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+      padding-top: var(--space-md);
+    }
+
+    .appeals-copy-tight {
+      margin: 0;
+      max-width: 60ch;
+    }
+
+    .appeals-hero-callout {
+      margin-top: var(--space-sm);
+      max-width: 58ch;
+    }
+
+    .appeals-form-panel,
+    .appeals-status-panel {
+      gap: var(--space-lg);
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-base) 10%);
+    }
+
+    .appeals-workspace > .panel + .panel,
+    .appeals-workspace > .card + .card {
+      margin-top: 0;
+    }
+
+    .appeals-status-panel {
+      padding: var(--space-lg);
+      overflow: visible;
+    }
+
+    .appeals-form-header {
+      gap: var(--space-lg);
+    }
+
+    .appeals-filing-checklist {
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: color-mix(in oklch, var(--surface-muted), white 16%);
+    }
+
+    .appeals-form-grid {
+      gap: var(--space-md);
+    }
+
+    .appeals-form-actions {
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .appeals-action-note {
+      flex: 1 1 240px;
+      max-width: 36ch;
+    }
+
+    .appeals-status-top {
+      gap: var(--space-sm);
+      padding: 0;
+      background: transparent;
+    }
+
+    .appeals-status-meta .pill {
+      background: var(--surface-muted);
+    }
+
+    .appeals-status-note {
+      max-width: 60ch;
+    }
+
+    .appeals-status-data {
+      gap: var(--space-md);
+      border-top: 0;
+      background: transparent;
+    }
+
+    .appeals-status-panel .table-wrap {
+      min-height: 20rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+    }
+
+    .appeals-empty-row td {
+      background: transparent;
+    }
+
+    .appeals-mobile-list {
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    .appeals-mobile-item {
+      background: var(--surface-muted);
+    }
+
+    @media (min-width: 900px) {
+      .appeals-hero-grid {
+        grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+      }
+
+      .appeals-hero-panel + .appeals-hero-panel {
+        border-top: 0;
+        border-left: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+        padding-top: 0;
+        padding-left: var(--space-lg);
+      }
+
+      .appeals-workspace {
+        grid-template-columns: minmax(320px, 0.96fr) minmax(0, 1.24fr);
+      }
+
+      .appeals-form-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+    }
+
+    @media (min-width: 1121px) {
+      .appeals-workspace[data-queue-state="rows"] .appeals-form-panel {
+        top: 112px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .appeals-main {
+        padding-top: var(--space-lg);
+      }
+
+      .appeals-hero {
+        padding: var(--space-lg);
+      }
+
+      .appeals-form-actions .button {
+        width: auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .appeals-status-panel {
+        padding: var(--space-md);
+      }
+
+      .appeals-mobile-list {
+        padding: 0;
+      }
+
+      .appeals-form-actions .button {
+        width: 100%;
+      }
     }
   </style>
   <script>
     (function gateAppealsRouteBeforePaint() {
       const root = document.documentElement;
+      const routePath = window.location.protocol === 'file:'
+        ? '/appeals.html'
+        : (window.location.pathname || '/appeals.html');
+      const next = `${routePath}${window.location.search || ''}${window.location.hash || ''}`;
+      window.__BDA_APPEALS_NEXT__ = next;
       root.classList.add('route-auth-pending');
       root.setAttribute('aria-busy', 'true');
       try {
         const token = localStorage.getItem('access_token');
         if (!token) {
-          const next = `${window.location.pathname || '/appeals.html'}${window.location.search || ''}${window.location.hash || ''}`;
           const params = new URLSearchParams();
           params.set('reason', 'appeals-login-required');
           params.set('next', next);
@@ -30,11 +897,11 @@
       }
     })();
   </script>
-  <script src="static/js/auth.js"></script>
-  <script src="static/js/common.js"></script>
-  <script src="static/js/data_bridge.js"></script>
+  <script defer src="static/js/auth.js"></script>
+  <script defer src="static/js/common.js"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -76,74 +943,198 @@
   </div>
 </section>
 
-<main>
-  <section class="card">
-    <div class="section-head">
-      <div>
-        <h2>Appeals</h2>
-        <p class="lede">Submit and track verdict appeals tied to the active debate snapshot.</p>
+<main id="main-content" class="appeals-main">
+  <section class="card appeals-hero">
+    <div class="appeals-hero-content">
+      <div class="section-head">
+        <div>
+          <h1 class="appeals-hero-title">Appeals</h1>
+          <p class="lede appeals-hero-copy">This page is for filing reconsideration requests against the active debate snapshot. Document the grounds, name the relief you want applied, then monitor the queue as governance review progresses.</p>
+        </div>
+        <span class="pill warn">Governance Review</span>
       </div>
-      <button class="button secondary" type="button" id="appeals-refresh-btn">Refresh</button>
+
+      <div class="appeals-status-grid">
+        <div class="appeals-status-tile">
+          <span>Filing Requirements</span>
+          <strong>Grounds + Relief</strong>
+        </div>
+        <div class="appeals-status-tile">
+          <span>Evidence Format</span>
+          <strong>One Per Line</strong>
+        </div>
+        <div class="appeals-status-tile">
+          <span>Review Scope</span>
+          <strong>Active Snapshot</strong>
+        </div>
+        <div class="appeals-status-tile">
+          <span>Queue Visibility</span>
+          <strong>Debate Context</strong>
+        </div>
+      </div>
+
+      <div class="appeals-hero-grid">
+        <div class="appeals-hero-panel">
+          <h2>What This Page Controls</h2>
+          <p class="lede appeals-copy-tight">Use this screen to challenge a stored outcome without changing the live verdict directly. Each filing records the reason for reconsideration, the requested relief, and any evidence references governance reviewers should check.</p>
+          <div class="callout soft appeals-hero-callout">
+            Appeals stay anchored to the currently selected debate context. Use <a href="snapshot.html">Snapshot</a>, <a href="audits.html">Audits</a>, and <a href="verdict.html">Verdict</a> to inspect the underlying state before submitting a challenge.
+          </div>
+        </div>
+        <div class="appeals-hero-panel">
+          <h2>Recommended Flow</h2>
+          <ol class="admin-flow">
+            <li>Review the active snapshot, verdict, and audits before filing.</li>
+            <li>State the grounds in plain language and be specific about what should be reconsidered.</li>
+            <li>Name the exact relief you want, such as a re-review or recomputation.</li>
+            <li>Attach evidence references only when they materially support the appeal.</li>
+          </ol>
+        </div>
+      </div>
     </div>
+  </section>
 
-    <div id="appeals-message" class="notice" hidden role="status" aria-live="polite"></div>
+  <div id="appeals-message" class="notice" hidden role="status" aria-live="polite"></div>
 
-    <div class="grid cols2">
-      <section class="card" style="box-shadow:none;margin:0">
-        <h3>Submit an Appeal</h3>
-        <p class="lede">Describe what should be reconsidered and what relief you are requesting.</p>
+  <div class="appeals-workspace" data-queue-state="loading">
+    <section class="panel appeals-form-panel">
+      <div class="appeals-form-header">
+        <div class="appeals-panel-intro">
+          <p class="eyebrow">Filing</p>
+          <h2>File an Appeal</h2>
+          <p class="lede">Describe what should be reconsidered and the relief you are requesting.</p>
+        </div>
+        <ol class="appeals-filing-checklist" aria-label="Appeal filing steps">
+          <li class="appeals-filing-item">
+            <span class="appeals-filing-step" aria-hidden="true">1</span>
+            <div class="appeals-filing-copy">
+              <strong>State the grounds</strong>
+              <span>Explain what in the current snapshot should be reconsidered.</span>
+            </div>
+          </li>
+          <li class="appeals-filing-item">
+            <span class="appeals-filing-step" aria-hidden="true">2</span>
+            <div class="appeals-filing-copy">
+              <strong>Name the requested relief</strong>
+              <span>Describe the specific adjustment or re-review you want applied.</span>
+            </div>
+          </li>
+          <li class="appeals-filing-item">
+            <span class="appeals-filing-step" aria-hidden="true">3</span>
+            <div class="appeals-filing-copy">
+              <strong>Attach evidence if helpful</strong>
+              <span>Add citations or URLs when they clarify why the filing deserves review.</span>
+            </div>
+          </li>
+        </ol>
+      </div>
+      <form class="appeals-form" id="appeal-form" novalidate>
         <div class="form-group">
           <label for="appeal-grounds">Grounds</label>
-          <textarea id="appeal-grounds" rows="5" placeholder="Explain why this snapshot should be reviewed (min 10 characters)."></textarea>
+          <textarea id="appeal-grounds" rows="5" required minlength="10" aria-describedby="appeal-grounds-hint appeal-grounds-error" placeholder="Explain why this snapshot should be reviewed (min 10 characters)."></textarea>
+          <small id="appeal-grounds-hint" class="form-hint">Required, minimum 10 characters.</small>
+          <small id="appeal-grounds-error" class="form-error" hidden></small>
         </div>
-        <div class="form-group">
-          <label for="appeal-evidence">Evidence References</label>
-          <textarea id="appeal-evidence" rows="3" placeholder="Optional. One URL or citation per line."></textarea>
+        <div class="appeals-form-grid">
+          <div class="form-group">
+            <label for="appeal-evidence">Evidence References</label>
+            <textarea id="appeal-evidence" rows="3" aria-describedby="appeal-evidence-hint appeal-evidence-error" placeholder="Optional. One URL or citation per line."></textarea>
+            <small id="appeal-evidence-hint" class="form-hint">Optional, include one URL or citation per line.</small>
+            <small id="appeal-evidence-error" class="form-error" hidden></small>
+          </div>
+          <div class="form-group">
+            <label for="appeal-relief">Requested Relief</label>
+            <input id="appeal-relief" type="text" required minlength="5" aria-describedby="appeal-relief-hint appeal-relief-error" placeholder="e.g., Recompute verdict after re-weighting topic t2." />
+            <small id="appeal-relief-hint" class="form-hint">Required, minimum 5 characters.</small>
+            <small id="appeal-relief-error" class="form-error" hidden></small>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="appeal-relief">Requested Relief</label>
-          <input id="appeal-relief" type="text" placeholder="e.g., Recompute verdict after re-weighting topic t2." />
+        <div class="row appeals-form-actions">
+          <button class="button success-action" id="appeal-submit-btn" type="submit">Submit Appeal</button>
+          <p class="appeals-action-note">Each filing is evaluated against the current debate context and latest stored snapshot.</p>
         </div>
-        <div class="row">
-          <button class="button success-action" id="appeal-submit-btn" type="button">Submit Appeal</button>
-        </div>
-      </section>
+      </form>
+    </section>
 
-      <section class="card" style="box-shadow:none;margin:0">
-        <h3>Appeals Status</h3>
-        <p class="lede">The table below reflects all appeals visible for the active debate context.</p>
-        <div class="table-wrap">
+    <section class="panel appeals-status-panel">
+      <div class="appeals-status-top">
+        <div class="panel-head appeals-status-head">
+          <div class="appeals-panel-intro">
+            <p class="eyebrow">Queue</p>
+            <h2>Appeals Queue</h2>
+            <p class="lede">All appeals visible for the active debate context.</p>
+            <div class="pill-cluster appeals-status-meta" id="appeals-status-meta" aria-live="polite">
+              <span class="pill">Queue: <span class="mono" id="appeals-queue-count">-</span></span>
+              <span class="pill">Pending: <span class="mono" id="appeals-pending-count">-</span></span>
+              <span class="pill">Updated: <span class="mono" id="appeals-last-updated">Not yet loaded</span></span>
+            </div>
+          </div>
+          <button class="button secondary refresh-btn" type="button" id="appeals-refresh-btn">Refresh</button>
+        </div>
+        <p class="appeals-status-note">Refresh after a new filing or governance update to keep the visible queue aligned with the latest debate context.</p>
+      </div>
+      <div class="appeals-status-data">
+        <div class="appeals-mobile-list" id="appeals-mobile-list" aria-live="polite"></div>
+        <div class="table-wrap" id="appeals-table-wrap" aria-busy="true">
           <table class="table">
             <thead>
-              <tr><th>Appeal</th><th>Status</th><th>Claimant</th><th>Created</th></tr>
+              <tr><th scope="col">Appeal</th><th scope="col">Status</th><th scope="col">Claimant</th><th scope="col">Filed</th></tr>
             </thead>
             <tbody id="appeals-tbody">
               <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading appeals...</td></tr>
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
-  </section>
+      </div>
+    </section>
+  </div>
 </main>
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="BDA.toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" id="appeals-back-to-top" aria-label="Back to top">↑</button>
 
 <div id="shared-help-panel" data-panel="help-panel"></div>
 
 <script>
-function setAppealsMessage(message, kind = 'success') {
+const APPEALS_LOADING_ROW = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading appeals...</td></tr>';
+const APPEALS_EMPTY_ROW = `
+  <tr class="appeals-empty-row">
+    <td colspan="4">
+      <div class="appeals-empty-state">
+        <strong>No appeals in queue</strong>
+        <span>The queue will populate here after the first filing for this debate context.</span>
+      </div>
+    </td>
+  </tr>
+`;
+const APPEAL_FIELD_IDS = ['appeal-grounds', 'appeal-evidence', 'appeal-relief'];
+const APPEALS_ENDPOINT = '/api/governance/appeals?limit=100';
+
+let hasHydratedAppeals = false;
+let latestAppealsLoadRequest = 0;
+
+function setAppealsMessage(message, kind = 'info') {
   const node = document.getElementById('appeals-message');
+  if (!message) {
+    node.hidden = true;
+    node.textContent = '';
+    node.className = 'notice';
+    node.setAttribute('role', 'status');
+    node.setAttribute('aria-live', 'polite');
+    return;
+  }
+
   node.hidden = false;
   node.className = 'notice';
   node.textContent = message;
+  node.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  node.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
   if (kind === 'success') node.classList.add('alert-success');
   if (kind === 'error') node.classList.add('alert-error');
 }
@@ -154,9 +1145,57 @@ function releaseRouteAuthGate() {
   root.removeAttribute('aria-busy');
 }
 
+function formatAppealStatusLabel(status) {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending';
+}
+
+function getAppealStatusTone(status) {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+  if (normalized === 'accepted') return 'good';
+  if (normalized === 'rejected') return 'bad';
+  return 'warn';
+}
+
+function renderAppealStatusPill(status) {
+  const label = formatAppealStatusLabel(status);
+  const tone = getAppealStatusTone(status);
+  return `<span class="pill ${tone}">${BDA.escapeHtml(label)}</span>`;
+}
+
+function getAppealSubmittedAt(appeal) {
+  return appeal?.submitted_at || appeal?.created_at || '';
+}
+
+function formatAppealsRefreshTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function updateAppealsMeta({ queueCount, pendingCount, updatedLabel } = {}) {
+  const queueNode = document.getElementById('appeals-queue-count');
+  const pendingNode = document.getElementById('appeals-pending-count');
+  const updatedNode = document.getElementById('appeals-last-updated');
+  if (queueNode && queueCount !== undefined) queueNode.textContent = String(queueCount);
+  if (pendingNode && pendingCount !== undefined) pendingNode.textContent = String(pendingCount);
+  if (updatedNode && updatedLabel !== undefined) updatedNode.textContent = updatedLabel;
+}
+
+function setAppealsTableState(state) {
+  const tableWrap = document.getElementById('appeals-table-wrap');
+  const workspace = document.querySelector('.appeals-workspace');
+  if (!tableWrap) return;
+  tableWrap.classList.toggle('is-empty', state === 'empty');
+  if (workspace) workspace.dataset.queueState = state;
+}
+
 function setAppealSubmitDisabled(disabled) {
   const button = document.getElementById('appeal-submit-btn');
-  if (button) button.disabled = disabled;
+  if (!button) return;
+  button.disabled = disabled;
+  button.setAttribute('aria-busy', String(disabled));
+  button.textContent = disabled ? 'Submitting Appeal...' : 'Submit Appeal';
 }
 
 function normalizeEvidenceList(raw) {
@@ -166,72 +1205,249 @@ function normalizeEvidenceList(raw) {
     .filter(Boolean);
 }
 
-function renderAppeals(rows) {
+function getAppealField(fieldId) {
+  return document.getElementById(fieldId);
+}
+
+function getAppealFieldErrorNode(fieldId) {
+  return document.getElementById(`${fieldId}-error`);
+}
+
+function clearAppealFieldError(fieldId) {
+  const field = getAppealField(fieldId);
+  const errorNode = getAppealFieldErrorNode(fieldId);
+  if (field) field.removeAttribute('aria-invalid');
+  if (errorNode) {
+    errorNode.textContent = '';
+    errorNode.hidden = true;
+  }
+}
+
+function setAppealFieldError(fieldId, message) {
+  const field = getAppealField(fieldId);
+  const errorNode = getAppealFieldErrorNode(fieldId);
+  if (field) field.setAttribute('aria-invalid', 'true');
+  if (errorNode) {
+    errorNode.textContent = message;
+    errorNode.hidden = false;
+  }
+}
+
+function resetAppealValidation() {
+  APPEAL_FIELD_IDS.forEach((fieldId) => clearAppealFieldError(fieldId));
+}
+
+function validateAppealForm() {
+  const groundsField = getAppealField('appeal-grounds');
+  const evidenceField = getAppealField('appeal-evidence');
+  const reliefField = getAppealField('appeal-relief');
+
+  resetAppealValidation();
+
+  const values = {
+    grounds: groundsField.value.trim(),
+    requestedRelief: reliefField.value.trim(),
+    evidenceReferences: normalizeEvidenceList(evidenceField.value),
+  };
+
+  let firstInvalidField = null;
+
+  if (values.grounds.length < 10) {
+    setAppealFieldError('appeal-grounds', 'Grounds must be at least 10 characters.');
+    firstInvalidField = firstInvalidField || groundsField;
+  }
+
+  if (values.requestedRelief.length < 5) {
+    setAppealFieldError('appeal-relief', 'Requested relief must be at least 5 characters.');
+    firstInvalidField = firstInvalidField || reliefField;
+  }
+
+  if (firstInvalidField) {
+    setAppealsMessage('Please correct the highlighted fields and try again.', 'error');
+    firstInvalidField.focus();
+    return null;
+  }
+
+  return values;
+}
+
+function renderAppealsLoadingRow() {
   const tbody = document.getElementById('appeals-tbody');
+  setAppealsTableState('loading');
+  tbody.innerHTML = APPEALS_LOADING_ROW;
+}
+
+function renderAppealsMobilePlaceholder(message, kind = 'empty') {
+  const list = document.getElementById('appeals-mobile-list');
+  if (!list) return;
+  const itemClass = kind === 'error' ? 'appeals-mobile-error' : 'appeals-mobile-empty';
+  list.innerHTML = `<p class="${itemClass}">${BDA.escapeHtml(message)}</p>`;
+}
+
+function renderAppealsErrorRow(message) {
+  const tbody = document.getElementById('appeals-tbody');
+  setAppealsTableState('error');
+  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--bad)">${BDA.escapeHtml(message)}</td></tr>`;
+}
+
+function setAppealsLoading(isLoading, options = {}) {
+  const { preserveRows = false } = options;
+  const tableWrap = document.getElementById('appeals-table-wrap');
+  const refreshButton = document.getElementById('appeals-refresh-btn');
+
+  if (tableWrap) tableWrap.setAttribute('aria-busy', String(isLoading));
+  if (refreshButton) {
+    refreshButton.disabled = isLoading;
+    refreshButton.setAttribute('aria-busy', String(isLoading));
+  }
+  if (isLoading && !preserveRows) {
+    renderAppealsLoadingRow();
+    renderAppealsMobilePlaceholder('Loading appeals...');
+  }
+  if (isLoading) {
+    updateAppealsMeta({ updatedLabel: preserveRows ? 'Refreshing...' : 'Loading...' });
+  }
+}
+
+function renderAppealsMobileList(rows) {
+  const list = document.getElementById('appeals-mobile-list');
+  if (!list) return;
   const appeals = Array.isArray(rows) ? rows : [];
   if (!appeals.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No appeals recorded for this debate yet.</td></tr>';
+    renderAppealsMobilePlaceholder('No appeals have been filed for this debate yet.');
     return;
   }
 
-  tbody.innerHTML = appeals.map((appeal) => `
-    <tr>
-      <td class="mono">${BDA.escapeHtml(appeal.appeal_id || '-')}</td>
-      <td>${BDA.escapeHtml(appeal.status || 'pending')}</td>
-      <td>${BDA.escapeHtml(appeal.claimant_id || 'unknown')}</td>
-      <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(appeal.created_at))}</td>
-    </tr>
-  `).join('');
+  list.innerHTML = appeals.map((appeal) => {
+    const appealId = BDA.escapeHtml(appeal.appeal_id || '-');
+    const statusPill = renderAppealStatusPill(appeal.status);
+    const claimant = BDA.escapeHtml(appeal.claimant_id || 'unknown');
+    const snapshotId = BDA.escapeHtml(appeal.snapshot_id || '-');
+    const submitted = BDA.escapeHtml(BDA.formatDateTime(getAppealSubmittedAt(appeal)) || '-');
+    return `
+      <article class="appeals-mobile-item">
+        <div class="appeals-mobile-item-head">
+          <div class="appeals-mobile-item-heading">
+            <p class="appeals-mobile-item-title">Appeal</p>
+            <span class="appeals-mobile-item-id mono">${appealId}</span>
+          </div>
+          ${statusPill}
+        </div>
+        <dl class="appeals-mobile-meta">
+          <div class="appeals-mobile-meta-row">
+            <dt>Snapshot</dt>
+            <dd class="mono">${snapshotId}</dd>
+          </div>
+          <div class="appeals-mobile-meta-row">
+            <dt>Claimant</dt>
+            <dd>${claimant}</dd>
+          </div>
+          <div class="appeals-mobile-meta-row">
+            <dt>Filed</dt>
+            <dd class="mono">${submitted}</dd>
+          </div>
+        </dl>
+      </article>
+    `;
+  }).join('');
 }
 
-async function loadAppeals() {
-  const snapshot = await BDA.loadSnapshot();
-  if (snapshot?.has_snapshot) {
-    BDA.updateStateStrip(snapshot);
+function renderAppeals(rows) {
+  const tbody = document.getElementById('appeals-tbody');
+  const appeals = Array.isArray(rows) ? rows : [];
+  const pendingCount = appeals.filter((appeal) => String(appeal?.status || 'pending').trim().toLowerCase() === 'pending').length;
+  hasHydratedAppeals = true;
+  updateAppealsMeta({ queueCount: appeals.length, pendingCount });
+  if (!appeals.length) {
+    setAppealsTableState('empty');
+    tbody.innerHTML = APPEALS_EMPTY_ROW;
+    renderAppealsMobilePlaceholder('No appeals have been filed for this debate yet.');
+    return;
   }
 
+  setAppealsTableState('rows');
+  tbody.innerHTML = appeals.map((appeal) => {
+    const appealId = BDA.escapeHtml(appeal.appeal_id || '-');
+    const snapshotId = BDA.escapeHtml(appeal.snapshot_id || '-');
+    const claimant = BDA.escapeHtml(appeal.claimant_id || 'unknown');
+    const submitted = BDA.escapeHtml(BDA.formatDateTime(getAppealSubmittedAt(appeal)) || '-');
+    return `
+      <tr>
+        <td>
+          <div class="appeals-appeal-cell">
+            <span class="mono">${appealId}</span>
+            <small>Snapshot <span class="mono">${snapshotId}</span></small>
+          </div>
+        </td>
+        <td class="appeals-status-cell">${renderAppealStatusPill(appeal.status)}</td>
+        <td>${claimant}</td>
+        <td class="mono">${submitted}</td>
+      </tr>
+    `;
+  }).join('');
+  renderAppealsMobileList(appeals);
+}
+
+async function loadAppeals(options = {}) {
+  const { preserveRows = hasHydratedAppeals, clearMessageOnSuccess = true } = options;
+  const requestId = ++latestAppealsLoadRequest;
+
   try {
-    const response = await BDA.api('/api/governance/appeals?limit=100');
+    setAppealsLoading(true, { preserveRows });
+    const [snapshot, response] = await Promise.all([
+      BDA.loadSnapshot(),
+      BDA.api(APPEALS_ENDPOINT),
+    ]);
+
+    if (requestId !== latestAppealsLoadRequest) return;
+    if (snapshot?.has_snapshot) {
+      BDA.updateStateStrip(snapshot);
+    }
     if (!response) return;
     renderAppeals(response.appeals || []);
+    updateAppealsMeta({ updatedLabel: formatAppealsRefreshTime(new Date()) });
+    if (clearMessageOnSuccess) {
+      setAppealsMessage('');
+    }
   } catch (error) {
-    setAppealsMessage(error.message || 'Failed to load appeals.', 'error');
-    renderAppeals([]);
+    if (requestId !== latestAppealsLoadRequest) return;
+    const errorMessage = error.message || 'Failed to load appeals.';
+    if (!hasHydratedAppeals) {
+      setAppealsMessage(errorMessage, 'error');
+      renderAppealsErrorRow(errorMessage);
+      renderAppealsMobilePlaceholder(errorMessage, 'error');
+      updateAppealsMeta({ queueCount: '-', pendingCount: '-', updatedLabel: 'Unavailable' });
+    } else {
+      setAppealsMessage(`Latest refresh failed: ${errorMessage}. Showing the last loaded queue.`, 'error');
+    }
+  } finally {
+    if (requestId === latestAppealsLoadRequest) {
+      setAppealsLoading(false, { preserveRows: true });
+    }
   }
 }
 
 async function submitAppeal() {
-  const grounds = document.getElementById('appeal-grounds').value.trim();
-  const requestedRelief = document.getElementById('appeal-relief').value.trim();
-  const evidenceReferences = normalizeEvidenceList(document.getElementById('appeal-evidence').value);
-
-  if (grounds.length < 10) {
-    setAppealsMessage('Grounds must be at least 10 characters.', 'error');
-    return;
-  }
-  if (requestedRelief.length < 5) {
-    setAppealsMessage('Requested relief must be at least 5 characters.', 'error');
-    return;
-  }
+  const validated = validateAppealForm();
+  if (!validated) return;
 
   try {
     setAppealSubmitDisabled(true);
-    setAppealsMessage('Submitting appeal...', 'success');
+    setAppealsMessage('Submitting appeal...', 'info');
     const response = await BDA.api('/api/governance/appeals', {
       method: 'POST',
       body: JSON.stringify({
-        grounds,
-        evidence_references: evidenceReferences,
-        requested_relief: requestedRelief,
+        grounds: validated.grounds,
+        evidence_references: validated.evidenceReferences,
+        requested_relief: validated.requestedRelief,
       }),
     });
     if (!response) return;
 
     setAppealsMessage(`Appeal submitted successfully: ${response.appeal_id}`, 'success');
-    document.getElementById('appeal-grounds').value = '';
-    document.getElementById('appeal-evidence').value = '';
-    document.getElementById('appeal-relief').value = '';
-    await loadAppeals();
+    document.getElementById('appeal-form').reset();
+    resetAppealValidation();
+    await loadAppeals({ clearMessageOnSuccess: false });
   } catch (error) {
     setAppealsMessage(error.message || 'Failed to submit appeal.', 'error');
   } finally {
@@ -242,20 +1458,41 @@ async function submitAppeal() {
 document.getElementById('appeals-refresh-btn').addEventListener('click', () => {
   loadAppeals();
 });
-document.getElementById('appeal-submit-btn').addEventListener('click', () => {
+document.getElementById('appeals-back-to-top').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+document.getElementById('appeal-form').addEventListener('submit', (event) => {
+  event.preventDefault();
   submitAppeal();
+});
+APPEAL_FIELD_IDS.forEach((fieldId) => {
+  const field = getAppealField(fieldId);
+  if (!field) return;
+  field.addEventListener('input', () => {
+    if (fieldId === 'appeal-grounds' && field.value.trim().length >= 10) {
+      clearAppealFieldError(fieldId);
+    } else if (fieldId === 'appeal-relief' && field.value.trim().length >= 5) {
+      clearAppealFieldError(fieldId);
+    } else if (fieldId === 'appeal-evidence') {
+      clearAppealFieldError(fieldId);
+    }
+  });
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (!Auth.isLoggedIn()) {
-    Auth.redirectToLogin('appeals-login-required');
+    Auth.redirectToLogin('appeals-login-required', window.__BDA_APPEALS_NEXT__ || '/appeals.html');
     return;
   }
 
+  releaseRouteAuthGate();
   try {
     await loadAppeals();
-  } finally {
-    releaseRouteAuthGate();
+  } catch (error) {
+    setAppealsMessage('Appeals page could not finish loading. Refresh to try again.', 'error');
+    renderAppealsErrorRow('Appeals page could not finish loading.');
+    renderAppealsMobilePlaceholder('Appeals page could not finish loading.', 'error');
+    updateAppealsMeta({ queueCount: '-', pendingCount: '-', updatedLabel: 'Unavailable' });
   }
 });
 </script>

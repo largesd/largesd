@@ -31,6 +31,15 @@ Implementation run: `2026-04-28`, covering Phase 2 and Phases 4-10 from `LSD_v1_
 | D distribution and confidence | `backend/scoring_engine.py` | `test_verdict_distribution_confidence_fixture` |
 | Perfect checker discrete `p` outputs | `skills/fact_checking/skill.py` | `test_perfect_checker_discrete_outputs` |
 
+## Newly Implemented (2026-04-30)
+
+| Criterion | Status | Evidence |
+| --- | --- | --- |
+| `LSD-§14` Normative Symmetry Tests | Pass | `backend/scoring_engine.py::run_symmetry_tests`, `backend/debate_engine_v2.py` |
+| `LSD-§15.1` Rebuttal-Type Tagging (Judge Coverage) | Pass | `backend/llm_client.py::judge_coverage`, `backend/scoring_engine.py::_aggregate_rebuttal_types` |
+| `LSD-§18` Replicates with Extraction Reruns | Pass | `backend/scoring_engine.py::run_replicates` (extraction_reruns=2, bootstrap=True) |
+| `LSD-§20.1` Judge Pool Governance Persistence | Pass | `backend/governance.py` (composition, rotation, COI log, calibration), `backend/app_v3.py` |
+
 ## Deferred Scope
 
 Phases 0, 0.5, 1, and 3 are explicitly outside this implementation run. Their criteria are marked `deferred` with rationale and target version in `acceptance/lsd_v1_2_criteria.json`.

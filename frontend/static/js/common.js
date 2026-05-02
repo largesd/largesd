@@ -290,7 +290,7 @@ ${commonFooter}`;
         }
       }
       
-      if (!response.ok) {
+      if (!response.ok && response.status !== 202) {
         const error = new Error(data.error || `HTTP ${response.status}`);
         error.status = response.status;
         error.code = data.code || null;
@@ -310,9 +310,9 @@ ${commonFooter}`;
   /**
    * Load current debate info
    */
-  async loadDebate() {
+  async loadDebate(options = {}) {
     try {
-      const data = await this.api('/api/debate');
+      const data = await this.api('/api/debate', options);
       this.state.currentDebate = data.has_debate ? data : null;
       if (data?.debate_id) {
         this.setActiveDebateId(data.debate_id);
@@ -328,9 +328,9 @@ ${commonFooter}`;
   /**
    * Load current snapshot
    */
-  async loadSnapshot() {
+  async loadSnapshot(options = {}) {
     try {
-      const data = await this.api('/api/debate/snapshot');
+      const data = await this.api('/api/debate/snapshot', options);
       this.state.currentSnapshot = data.has_snapshot ? data : null;
       return data;
     } catch (error) {
@@ -341,11 +341,88 @@ ${commonFooter}`;
   },
 
   /**
+   * Poll a snapshot job until it completes or fails.
+   * @param {string} jobId
+   * @param {Object} options
+   * @param {number} options.intervalMs - polling interval in ms (default 2000)
+   * @param {number} options.maxPolls - maximum number of polls (default 150 = 5 min)
+   * @param {Function} options.onProgress - callback(job) for status updates
+   */
+  async pollSnapshotJob(jobId, options = {}) {
+    const {
+      intervalMs = 2000,
+      maxPolls = 150,
+      onProgress = null,
+    } = options;
+
+    for (let i = 0; i < maxPolls; i++) {
+      const job = await this.api(`/api/debate/snapshot-jobs/${encodeURIComponent(jobId)}`, {
+        method: 'GET',
+        preferLiveApi: true,
+      });
+
+      if (onProgress && typeof onProgress === 'function') {
+        onProgress(job);
+      }
+
+      if (job.status === 'completed') {
+        return job;
+      }
+      if (job.status === 'failed') {
+        const error = new Error(job.error || 'Snapshot generation failed');
+        error.jobId = jobId;
+        error.job = job;
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    const timeoutError = new Error('Snapshot generation timed out');
+    timeoutError.jobId = jobId;
+    throw timeoutError;
+  },
+
+  /**
+   * Generate a new snapshot asynchronously.
+   * POSTs to /api/debate/snapshot, then polls the job until complete.
+   * @param {Object} options
+   * @param {string} options.triggerType - e.g. 'activity', 'scheduled', 'manual'
+   * @param {Function} options.onProgress - callback(job) for status updates
+   */
+  async generateSnapshot(options = {}) {
+    const { triggerType = 'manual', onProgress = null } = options;
+
+    // Step 1: enqueue snapshot generation
+    const enqueueData = await this.api('/api/debate/snapshot', {
+      method: 'POST',
+      body: JSON.stringify({ trigger_type: triggerType }),
+      preferLiveApi: true,
+    });
+
+    if (!enqueueData || !enqueueData.job_id) {
+      throw new Error('Snapshot enqueue failed: no job_id returned');
+    }
+
+    // Step 2: poll until complete
+    const job = await this.pollSnapshotJob(enqueueData.job_id, {
+      onProgress,
+    });
+
+    // Step 3: reload the current snapshot to get full data
+    const snapshotData = await this.loadSnapshot({ preferLiveApi: true });
+    return {
+      job,
+      snapshot: snapshotData,
+    };
+  },
+
+  /**
    * Load debates visible to the current viewer
    */
-  async loadDebates() {
+  async loadDebates(options = {}) {
     try {
-      const data = await this.api('/api/debates');
+      const data = await this.api('/api/debates', options);
       return data.debates || [];
     } catch (error) {
       console.error('Error loading debates:', error);
@@ -356,8 +433,15 @@ ${commonFooter}`;
   /**
    * Update state strip display
    */
+  getVerdictTone(verdict) {
+    if (verdict === 'FOR') return 'good';
+    if (verdict === 'AGAINST') return 'bad';
+    return 'warn';
+  },
+
   updateStateStrip(data) {
     const verdict = data?.verdict || 'NO VERDICT';
+    const verdictTone = this.getVerdictTone(verdict);
     const confidence = data?.confidence !== null && data?.confidence !== undefined 
       ? data.confidence.toFixed(2) 
       : '-';
@@ -372,6 +456,8 @@ ${commonFooter}`;
       verdictEl.textContent = verdict;
       verdictEl.className = 'state-value verdict-neutral' + 
         (verdict === 'FOR' ? ' good' : verdict === 'AGAINST' ? ' bad' : '');
+      const verdictItem = verdictEl.closest('.state-item');
+      if (verdictItem) verdictItem.dataset.stateTone = verdictTone;
     }
     if (confidenceEl) confidenceEl.textContent = confidence;
     if (snapshotEl) {
@@ -382,7 +468,11 @@ ${commonFooter}`;
     // Mobile
     const verdictMobile = document.getElementById('verdict-mobile');
     const confidenceMobile = document.getElementById('confidence-mobile');
-    if (verdictMobile) verdictMobile.textContent = verdict;
+    if (verdictMobile) {
+      verdictMobile.textContent = verdict;
+      const verdictCompact = verdictMobile.closest('.state-compact');
+      if (verdictCompact) verdictCompact.dataset.stateTone = verdictTone;
+    }
     if (confidenceMobile) confidenceMobile.textContent = confidence;
   },
   
@@ -484,6 +574,17 @@ ${commonFooter}`;
       closeHelpBtn.addEventListener('click', () => this.toggleHelp());
       closeHelpBtn.dataset.helpBound = 'true';
     });
+
+    if (!this._helpEscapeBound) {
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const panel = document.getElementById('helpPanel');
+        if (panel && panel.classList.contains('open')) {
+          this.toggleHelp();
+        }
+      });
+      this._helpEscapeBound = true;
+    }
   },
   
   /**
@@ -599,7 +700,7 @@ ${commonFooter}`;
   },
 
   /**
-   * Normalize nav links and keep a fixed overflow set in the More menu.
+   * Normalize nav links and move overflow into the More disclosure.
    */
   normalizeNavigation() {
     const nav = document.querySelector('.navlinks');
@@ -611,6 +712,19 @@ ${commonFooter}`;
       menuLinks.forEach((link) => nav.insertBefore(link, details));
       details.remove();
     });
+
+    // Remove admin link for non-admins before normalizing
+    const isAdmin = (typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function') ? Auth.isAdmin() : false;
+    if (!isAdmin) {
+      Array.from(nav.children).forEach((child) => {
+        if (child.tagName === 'A') {
+          const href = (child.getAttribute('href') || '').split('?')[0].split('#')[0].split('/').pop();
+          if (href === 'admin.html') {
+            child.remove();
+          }
+        }
+      });
+    }
 
     let allLinks = Array.from(nav.children).filter((element) => {
       return element.tagName === 'A' && !element.classList.contains('auth-link');
@@ -656,6 +770,8 @@ ${commonFooter}`;
     const insertionPointForMissing = nav.querySelector('.help-btn, [data-help-toggle="true"], .auth-link');
     navOrder.forEach((href) => {
       if (existingHrefs.has(href)) return;
+      // Hide admin link for non-admins
+      if (href === 'admin.html' && !isAdmin) return;
       const link = document.createElement('a');
       link.href = href;
       link.textContent = navLabels[href] || href;
@@ -708,8 +824,6 @@ ${commonFooter}`;
 
     const menu = document.createElement('div');
     menu.className = 'nav-more-menu';
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', 'Additional pages');
 
     details.appendChild(summary);
     details.appendChild(menu);
@@ -718,15 +832,40 @@ ${commonFooter}`;
     nav.insertBefore(details, menuInsertionPoint || null);
 
     const overflowLinks = [];
+    const moveToOverflow = (link) => {
+      if (!link) return;
+      overflowLinks.push(link);
+      menu.appendChild(link);
+    };
+
     allLinks.forEach((link) => {
       if (alwaysInMore.has(hrefKey(link))) {
-        overflowLinks.push(link);
-        menu.appendChild(link);
+        moveToOverflow(link);
       }
     });
 
+    const getVisibleLinks = () => {
+      return Array.from(nav.children).filter((element) => {
+        return element.tagName === 'A' && !element.classList.contains('auth-link');
+      });
+    };
+
+    while (nav.scrollWidth > nav.clientWidth) {
+      const visibleLinks = getVisibleLinks();
+      if (visibleLinks.length <= 1) break;
+
+      const movableLinks = visibleLinks.filter((link) => hrefKey(link) !== currentPage);
+      const linkToMove = movableLinks[movableLinks.length - 1] || visibleLinks[visibleLinks.length - 1];
+      if (!linkToMove) break;
+      overflowLinks.unshift(linkToMove);
+      menu.prepend(linkToMove);
+    }
+
     if (overflowLinks.length === 0) {
       details.remove();
+      if (this.syncNavigationWrapState()) {
+        this.scheduleNavigationRebalance();
+      }
       return;
     }
 
@@ -734,6 +873,38 @@ ${commonFooter}`;
       return link.classList.contains('active') || link.getAttribute('aria-current') === 'page';
     });
     summary.classList.toggle('active', hasActiveOverflowLink);
+    if (this.syncNavigationWrapState()) {
+      this.scheduleNavigationRebalance();
+    }
+  },
+
+  /**
+   * Toggle a class when the header wraps so CSS can left-align the second row.
+   */
+  syncNavigationWrapState() {
+    const navShell = document.querySelector('.nav');
+    const brand = navShell?.querySelector('.brand');
+    const links = navShell?.querySelector('.navlinks');
+    if (!navShell || !brand || !links) return;
+
+    const brandBox = brand.getBoundingClientRect();
+    const linksBox = links.getBoundingClientRect();
+    const wrapped = linksBox.top >= brandBox.bottom - 2;
+    const changed = navShell.classList.contains('nav-is-wrapped') !== wrapped;
+    navShell.classList.toggle('nav-is-wrapped', wrapped);
+    return changed;
+  },
+
+  /**
+   * Run one follow-up nav normalization after wrap state changes.
+   */
+  scheduleNavigationRebalance() {
+    if (this._navWrapSyncPending) return;
+    this._navWrapSyncPending = true;
+    requestAnimationFrame(() => {
+      this._navWrapSyncPending = false;
+      this.normalizeNavigation();
+    });
   },
 
   /**
@@ -761,6 +932,9 @@ ${commonFooter}`;
 
     const rebalance = this.debounce(() => this.normalizeNavigation(), 120);
     window.addEventListener('resize', rebalance);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => rebalance());
+    }
     this._navResizeBound = true;
   },
   
@@ -833,7 +1007,10 @@ const DebateSelector = {
   async fetchDebates() {
     // Try API first
     try {
-      const data = await BDA.api('/api/debates', { suppressAuthRedirect: true });
+      const data = await BDA.api('/api/debates', {
+        preferLiveApi: true,
+        suppressAuthRedirect: true,
+      });
       if (data && data.debates && data.debates.length > 0) {
         return data.debates.map(d => ({
           debate_id: d.debate_id,

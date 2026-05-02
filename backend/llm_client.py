@@ -77,12 +77,14 @@ class MockLLMProvider(LLMProvider):
     
     def _mock_coverage_response(self) -> LLMResponse:
         addressed = random.choice([True, True, True, False])  # 75% addressed
+        rebuttal_type = random.choice(["EMPIRICAL", "NORMATIVE", "INFERENCE", "SCOPE/DEFINITION"])
         return LLMResponse(
             content=json.dumps({
                 "addressed": addressed,
                 "confidence": round(random.uniform(0.6, 0.9), 2),
                 "explanation": f"Opposing argument is {'directly rebutted' if addressed else 'not adequately addressed'}.",
-                "citation_span_id": f"span_{random.randint(1, 10)}"
+                "citation_span_id": f"span_{random.randint(1, 10)}",
+                "rebuttal_type": rebuttal_type
             }),
             model="mock-coverage-v1",
             usage={"prompt_tokens": 150, "completion_tokens": 40},
@@ -244,27 +246,86 @@ class LLMClient:
                  num_judges: int = 5,
                  api_key: Optional[str] = None):
         self.num_judges = num_judges
+        self._usage_log: List[Dict] = []
         
         # Initialize provider
         provider = provider or os.getenv("LLM_PROVIDER", "mock")
+        self.provider_name = provider
         
         if provider == "openai":
             self.provider = OpenAIProvider(api_key=api_key)
         elif provider == "openrouter":
             # Import here to avoid circular dependency
             from llm_client_openrouter import OpenRouterProvider
+            # Validate required env vars before instantiating
+            if not (os.getenv("OPENROUTER_API_KEY") or api_key):
+                raise ValueError(
+                    "LLM_PROVIDER=openrouter requires OPENROUTER_API_KEY environment variable."
+                )
+            if not os.getenv("OPENROUTER_MODEL"):
+                raise ValueError(
+                    "LLM_PROVIDER=openrouter requires OPENROUTER_MODEL environment variable."
+                )
             self.provider = OpenRouterProvider(api_key=api_key)
         elif provider == "openrouter-multi":
             # Multi-model judge diversity
             from llm_client_openrouter import MultiModelJudgeProvider
+            if not (os.getenv("OPENROUTER_API_KEY") or api_key):
+                raise ValueError(
+                    "LLM_PROVIDER=openrouter-multi requires OPENROUTER_API_KEY environment variable."
+                )
             self.provider = MultiModelJudgeProvider(api_key=api_key)
         else:
             self.provider = MockLLMProvider()
     
+    def get_usage_summary(self) -> Dict:
+        """Return accumulated token usage and call count."""
+        total_prompt = sum(u.get('prompt_tokens', 0) for u in self._usage_log)
+        total_completion = sum(u.get('completion_tokens', 0) for u in self._usage_log)
+        return {
+            'call_count': len(self._usage_log),
+            'prompt_tokens': total_prompt,
+            'completion_tokens': total_completion,
+            'total_tokens': total_prompt + total_completion,
+            'provider': self.provider_name,
+        }
+
+    def get_runtime_metadata(self) -> Dict[str, Any]:
+        """Describe the currently instantiated provider configuration."""
+        configured_model: Any = "mock"
+
+        provider_model = getattr(self.provider, "model", None)
+        if provider_model:
+            configured_model = provider_model
+        else:
+            judge_models = getattr(self.provider, "judge_models", None)
+            if judge_models:
+                configured_model = list(judge_models)
+
+        return {
+            'provider': self.provider_name,
+            'configured_model': configured_model,
+            'num_judges': self.num_judges,
+        }
+    
+    def reset_usage(self):
+        """Clear the usage log."""
+        self._usage_log = []
+    
     def generate(self, prompt: str, temperature: float = 0.7,
                  max_tokens: int = 500) -> LLMResponse:
         """Single generation"""
-        return self.provider.generate(prompt, temperature, max_tokens)
+        import time
+        start = time.time()
+        response = self.provider.generate(prompt, temperature, max_tokens)
+        latency_ms = round((time.time() - start) * 1000, 2)
+        self._usage_log.append({
+            'prompt_tokens': response.usage.get('prompt_tokens', 0),
+            'completion_tokens': response.usage.get('completion_tokens', 0),
+            'model': response.model,
+            'latency_ms': latency_ms,
+        })
+        return response
     
     def generate_multiple(self, prompt: str, n: int = None,
                           temperature_range: tuple = (0.3, 0.9),
@@ -280,7 +341,7 @@ class LLMClient:
             # Vary temperature for diversity
             t_min, t_max = temperature_range
             temp = t_min + (t_max - t_min) * (i / max(n - 1, 1))
-            response = self.provider.generate(prompt, temp, max_tokens)
+            response = self.generate(prompt, temp, max_tokens)
             responses.append(response)
         
         return responses
@@ -424,12 +485,14 @@ Supporting Facts of Opposing Argument:
 Rebuttal/Counter-argument Text:
 {rebuttal_text}
 
-Has the opposing argument been addressed? Respond in JSON format:
+Has the opposing argument been addressed? Also classify the rebuttal type.
+Respond in JSON format:
 {{
     "addressed": <true/false>,
     "confidence": <float 0-1>,
     "explanation": "<why it is or isn't addressed>",
-    "citation": "<specific text from rebuttal that addresses it, if any>"
+    "citation": "<specific text from rebuttal that addresses it, if any>",
+    "rebuttal_type": "EMPIRICAL|NORMATIVE|INFERENCE|SCOPE/DEFINITION"
 }}
 """
         
@@ -443,7 +506,8 @@ Has the opposing argument been addressed? Respond in JSON format:
                     "addressed": data["addressed"],
                     "confidence": data.get("confidence", 0.5),
                     "explanation": data.get("explanation", ""),
-                    "citation": data.get("citation", "")
+                    "citation": data.get("citation", ""),
+                    "rebuttal_type": data.get("rebuttal_type", "UNKNOWN")
                 })
         
         return determinations
@@ -615,3 +679,40 @@ Respond in JSON format:
         
         response = self.generate(prompt, temperature=0.4)
         return self.extract_json(response) or {"summary": "", "cited_arguments": []}
+
+    def judge_normative_symmetry(self, premise_text: str, frame_context: str = "") -> Dict:
+        """
+        LSD §14: Judge-based normative symmetry evaluation.
+        Returns role-swap and comparable-case test results.
+        """
+        prompt = f"""Evaluate the normative premise for symmetry bias.
+
+Premise: {premise_text}
+{frame_context and f"Frame context: {frame_context}" or ""}
+
+Perform two tests:
+1. ROLE-SWAP TEST: Swap the primary actors/agents in the premise and evaluate whether acceptability changes.
+2. COMPARABLE-CASE TEST: Construct a structurally analogous premise in a different domain and evaluate.
+
+For each test, return q = P(acceptable | Frame) as a float 0-1.
+
+Respond in JSON format:
+{{
+    "q_original": <float>,
+    "q_swapped": <float>,
+    "q_comparable": <float>,
+    "swap_description": "<description of the role swap>",
+    "comparable_case": "<the analogous premise>",
+    "delta_q": <float>
+}}
+"""
+        response = self.generate(prompt, temperature=0.5)
+        data = self.extract_json(response) or {}
+        return {
+            "q_original": data.get("q_original", 0.5),
+            "q_swapped": data.get("q_swapped", 0.5),
+            "q_comparable": data.get("q_comparable", 0.5),
+            "swap_description": data.get("swap_description", ""),
+            "comparable_case": data.get("comparable_case", ""),
+            "delta_q": data.get("delta_q", 0.0),
+        }

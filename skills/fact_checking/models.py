@@ -41,6 +41,27 @@ class CacheResult(Enum):
     MISS = "MISS"
 
 
+class SourceConfidence(Enum):
+    """How strongly a source supports or contradicts a claim."""
+    CONFIRMS = "confirms"      # Source explicitly confirms
+    CONTRADICTS = "contradicts"  # Source explicitly contradicts
+    SILENT = "silent"          # Source has no relevant information
+    AMBIGUOUS = "ambiguous"    # Source has mixed or unclear information
+
+
+@dataclass
+class SourceResult:
+    """Result from querying a single source."""
+    source_id: str
+    source_url: str
+    source_title: str
+    confidence: SourceConfidence
+    excerpt: str  # Verbatim quote or summary from the source
+    content_hash: str
+    retrieved_at: datetime
+    tier: EvidenceTier
+
+
 @dataclass
 class TemporalContext:
     """Temporal context for time-sensitive claims"""

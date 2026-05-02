@@ -11,6 +11,18 @@ import os
 import sys
 import argparse
 
+
+def describe_configured_model(llm_provider: str) -> str:
+    """Return the model or provider detail implied by the current environment."""
+    if llm_provider == 'openrouter':
+        return os.getenv('OPENROUTER_MODEL', '<unset>')
+    if llm_provider == 'openrouter-multi':
+        return 'OpenRouter multi-model judge pool'
+    if llm_provider == 'openai':
+        return os.getenv('OPENAI_MODEL', 'gpt-4')
+    return 'mock'
+
+
 def main():
     parser = argparse.ArgumentParser(description='Blind Debate Adjudicator Server v3')
     parser.add_argument('--port', type=int, default=5000, help='Port to run on (default: 5000)')
@@ -18,13 +30,14 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--db-path', default=os.getenv('DEBATE_DB_PATH', 'data/debate_system.db'),
                        help='SQLite database path (default: data/debate_system.db)')
-    parser.add_argument('--fact-mode', default='OFFLINE', choices=['OFFLINE', 'ONLINE_ALLOWLIST'],
-                       help='Fact checking mode (default: OFFLINE)')
-    parser.add_argument('--llm-provider', default='mock', 
+    parser.add_argument('--fact-mode', default=os.getenv('FACT_CHECK_MODE', 'OFFLINE'),
+                       choices=['OFFLINE', 'ONLINE_ALLOWLIST'],
+                       help='Fact checking mode (default: $FACT_CHECK_MODE or OFFLINE)')
+    parser.add_argument('--llm-provider', default=os.getenv('LLM_PROVIDER', 'mock'),
                        choices=['mock', 'openai', 'openrouter', 'openrouter-multi'],
-                       help='LLM provider (default: mock)')
-    parser.add_argument('--num-judges', type=int, default=5,
-                       help='Number of judges for scoring (default: 5)')
+                       help='LLM provider (default: $LLM_PROVIDER or mock)')
+    parser.add_argument('--num-judges', type=int, default=int(os.getenv('NUM_JUDGES', '5')),
+                       help='Number of judges for scoring (default: $NUM_JUDGES or 5)')
     
     args = parser.parse_args()
     
@@ -47,6 +60,7 @@ def main():
     print(f"   - Database: {args.db_path}")
     print(f"   - Fact Check Mode: {args.fact_mode}")
     print(f"   - LLM Provider: {args.llm_provider}")
+    print(f"   - Configured Model: {describe_configured_model(args.llm_provider)}")
     print(f"   - Num Judges: {args.num_judges}")
     print("-" * 70)
     print(" New in v3:")

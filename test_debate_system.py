@@ -1041,6 +1041,135 @@ def test_api_auth_session_and_admin_access_consistency():
         shutil.rmtree(temp_dir)
 
 
+def test_legacy_password_hashes_authenticate_and_migrate():
+    """Legacy password hashes should verify cleanly and upgrade to bcrypt."""
+    import hashlib
+    from werkzeug.security import generate_password_hash
+    from backend.database_v3 import Database
+
+    print("\n=== Testing Legacy Password Hash Compatibility ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_legacy_auth.db")
+
+    try:
+        db = Database(db_path)
+        now = datetime.now().isoformat()
+
+        db.save_user({
+            "user_id": "user_legacy_scrypt",
+            "email": "legacy.scrypt@example.com",
+            "password_hash": generate_password_hash("legacy-pass-123"),
+            "display_name": "Legacy Scrypt",
+            "created_at": now,
+            "is_active": True,
+            "is_verified": False,
+            "last_login": None,
+        })
+        db.save_user({
+            "user_id": "user_legacy_sha256",
+            "email": "legacy.sha256@example.com",
+            "password_hash": hashlib.sha256("legacy-pass-456".encode("utf-8")).hexdigest(),
+            "display_name": "Legacy Sha256",
+            "created_at": now,
+            "is_active": True,
+            "is_verified": False,
+            "last_login": None,
+        })
+
+        assert db.verify_user("legacy.scrypt@example.com", "wrong-pass") is None
+        assert db.verify_user("legacy.sha256@example.com", "wrong-pass") is None
+
+        scrypt_user = db.verify_user("legacy.scrypt@example.com", "legacy-pass-123")
+        sha256_user = db.verify_user("legacy.sha256@example.com", "legacy-pass-456")
+
+        assert scrypt_user is not None, "Legacy werkzeug/scrypt user should authenticate"
+        assert sha256_user is not None, "Legacy SHA-256 user should authenticate"
+
+        migrated_scrypt = db.get_user_by_email("legacy.scrypt@example.com")
+        migrated_sha256 = db.get_user_by_email("legacy.sha256@example.com")
+
+        assert migrated_scrypt["password_hash"].startswith("$2"), "Legacy scrypt hash should be upgraded to bcrypt"
+        assert migrated_sha256["password_hash"].startswith("$2"), "Legacy SHA-256 hash should be upgraded to bcrypt"
+        print("✓ Legacy password hashes authenticate without 500s and migrate to bcrypt")
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+def test_rate_limiter_exempts_navigation_and_read_only_requests():
+    """Navigation and GET endpoints should not consume the default mutating API limit."""
+    print("\n=== Testing Rate Limiter Exempts Navigation + Read-Only Requests ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_rate_limits.db")
+    env_keys = (
+        "DEBATE_DB_PATH",
+        "SECRET_KEY",
+        "ENABLE_RATE_LIMITER",
+    )
+    old_env = {key: os.environ.get(key) for key in env_keys}
+    app_module = None
+
+    try:
+        os.environ["DEBATE_DB_PATH"] = db_path
+        os.environ["SECRET_KEY"] = "test-secret-rate-limit-32-bytes-min"
+        os.environ["ENABLE_RATE_LIMITER"] = "true"
+
+        try:
+            import backend.app_v3 as app_v3
+        except ModuleNotFoundError as exc:
+            if exc.name == "jwt":
+                print("⚠ Skipping rate limiter test: PyJWT not available in this interpreter.")
+                return
+            raise
+
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        for _ in range(55):
+            response = client.get("/")
+            assert response.status_code == 200, "Static navigation should not be rate limited"
+
+        for _ in range(55):
+            response = client.get("/api/health")
+            assert response.status_code == 200, "Read-only API GETs should not be rate limited"
+
+        last_response = None
+        for idx in range(51):
+            last_response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": f"rate-limit-user-{idx}@example.com",
+                    "password": "password123",
+                    "display_name": f"Rate User {idx}",
+                },
+            )
+            if idx < 50:
+                assert last_response.status_code == 201, (
+                    f"Expected write request {idx + 1} to succeed, got {last_response.status_code}: "
+                    f"{last_response.get_data(as_text=True)}"
+                )
+
+        assert last_response is not None
+        assert last_response.status_code == 429, "Mutating API requests should still hit the default rate limit"
+        print("✓ Navigation/GETs are exempt while mutating API requests remain protected")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+
+        shutil.rmtree(temp_dir)
+
+
 def test_debate_proposal_lifecycle():
     """Test debate proposal submission, queue, accept, and reject."""
     import uuid as _uuid
@@ -1113,6 +1242,101 @@ def test_debate_proposal_lifecycle():
 
         print("✓ Debate proposal lifecycle works end-to-end")
     finally:
+        shutil.rmtree(temp_dir)
+
+
+def test_accepting_proposal_activates_debate_for_proposer():
+    """Accepted proposals should become the proposer's active debate, not only the admin's."""
+    print("\n=== Testing Proposal Acceptance Activates Proposer Debate Context ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_proposal_activation.db")
+
+    old_env = {
+        "DEBATE_DB_PATH": os.environ.get("DEBATE_DB_PATH"),
+        "FACT_CHECK_MODE": os.environ.get("FACT_CHECK_MODE"),
+        "LLM_PROVIDER": os.environ.get("LLM_PROVIDER"),
+        "NUM_JUDGES": os.environ.get("NUM_JUDGES"),
+        "ADMIN_ACCESS_MODE": os.environ.get("ADMIN_ACCESS_MODE"),
+    }
+    os.environ["DEBATE_DB_PATH"] = db_path
+    os.environ["FACT_CHECK_MODE"] = "OFFLINE"
+    os.environ["LLM_PROVIDER"] = "mock"
+    os.environ["NUM_JUDGES"] = "3"
+    os.environ["ADMIN_ACCESS_MODE"] = "authenticated"
+
+    app_module = None
+    try:
+        import backend.app_v3 as app_v3
+
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        proposer = client.post("/api/auth/register", json={
+            "email": "proposal.proposer@example.com",
+            "password": "password123",
+            "display_name": "Proposal Proposer",
+        })
+        assert proposer.status_code == 201, proposer.get_data(as_text=True)
+        proposer_token = proposer.get_json()["access_token"]
+        proposer_headers = {"Authorization": f"Bearer {proposer_token}"}
+
+        admin = client.post("/api/auth/register", json={
+            "email": "proposal.admin@example.com",
+            "password": "password123",
+            "display_name": "Proposal Admin",
+        })
+        assert admin.status_code == 201, admin.get_data(as_text=True)
+        admin_token = admin.get_json()["access_token"]
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+        proposal_response = client.post(
+            "/api/debate-proposals",
+            headers=proposer_headers,
+            json={
+                "motion": "Resolved: Independent AI audits should be required before frontier deployment.",
+                "moderation_criteria": "Allow evidence-based arguments and block spam or harassment.",
+                "debate_frame": "Judge which side best balances safety, accountability, and practical burden.",
+            },
+        )
+        assert proposal_response.status_code == 201, proposal_response.get_data(as_text=True)
+        proposal_id = proposal_response.get_json()["proposal_id"]
+
+        accept_response = client.post(
+            f"/api/admin/debate-proposals/{proposal_id}/accept",
+            headers=admin_headers,
+        )
+        assert accept_response.status_code == 200, accept_response.get_data(as_text=True)
+        debate_id = accept_response.get_json()["debate_id"]
+
+        proposer_active = client.get("/api/debate", headers=proposer_headers)
+        assert proposer_active.status_code == 200, proposer_active.get_data(as_text=True)
+        proposer_active_payload = proposer_active.get_json()
+        assert proposer_active_payload.get("has_debate") is True
+        assert proposer_active_payload.get("debate_id") == debate_id, (
+            "Accepted proposal should become the proposer's active debate"
+        )
+
+        proposer_debates = client.get("/api/debates", headers=proposer_headers)
+        assert proposer_debates.status_code == 200, proposer_debates.get_data(as_text=True)
+        debate_ids = {item["debate_id"] for item in proposer_debates.get_json().get("debates", [])}
+        assert debate_id in debate_ids, "Accepted debate should appear in the proposer's debate list"
+
+        print("✓ Accepted proposals activate debate context for the proposer")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+
         shutil.rmtree(temp_dir)
 
 
@@ -1211,6 +1435,8 @@ def run_all_tests():
         ("Visible Modulation", test_visible_modulation),
         ("Admin Template Persistence + Engine Sync", test_admin_template_persistence_and_engine_sync),
         ("API Auth + Session Consistency", test_api_auth_session_and_admin_access_consistency),
+        ("Legacy Password Hash Compatibility", test_legacy_password_hashes_authenticate_and_migrate),
+        ("Rate Limiter Exemptions", test_rate_limiter_exempts_navigation_and_read_only_requests),
         ("Debate Proposal Lifecycle", test_debate_proposal_lifecycle),
         ("Snapshot Append-Only + Integrity", test_snapshot_append_only_and_integrity_fields),
     ]

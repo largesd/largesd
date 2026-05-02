@@ -15,6 +15,7 @@
   </style>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <header class="site-header">
   <div class="nav">
     <div class="brand">
@@ -56,12 +57,12 @@
   </div>
 </section>
 
-<main>
+<main id="main-content">
 
 <section class="card">
   <div class="section-head">
     <div>
-      <h2>Snapshot</h2>
+      <h1>Snapshot</h1>
       <p class="lede">A live, audit-ready view of the current run.</p>
     </div>
     <a class="button secondary" href="topics.html">Open topic map</a>
@@ -183,7 +184,7 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <a href="#" onclick="toggleHelp(); return false;">Glossary</a></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -191,9 +192,9 @@
 <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
-<div class="help-panel" id="helpPanel">
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
   <div class="help-panel-header">
-    <h3>Glossary & Help</h3>
+    <h3 id="help-panel-title">Glossary & Help</h3>
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">

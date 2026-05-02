@@ -14,15 +14,20 @@ python -m playwright install chromium
 
 # 1. Run unit tests (no server needed)
 python test_debate_system.py
+python test_lsd_v1_2_contracts.py
+python test_fact_check_skill.py
 
-# 2. Start server and run manual tests
+# 2. Run workflow check (unit + fact + lint)
+python scripts/dev_workflow.py check
+
+# 3. Start server and run manual tests
 python start_server.py --host 127.0.0.1 --port 5000
 # In another terminal:
 source venv/bin/activate
 python test_manual.py server-check --base-url http://127.0.0.1:5000
 python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
 
-# 3. Run browser acceptance checks against a temporary v3 server
+# 4. Run browser acceptance checks against a temporary v3 server
 python scripts/dev_workflow.py acceptance
 ```
 
@@ -90,6 +95,40 @@ Tests the fact-checking skill specifically:
 ```bash
 python test_fact_check_skill.py
 ```
+
+### 4. OpenRouter Smoke Tests
+
+To validate real LLM integration (requires an OpenRouter API key):
+
+```bash
+# 1. Configure environment
+export LLM_PROVIDER=openrouter
+export OPENROUTER_API_KEY=sk-or-v1-...
+export OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+export NUM_JUDGES=1
+export ALLOW_MOCK_FALLBACK=false
+
+# 2. Run a single direct generation test
+python -c "
+from backend.llm_client_openrouter import OpenRouterProvider
+p = OpenRouterProvider()
+r = p.generate('Say hello in one word.')
+print('Model:', r.model)
+print('Tokens:', r.usage)
+"
+
+# 3. Run end-to-end manual scenario
+python start_server.py
+# In another terminal:
+python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+```
+
+**Verification checklist:**
+- [ ] Direct `generate()` returns valid JSON with correct model id
+- [ ] Snapshot completes without timeout (async pipeline)
+- [ ] Snapshot metadata shows `provider: openrouter` and actual model id
+- [ ] Token usage is tracked in `provider_metadata`
+- [ ] Invalid API key produces explicit error (no silent mock fallback)
 
 ### 4. UI Acceptance Tests (`acceptance/run_ui_acceptance.py`)
 

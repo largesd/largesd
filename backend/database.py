@@ -1,6 +1,7 @@
 """
 SQLite database layer for debate system persistence
 """
+import os
 import sqlite3
 import json
 import uuid
@@ -19,13 +20,27 @@ class DebateDatabase:
     
     def __init__(self, db_path: str = "data/debate_system.db"):
         self.db_path = db_path
+        self._db_url = os.getenv("DATABASE_URL", "")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_tables()
     
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def _get_connection(self):
+        db_url = os.getenv("DATABASE_URL", "")
+        if db_url.startswith("postgresql://"):
+            try:
+                import psycopg2
+                conn = psycopg2.connect(db_url)
+                return conn
+            except ImportError:
+                raise RuntimeError("psycopg2 required for PostgreSQL. Install: pip install psycopg2-binary")
+        elif db_url.startswith("sqlite:///"):
+            conn = sqlite3.connect(db_url.replace("sqlite:///", ""))
+            conn.row_factory = sqlite3.Row
+            return conn
+        else:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
 
     def _ensure_column(self, cursor: sqlite3.Cursor, table_name: str,
                        column_name: str, column_definition: str):
@@ -100,6 +115,24 @@ class DebateDatabase:
                 block_reason TEXT,
                 FOREIGN KEY (debate_id) REFERENCES debates(debate_id),
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # Lightweight migrations for email processor improvements
+        self._ensure_column(cursor, "posts", "submission_id", "TEXT")
+        
+        # Failed publishes queue for atomic/retriable GitHub publishing
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS failed_publishes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                debate_id TEXT NOT NULL,
+                snapshot_id TEXT,
+                payload_json TEXT NOT NULL,
+                commit_message TEXT NOT NULL,
+                retry_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                next_retry_at TEXT
             )
         """)
         
@@ -262,9 +295,21 @@ class DebateDatabase:
                 created_at TEXT NOT NULL,
                 is_active INTEGER DEFAULT 1,
                 is_verified INTEGER DEFAULT 0,
+                is_admin INTEGER DEFAULT 0,
                 last_login TEXT
             )
         """)
+        self._ensure_column(cursor, 'users', 'is_admin', 'INTEGER DEFAULT 0')
+        
+        # Migration: if no user is admin, promote the oldest registered user to admin
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+        admin_count = cursor.fetchone()[0]
+        if admin_count == 0:
+            cursor.execute(
+                "UPDATE users SET is_admin = 1 WHERE user_id = ("
+                "SELECT user_id FROM users ORDER BY created_at ASC LIMIT 1"
+                ")"
+            )
         
         # User sessions table for tracking logins
         cursor.execute("""
@@ -333,6 +378,8 @@ class DebateDatabase:
         self._ensure_column(cursor, "snapshots", "borderline_rate", "REAL DEFAULT 0.0")
         self._ensure_column(cursor, "snapshots", "suppression_policy_json", "TEXT")
         self._ensure_column(cursor, "snapshots", "status", "TEXT DEFAULT 'valid'")
+        self._ensure_column(cursor, "snapshots", "provider_metadata_json", "TEXT")
+        self._ensure_column(cursor, "snapshots", "cost_estimate", "REAL")
         self._ensure_column(cursor, "facts", "fact_type", "TEXT DEFAULT 'empirical'")
         self._ensure_column(cursor, "facts", "normative_provenance", "TEXT")
         self._ensure_column(cursor, "facts", "operationalization", "TEXT")
@@ -734,8 +781,8 @@ class DebateDatabase:
         cursor.execute("""
             INSERT OR REPLACE INTO posts
             (post_id, debate_id, frame_id, user_id, side, topic_id, facts, inference, counter_arguments,
-             timestamp, modulation_outcome, block_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             timestamp, modulation_outcome, block_reason, submission_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             post_data['post_id'],
             post_data['debate_id'],
@@ -748,7 +795,8 @@ class DebateDatabase:
             post_data.get('counter_arguments', ''),
             post_data['timestamp'],
             post_data['modulation_outcome'],
-            post_data.get('block_reason')
+            post_data.get('block_reason'),
+            post_data.get('submission_id')
         ))
         conn.commit()
         conn.close()
@@ -768,6 +816,86 @@ class DebateDatabase:
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
+    
+    def get_post_by_submission_id(self, submission_id: str) -> Optional[Dict]:
+        """Return a post row if submission_id already exists."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT post_id, debate_id, timestamp FROM posts WHERE submission_id = ?",
+            (submission_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {
+                "post_id": row[0],
+                "debate_id": row[1],
+                "timestamp": row[2],
+            }
+        return None
+    
+    # Failed publish queue operations
+    def queue_failed_publish(self, debate_id: str, snapshot_id: Optional[str],
+                             payload_json: str, commit_message: str,
+                             last_error: str) -> None:
+        """Queue a failed GitHub publish for later retry."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        created_at = datetime.now().isoformat()
+        cursor.execute("""
+            INSERT INTO failed_publishes
+            (debate_id, snapshot_id, payload_json, commit_message, retry_count, last_error, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (debate_id, snapshot_id, payload_json, commit_message, 0, last_error, created_at))
+        conn.commit()
+        conn.close()
+    
+    def get_failed_publishes(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get pending failed publishes ordered by creation time."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, debate_id, snapshot_id, payload_json, commit_message, retry_count, last_error, created_at
+            FROM failed_publishes
+            ORDER BY created_at ASC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "id": row[0],
+                "debate_id": row[1],
+                "snapshot_id": row[2],
+                "payload_json": row[3],
+                "commit_message": row[4],
+                "retry_count": row[5],
+                "last_error": row[6],
+                "created_at": row[7],
+            }
+            for row in rows
+        ]
+    
+    def mark_publish_success(self, item_id: int) -> None:
+        """Remove a failed publish entry after successful retry."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM failed_publishes WHERE id = ?", (item_id,))
+        conn.commit()
+        conn.close()
+    
+    def increment_publish_retry(self, item_id: int, error: str) -> None:
+        """Increment retry count and update last error for a failed publish."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE failed_publishes
+            SET retry_count = retry_count + 1, last_error = ?
+            WHERE id = ?
+        """, (error, item_id))
+        conn.commit()
+        conn.close()
     
     # Span operations
     def save_span(self, span_data: Dict[str, Any]):
@@ -1005,8 +1133,9 @@ class DebateDatabase:
              allowed_count, blocked_count, block_reasons, side_order, overall_scores,
              overall_for, overall_against, margin_d, ci_d_lower, ci_d_upper, confidence,
              verdict, topic_scores, replay_manifest_json, input_hash_root, output_hash_root,
-             recipe_versions_json, borderline_rate, suppression_policy_json, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             recipe_versions_json, borderline_rate, suppression_policy_json, status,
+             provider_metadata_json, cost_estimate)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             snapshot_data['snapshot_id'],
             snapshot_data['debate_id'],
@@ -1035,6 +1164,8 @@ class DebateDatabase:
             snapshot_data.get('borderline_rate', 0.0),
             json.dumps(snapshot_data.get('suppression_policy_json', {})),
             snapshot_data.get('status', 'valid'),
+            json.dumps(snapshot_data.get('provider_metadata', {})),
+            snapshot_data.get('cost_estimate'),
         ))
         conn.commit()
         conn.close()
@@ -1132,8 +1263,8 @@ class DebateDatabase:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO users
-            (user_id, email, password_hash, display_name, created_at, is_active, is_verified, last_login)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, email, password_hash, display_name, created_at, is_active, is_verified, is_admin, last_login)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_data['user_id'],
             user_data['email'],
@@ -1142,6 +1273,7 @@ class DebateDatabase:
             user_data['created_at'],
             1 if user_data.get('is_active', True) else 0,
             1 if user_data.get('is_verified', False) else 0,
+            1 if user_data.get('is_admin', False) else 0,
             user_data.get('last_login')
         ))
         conn.commit()

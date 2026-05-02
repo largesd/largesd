@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBATE_DB_PATH=/app/data/debate_system.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      - NUM_JUDGES=${NUM_JUDGES:-5}
+      - FACT_CHECK_MODE=${FACT_CHECK_MODE:-OFFLINE}
+      - ADMIN_ACCESS_MODE=${ADMIN_ACCESS_MODE:-authenticated}
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
+    volumes:
+      - debate_data:/app/data
+    depends_on:
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  debate_data:
+  redis_data:

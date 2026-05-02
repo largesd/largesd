@@ -296,6 +296,7 @@ class User:
     created_at: datetime
     is_active: bool = True
     is_verified: bool = False
+    is_admin: bool = False
     last_login: Optional[datetime] = None
     
     def __post_init__(self):

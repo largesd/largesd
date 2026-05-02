@@ -60,7 +60,16 @@ python -m pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-### 2. Start Server
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env and set at minimum:
+#   SECRET_KEY=your-strong-random-key
+#   LLM_PROVIDER=mock   # or openrouter with OPENROUTER_API_KEY
+```
+
+### 3. Start Server
 
 ```bash
 python start_server.py --host 127.0.0.1 --port 5000
@@ -75,6 +84,14 @@ python start_server.py \
   --fact-mode OFFLINE \
   --llm-provider mock \
   --num-judges 5
+```
+
+### Docker Quick Start
+
+```bash
+cp .env.example .env
+# Edit .env with production values
+docker-compose up --build -d
 ```
 
 ### 3. Validate Health
@@ -156,7 +173,29 @@ From `.env.example`:
 - `NUM_JUDGES`: judge count for evaluation replicates
 - `FACT_CHECK_MODE`: `OFFLINE` or `ONLINE_ALLOWLIST`
 - `OPENAI_API_KEY` (if `openai`)
-- `OPENROUTER_API_KEY` (if `openrouter` or `openrouter-multi`)
+- `OPENROUTER_API_KEY` (required if provider is `openrouter`)
+- `OPENROUTER_MODEL` (required if provider is `openrouter`, e.g. `anthropic/claude-3.5-sonnet`)
+- `OPENROUTER_TIMEOUT_SECONDS` (optional, default 60)
+- `ALLOW_MOCK_FALLBACK` (optional, default `false`)
+- `SITE_URL` / `SITE_NAME` (optional, for OpenRouter rankings)
+
+### OpenRouter Setup
+
+```bash
+python setup_openrouter.py
+```
+
+This interactive script will prompt for your API key, model, and judge count, then write a `.env` file.
+
+## Async Snapshot Pipeline
+
+Snapshot generation is now asynchronous to avoid HTTP timeouts during long-running evaluations:
+
+1. `POST /api/debate/snapshot` returns immediately with a `job_id`
+2. Poll `GET /api/debate/snapshot-jobs/<job_id>` for progress
+3. On completion, the job result includes `snapshot_summary`
+
+The background worker is started automatically when the server boots.
 
 ## Admin Access Policy
 

@@ -381,6 +381,36 @@ const DataBridge = {
   // ===================================================================
 
   /**
+   * Build the canonical email body for a BDA Submission v1.
+   * Mirrors backend/email_submission_parser.py::build_email_body().
+   */
+  buildEmailBody(debateId, resolution, side, topicId, facts, inference, counterArguments) {
+    const submissionId = self.crypto?.randomUUID
+      ? self.crypto.randomUUID()
+      : 'sub-' + Date.now();
+    const submittedAt = new Date().toISOString();
+    const lines = [
+      'BDA Submission v1',
+      `Debate-ID: ${debateId}`,
+      `Resolution: ${resolution}`,
+      `Submission-ID: ${submissionId}`,
+      `Submitted-At: ${submittedAt}`,
+      `Position: ${side}`,
+      `Topic-Area: ${topicId}`,
+      '',
+      'Facts:',
+      facts,
+      '',
+      'Inference:',
+      inference,
+    ];
+    if (counterArguments) {
+      lines.push('', 'Counter-Arguments:', counterArguments);
+    }
+    return lines.join('\n');
+  },
+
+  /**
    * Build a mailto: link for submitting a post via email.
    */
   buildMailtoLink(debateId, resolution, side, topicId, facts, inference, counterArguments) {
@@ -398,35 +428,7 @@ const DataBridge = {
       return null;
     }
 
-    const parser = {
-      buildEmailBody(debate_id, resolution, side, topic_id, facts, inference, counter_arguments) {
-        const submissionId = self.crypto?.randomUUID
-          ? self.crypto.randomUUID()
-          : 'sub-' + Date.now();
-        const submittedAt = new Date().toISOString();
-        const lines = [
-          'BDA Submission v1',
-          `Debate-ID: ${debate_id}`,
-          `Resolution: ${resolution}`,
-          `Submission-ID: ${submissionId}`,
-          `Submitted-At: ${submittedAt}`,
-          `Position: ${side}`,
-          `Topic-Area: ${topic_id}`,
-          '',
-          'Facts:',
-          facts,
-          '',
-          'Inference:',
-          inference,
-        ];
-        if (counter_arguments) {
-          lines.push('', 'Counter-Arguments:', counter_arguments);
-        }
-        return lines.join('\n');
-      }
-    };
-
-    const body = parser.buildEmailBody(
+    const body = this.buildEmailBody(
       cleanDebateId, cleanResolution, side, topicId, facts, inference, counterArguments
     );
 
@@ -488,9 +490,13 @@ const DataBridge = {
     const originalLoadDebates = BDA.loadDebates.bind(BDA);
 
     BDA.api = async function(endpoint, options = {}) {
+      const {
+        preferLiveApi = false,
+        ...apiOptions
+      } = options;
       DataBridge.loadConfig();
-      if (!DataBridge.isConfigured()) {
-        return originalApi(endpoint, options);
+      if (preferLiveApi || !DataBridge.isConfigured()) {
+        return originalApi(endpoint, apiOptions);
       }
 
       // Ensure cache is loaded
@@ -540,7 +546,7 @@ const DataBridge = {
         return DataBridge.getSnapshotDiff() || {};
       }
       if (endpoint === '/api/debate/posts') {
-        if (options.method === 'POST') {
+        if (apiOptions.method === 'POST') {
           // In hard cutover, POSTs should go through email
           throw new Error('Use email submission in GitHub mode.');
         }
@@ -553,48 +559,46 @@ const DataBridge = {
 
       // Fallback for unmapped endpoints
       console.warn('DataBridge: unmapped endpoint, falling back to API:', endpoint);
-      return originalApi(endpoint, options);
+      return originalApi(endpoint, apiOptions);
     };
 
-    BDA.loadDebate = async function() {
+    BDA.loadDebate = async function(options = {}) {
       DataBridge.loadConfig();
-      if (DataBridge.isConfigured()) {
+      if (!options.preferLiveApi && DataBridge.isConfigured()) {
         await DataBridge.ensureData();
         const d = DataBridge.getDebate();
         BDA.state.currentDebate = d.has_debate ? d : null;
         if (d.debate_id) BDA.setActiveDebateId(d.debate_id);
         return d;
       }
-      return originalLoadDebate();
+      return originalLoadDebate(options);
     };
 
-    BDA.loadSnapshot = async function() {
+    BDA.loadSnapshot = async function(options = {}) {
       DataBridge.loadConfig();
-      if (DataBridge.isConfigured()) {
+      if (!options.preferLiveApi && DataBridge.isConfigured()) {
         await DataBridge.ensureData();
         const s = DataBridge.getSnapshot();
         BDA.state.currentSnapshot = s.has_snapshot ? s : null;
         return s;
       }
-      return originalLoadSnapshot();
+      return originalLoadSnapshot(options);
     };
 
-    BDA.loadDebates = async function() {
+    BDA.loadDebates = async function(options = {}) {
       DataBridge.loadConfig();
-      if (DataBridge.isConfigured()) {
+      if (!options.preferLiveApi && DataBridge.isConfigured()) {
         await DataBridge.ensureData();
         const d = DataBridge.getDebate();
-        return {
-          debates: d.has_debate ? [{
+        return d.has_debate ? [{
             debate_id: d.debate_id,
             resolution: d.resolution,
             scope: d.scope,
             created_at: d.created_at,
             has_snapshot: d.has_snapshot,
-          }] : []
-        };
+          }] : [];
       }
-      return originalLoadDebates();
+      return originalLoadDebates(options);
     };
   }
 
@@ -607,7 +611,8 @@ const DataBridge = {
   const skipPages = ['setup.html', 'login.html', 'register.html', 'about.html', 'index.html'];
   if (skipPages.some(p => path.endsWith(p))) return;
   DataBridge.loadConfig();
-  if (!DataBridge.isConfigured()) {
+  const hasAuthToken = !!localStorage.getItem('access_token');
+  if (!DataBridge.isConfigured() && !hasAuthToken) {
     window.location.href = 'setup.html';
   }
 })();
