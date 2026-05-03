@@ -5,14 +5,17 @@ Tests compliance with Medium Scale Discussion (MSD) specification
 import sys
 import os
 import json
+import copy
 import tempfile
 import shutil
 import importlib
 from datetime import datetime, timedelta
+from pathlib import Path
 
-# Add paths for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'skills', 'fact_checking'))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from dataclasses import dataclass
 
@@ -29,6 +32,9 @@ from backend.debate_engine_v2 import DebateEngineV2
 from backend.scoring_engine import ScoringEngine, TopicSideScores
 from backend.llm_client import LLMClient, MockLLMProvider
 from backend.modulation import ModulationEngine, ModulationTemplate
+from backend.topic_engine import TopicEngine, Topic
+from backend.lsd_v1_2 import merge_sensitivity
+from backend.published_results import PublishedResultsBuilder
 
 
 # =============================================================================
@@ -690,6 +696,107 @@ def test_relevance_sensitivity():
     print(f"✓ Relevance sensitivity: D_mean={audit['d_mean']}, stability={audit['stability_ratio']}")
 
 
+def test_merge_variant_deterministic_ids():
+    """Test that merge_variant_replicate produces deterministic IDs."""
+    print("\n=== Testing Merge Variant Deterministic IDs ===")
+
+    engine = TopicEngine()
+    topics = [
+        Topic(topic_id="tA", name="A", scope="apple banana cherry", relevance=0.25),
+        Topic(topic_id="tB", name="B", scope="apple banana cherry date", relevance=0.25),
+        Topic(topic_id="tC", name="C", scope="xylophone zebra", relevance=0.25),
+        Topic(topic_id="tD", name="D", scope="quantum physics", relevance=0.25),
+    ]
+
+    variant1 = engine.merge_variant_replicate(topics, variant_seed=99)
+    variant2 = engine.merge_variant_replicate(topics, variant_seed=99)
+
+    ids1 = {t.topic_id for t in variant1}
+    ids2 = {t.topic_id for t in variant2}
+    assert ids1 == ids2, f"Variant IDs not deterministic: {ids1} vs {ids2}"
+
+    # Also verify a different seed produces different IDs
+    variant3 = engine.merge_variant_replicate(topics, variant_seed=42)
+    ids3 = {t.topic_id for t in variant3}
+    # With high probability the hash IDs differ; assert they are not identical set
+    assert ids1 != ids3 or len(ids1 & ids3) < len(ids1), "Different seeds should produce different IDs"
+
+    print("✓ Merge variant IDs are deterministic for identical seed")
+
+
+def test_merge_variant_produces_different_structure():
+    """Test that min_sim variant produces a different merge than max_sim primary."""
+    print("\n=== Testing Merge Variant Different Structure ===")
+
+    engine = TopicEngine()
+    topics = [
+        Topic(topic_id="tA", name="A", scope="apple banana cherry", relevance=0.25),
+        Topic(topic_id="tB", name="B", scope="apple banana cherry date", relevance=0.25),
+        Topic(topic_id="tC", name="C", scope="xylophone zebra", relevance=0.25),
+        Topic(topic_id="tD", name="D", scope="quantum physics", relevance=0.25),
+    ]
+
+    # Primary merge (max_sim) with target=3
+    primary_merged = engine._merge_topics([copy.deepcopy(t) for t in topics], target_count=3)
+    # Variant merge (min_sim) with target=3
+    variant_merged = engine.merge_variant_replicate(topics, variant_seed=99)
+
+    # Build sets of merged parent pairs
+    def get_merge_pairs(topic_list):
+        pairs = set()
+        for t in topic_list:
+            if len(t.parent_topic_ids) == 2:
+                pairs.add(tuple(sorted(t.parent_topic_ids)))
+        return pairs
+
+    primary_pairs = get_merge_pairs(primary_merged)
+    variant_pairs = get_merge_pairs(variant_merged)
+
+    assert primary_pairs != variant_pairs, (
+        f"Variant should merge a different pair than primary. "
+        f"Primary: {primary_pairs}, Variant: {variant_pairs}"
+    )
+    print(f"✓ Primary merged {primary_pairs}, Variant merged {variant_pairs}")
+
+
+def test_merge_sensitivity_ancestry_stability():
+    """Test that mapping stability is computed from ancestry, not synthetic scopes."""
+    print("\n=== Testing Merge Sensitivity Ancestry Stability ===")
+
+    primary_topics = [
+        {"topic_id": "t1", "parent_topic_ids": []},
+        {"topic_id": "t2", "parent_topic_ids": []},
+        {"topic_id": "t3", "parent_topic_ids": []},
+    ]
+    # Variant: t1 and t2 merged into r1; t3 survives
+    replicate_topics = [
+        {"topic_id": "r1", "parent_topic_ids": ["t1", "t2"]},
+        {"topic_id": "t3", "parent_topic_ids": []},
+    ]
+    topic_content_mass = {"t1": 10.0, "t2": 10.0, "t3": 5.0}
+    primary_to_replicate = {"t1": "r1", "t2": "r1", "t3": "t3"}
+
+    result = merge_sensitivity(
+        primary_topics,
+        replicate_topics,
+        topic_content_mass,
+        baseline_d=0.5,
+        replicate_d=0.6,
+        primary_to_replicate=primary_to_replicate,
+    )
+
+    # Stability: t1=10*0.5=5, t2=10*0.5=5, t3=5*1.0=5 -> total_stable=15, total_mass=25 -> 0.6
+    expected_stability = round(15.0 / 25.0, 4)
+    assert result["mapping_stability"] == expected_stability, (
+        f"Expected stability {expected_stability}, got {result['mapping_stability']}"
+    )
+    assert result["score_deltas_per_frame"]["active"]["delta_d"] == round(0.6 - 0.5, 4)
+    assert result["score_deltas_per_frame"]["active"]["baseline_d"] == 0.5
+    assert result["score_deltas_per_frame"]["active"]["replicate_d"] == 0.6
+
+    print(f"✓ Ancestry stability computed correctly: {result['mapping_stability']}")
+
+
 # =============================================================================
 # REQUIREMENTS COMPLIANCE TESTS
 # =============================================================================
@@ -944,6 +1051,15 @@ def test_api_auth_session_and_admin_access_consistency():
         assert unauthorized_create.status_code == 401, "Unauthenticated debate creation should be rejected"
         assert unauthorized_create.get_json().get("code") == "AUTH_REQUIRED"
 
+        # Pre-seed a dummy admin so the real test user does NOT get auto-admin
+        # (database_v3 auto-promotes the first registered user to admin)
+        dummy_reg = client.post("/api/auth/register", json={
+            "email": "dummy.admin@example.com",
+            "password": "password123",
+            "display_name": "Dummy Admin",
+        })
+        assert dummy_reg.status_code == 201
+
         registration_payload = {
             "email": "auth.session.user@example.com",
             "password": "password123",
@@ -952,11 +1068,13 @@ def test_api_auth_session_and_admin_access_consistency():
         registration = client.post("/api/auth/register", json=registration_payload)
         assert registration.status_code == 201, f"Registration failed: {registration.get_data(as_text=True)}"
         auth_data = registration.get_json()
+        # Verify the test user is NOT auto-admin (the auto-admin slot was taken by dummy)
+        assert auth_data.get("is_admin") is False, "Test user should not be auto-admin"
         token = auth_data["access_token"]
         auth_headers = {"Authorization": f"Bearer {token}"}
 
-        # Grant admin access so the authenticated user can create debates
-        # (POST /api/debates is admin_required)
+        # Grant admin access via restricted-mode allowlist so the authenticated user
+        # can create debates (POST /api/debates is admin_required)
         os.environ["ADMIN_USER_EMAILS"] = registration_payload["email"]
         # Reload app module to pick up new env
         app_module = importlib.reload(app_module)
@@ -994,7 +1112,7 @@ def test_api_auth_session_and_admin_access_consistency():
 
         admin_forbidden = client.get("/api/admin/moderation-template/current", headers=auth_headers)
         assert admin_forbidden.status_code == 403, "Restricted admin mode should block non-allowlisted users"
-        assert admin_forbidden.get_json().get("code") == "ADMIN_FORBIDDEN"
+        assert admin_forbidden.get_json().get("code") == "ADMIN_RESTRICTED"
 
         os.environ["ADMIN_USER_EMAILS"] = registration_payload["email"]
         app_module = importlib.reload(app_module)
@@ -1273,15 +1391,6 @@ def test_accepting_proposal_activates_debate_for_proposer():
         app_module.app.config["TESTING"] = True
         client = app_module.app.test_client()
 
-        proposer = client.post("/api/auth/register", json={
-            "email": "proposal.proposer@example.com",
-            "password": "password123",
-            "display_name": "Proposal Proposer",
-        })
-        assert proposer.status_code == 201, proposer.get_data(as_text=True)
-        proposer_token = proposer.get_json()["access_token"]
-        proposer_headers = {"Authorization": f"Bearer {proposer_token}"}
-
         admin = client.post("/api/auth/register", json={
             "email": "proposal.admin@example.com",
             "password": "password123",
@@ -1290,6 +1399,15 @@ def test_accepting_proposal_activates_debate_for_proposer():
         assert admin.status_code == 201, admin.get_data(as_text=True)
         admin_token = admin.get_json()["access_token"]
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+        proposer = client.post("/api/auth/register", json={
+            "email": "proposal.proposer@example.com",
+            "password": "password123",
+            "display_name": "Proposal Proposer",
+        })
+        assert proposer.status_code == 201, proposer.get_data(as_text=True)
+        proposer_token = proposer.get_json()["access_token"]
+        proposer_headers = {"Authorization": f"Bearer {proposer_token}"}
 
         proposal_response = client.post(
             "/api/debate-proposals",
@@ -1398,6 +1516,71 @@ def test_snapshot_append_only_and_integrity_fields():
         shutil.rmtree(temp_dir)
 
 
+def test_published_bundle_uses_engine_for_diff_and_targets():
+    """Test that PublishedResultsBuilder uses DebateEngineV2 when wired."""
+    print("\n=== Testing Published Bundle Uses Engine for Diff and Targets ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_published_bundle.db")
+    engine = None
+
+    try:
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+
+        debate = engine.create_debate({
+            "motion": "Should governments subsidize renewable energy?",
+            "moderation_criteria": "Allow evidence-backed arguments. Block harassment.",
+            "debate_frame": "Judge which side best informs a neutral policymaker.",
+        })
+        debate_id = debate["debate_id"]
+
+        # Submit posts and generate first snapshot
+        engine.submit_post(debate_id, "FOR", None,
+                           "Renewables create jobs.", "Therefore subsidize.")
+        engine.submit_post(debate_id, "AGAINST", None,
+                           "Subsidies distort markets.", "Therefore do not subsidize.")
+        snap1 = engine.generate_snapshot(debate_id, trigger_type="manual")
+
+        # Submit more posts and generate second snapshot so diff has two snapshots
+        engine.submit_post(debate_id, "FOR", None,
+                           "Solar costs have dropped 80%.", "Therefore subsidies are efficient.")
+        snap2 = engine.generate_snapshot(debate_id, trigger_type="activity")
+
+        # Build bundle with engine-wired builder
+        builder = PublishedResultsBuilder(db_path=db_path, engine=engine)
+        bundle = builder.build_bundle(debate_id)
+
+        # Verify snapshot_diff uses engine shape
+        diff = bundle["snapshot_diff"]
+        assert diff is not None, "Expected snapshot_diff with two snapshots"
+        assert "topics" in diff, "Engine diff should include 'topics'"
+        assert "facts" in diff, "Engine diff should include 'facts'"
+        assert "arguments" in diff, "Engine diff should include 'arguments'"
+        assert "scores" in diff, "Engine diff should include 'scores'"
+        assert "note" not in diff, "Engine-backed diff should not contain placeholder 'note'"
+
+        # Verify evidence_targets uses flat engine shape
+        targets = bundle["evidence_targets"]
+        assert "high_impact_targets" in targets, "Engine targets should include 'high_impact_targets'"
+        assert "medium_impact_targets" in targets, "Engine targets should include 'medium_impact_targets'"
+        assert "margin_needed_for_flip" in targets, "Engine targets should include 'margin_needed_for_flip'"
+        assert "verdict" in targets, "Engine targets should include 'verdict'"
+        assert "confidence" in targets, "Engine targets should include 'confidence'"
+        assert "note" not in targets, "Engine-backed targets should not contain placeholder 'note'"
+        assert "verdict_sensitivity" not in targets, "Targets should remain flat, not nested under 'verdict_sensitivity'"
+
+        print("✓ Published bundle uses engine-shaped diff and flat evidence targets")
+    finally:
+        if engine is not None:
+            engine.shutdown()
+        shutil.rmtree(temp_dir)
+
+
 # =============================================================================
 # MAIN TEST RUNNER
 # =============================================================================
@@ -1428,6 +1611,9 @@ def run_all_tests():
         # Audit tests
         ("Side-Label Symmetry", test_side_label_symmetry),
         ("Relevance Sensitivity", test_relevance_sensitivity),
+        ("Merge Sensitivity Deterministic IDs", test_merge_variant_deterministic_ids),
+        ("Merge Sensitivity Different Structure", test_merge_variant_produces_different_structure),
+        ("Merge Sensitivity Ancestry Stability", test_merge_sensitivity_ancestry_stability),
         
         # Requirements compliance
         ("Identity Blindness", test_identity_blindness),
@@ -1439,6 +1625,7 @@ def run_all_tests():
         ("Rate Limiter Exemptions", test_rate_limiter_exempts_navigation_and_read_only_requests),
         ("Debate Proposal Lifecycle", test_debate_proposal_lifecycle),
         ("Snapshot Append-Only + Integrity", test_snapshot_append_only_and_integrity_fields),
+        ("Published Bundle Uses Engine", test_published_bundle_uses_engine_for_diff_and_targets),
     ]
     
     passed = 0
