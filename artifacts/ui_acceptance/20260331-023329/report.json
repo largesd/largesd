@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-03-31T02:33:34.107263",
+  "spec": "acceptance/ui_end_to_end.md",
+  "browser": "auto",
+  "port": 5061,
+  "criteria": [
+    {
+      "id": "AC-UI-1",
+      "title": "Home page loads the active debate without identity leakage",
+      "description": "Anonymous users can load the home page, see the current debate state, and do not see username fields.",
+      "passed": false,
+      "duration_seconds": 1.02,
+      "screenshots": [],
+      "server_log": "artifacts/ui_acceptance/20260331-023329/AC-UI-1/server.log",
+      "error": "Server exited early with code 1\n\nTraceback (most recent call last):\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/ui_acceptance.py\", line 466, in run_single_criterion\n    wait_for_health(base_url, timeout_seconds, process)\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/dev_workflow.py\", line 130, in wait_for_health\n    raise RuntimeError(f\"Server exited early with code {process.returncode}\")\nRuntimeError: Server exited early with code 1\n"
+    },
+    {
+      "id": "AC-UI-2",
+      "title": "Posting flow is visibly gated, then allows a structured post with a session",
+      "description": "The posting form is disabled when logged out, then accepts a structured post when a client session exists.",
+      "passed": false,
+      "duration_seconds": 1.01,
+      "screenshots": [],
+      "server_log": "artifacts/ui_acceptance/20260331-023329/AC-UI-2/server.log",
+      "error": "Server exited early with code 1\n\nTraceback (most recent call last):\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/ui_acceptance.py\", line 466, in run_single_criterion\n    wait_for_health(base_url, timeout_seconds, process)\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/dev_workflow.py\", line 130, in wait_for_health\n    raise RuntimeError(f\"Server exited early with code {process.returncode}\")\nRuntimeError: Server exited early with code 1\n"
+    },
+    {
+      "id": "AC-UI-3",
+      "title": "Generating a snapshot updates the UI and verdict page",
+      "description": "After a post is submitted, the snapshot button produces a snapshot id and the verdict page renders real contribution data.",
+      "passed": false,
+      "duration_seconds": 1.01,
+      "screenshots": [],
+      "server_log": "artifacts/ui_acceptance/20260331-023329/AC-UI-3/server.log",
+      "error": "Server exited early with code 1\n\nTraceback (most recent call last):\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/ui_acceptance.py\", line 466, in run_single_criterion\n    wait_for_health(base_url, timeout_seconds, process)\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/dev_workflow.py\", line 130, in wait_for_health\n    raise RuntimeError(f\"Server exited early with code {process.returncode}\")\nRuntimeError: Server exited early with code 1\n"
+    },
+    {
+      "id": "AC-UI-4",
+      "title": "Topics page renders topic rows after snapshot generation",
+      "description": "A fresh snapshot produces non-empty topic rows and header state on the topics page.",
+      "passed": false,
+      "duration_seconds": 1.01,
+      "screenshots": [],
+      "server_log": "artifacts/ui_acceptance/20260331-023329/AC-UI-4/server.log",
+      "error": "Server exited early with code 1\n\nTraceback (most recent call last):\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/ui_acceptance.py\", line 466, in run_single_criterion\n    wait_for_health(base_url, timeout_seconds, process)\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/dev_workflow.py\", line 130, in wait_for_health\n    raise RuntimeError(f\"Server exited early with code {process.returncode}\")\nRuntimeError: Server exited early with code 1\n"
+    },
+    {
+      "id": "AC-UI-5",
+      "title": "Visible modulation blocks obvious spam through the UI",
+      "description": "A repetitive spammy submission is blocked and shown as blocked in the pending-posts UI.",
+      "passed": false,
+      "duration_seconds": 1.01,
+      "screenshots": [],
+      "server_log": "artifacts/ui_acceptance/20260331-023329/AC-UI-5/server.log",
+      "error": "Server exited early with code 1\n\nTraceback (most recent call last):\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/ui_acceptance.py\", line 466, in run_single_criterion\n    wait_for_health(base_url, timeout_seconds, process)\n  File \"/Users/jonathanleung/Documents/C++/debate_system/scripts/dev_workflow.py\", line 130, in wait_for_health\n    raise RuntimeError(f\"Server exited early with code {process.returncode}\")\nRuntimeError: Server exited early with code 1\n"
+    }
+  ],
+  "passed": false
+}

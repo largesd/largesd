@@ -1,0 +1,106 @@
+{
+  "feature": "LSD v1.2 UI debate flow",
+  "task": "Verify the core blind-debate experience through the real browser UI.",
+  "base_url": "http://127.0.0.1:5001",
+  "started_at": "2026-05-02 00:23:02 PDT",
+  "total_count": 11,
+  "passed_count": 2,
+  "failed_count": 9,
+  "results": [
+    {
+      "id": "AC-1",
+      "title": "Create a debate from the UI from a blank-start snapshot state",
+      "passed": false,
+      "duration_ms": 6982,
+      "error": "Locator expected to contain text 'Posting is available'\nActual value: Create or select a debate to start posting. \nCall log:\n  - Expect \"to_contain_text\" with timeout 5000ms\n  - waiting for locator(\"#post-access-hint\")\n    9 \u00d7 locator resolved to <small id=\"post-access-hint\">Create or select a debate to start posting.</small>\n      - unexpected value \"Create or select a debate to start posting.\"\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-1-result.png"
+    },
+    {
+      "id": "AC-2",
+      "title": "Submit opposing argument units from the UI",
+      "passed": false,
+      "duration_ms": 21063,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-2-result.png"
+    },
+    {
+      "id": "AC-3",
+      "title": "Generate an immutable scoring snapshot from the UI",
+      "passed": false,
+      "duration_ms": 21176,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-3-result.png"
+    },
+    {
+      "id": "AC-4",
+      "title": "Inspect topic and verdict decision surfaces through the UI",
+      "passed": false,
+      "duration_ms": 21313,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-4-result.png"
+    },
+    {
+      "id": "AC-5",
+      "title": "Persist moderation template changes through the Admin UI",
+      "passed": true,
+      "duration_ms": 2636,
+      "evidence": [
+        "Saved moderation draft version ac-1777706656273 from admin UI.",
+        "Reload confirmed draft persistence in template history."
+      ],
+      "screenshot": "artifacts/acceptance/screenshots/ac-5-result.png"
+    },
+    {
+      "id": "AC-6",
+      "title": "Render evidence, dossier, and governance trust surfaces from live APIs",
+      "passed": false,
+      "duration_ms": 21177,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-6-result.png"
+    },
+    {
+      "id": "AC-7",
+      "title": "Complete register, login, and logout flows through UI forms",
+      "passed": false,
+      "duration_ms": 45555,
+      "error": "Locator expected to be visible\nActual value: None\nError: element(s) not found \nCall log:\n  - Expect \"to_be_visible\" with timeout 45000ms\n  - waiting for locator(\"#register-form\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-7-result.png"
+    },
+    {
+      "id": "AC-8",
+      "title": "Render snapshot history and latest snapshot diff after multiple runs",
+      "passed": false,
+      "duration_ms": 20750,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-8-result.png"
+    },
+    {
+      "id": "AC-9",
+      "title": "Debate proposal lifecycle: submit, queue, accept",
+      "passed": true,
+      "duration_ms": 786,
+      "evidence": [
+        "Submitted proposal prop_cbf0f7deb6.",
+        "Admin accepted proposal and created debate debate_f26a66ac.",
+        "Proposal flow end-to-end verified."
+      ],
+      "screenshot": "artifacts/acceptance/screenshots/ac-9-result.png"
+    },
+    {
+      "id": "AC-10",
+      "title": "Identity-blind public surface hardening",
+      "passed": false,
+      "duration_ms": 6250,
+      "error": "Locator expected to be visible\nActual value: None\nError: element(s) not found \nCall log:\n  - Expect \"to_be_visible\" with timeout 5000ms\n  - waiting for locator(\".navlinks\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-10-result.png"
+    },
+    {
+      "id": "AC-11",
+      "title": "Snapshot integrity and reproducibility fields",
+      "passed": false,
+      "duration_ms": 20776,
+      "error": "Locator.check: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"side\\\"][value=\\\"FOR\\\"]\")\n",
+      "screenshot": "artifacts/acceptance/screenshots/ac-11-result.png"
+    }
+  ]
+}

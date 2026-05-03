@@ -1,0 +1,109 @@
+{
+  "source_document": "docs/requirements/LSD_req.txt",
+  "source_version": "LSD v1.2",
+  "phase": "Phase 1 browser-enforced subset",
+  "task": "Verify the core blind-debate experience through the real browser UI.",
+  "feature": "LSD v1.2 UI debate flow",
+  "notes": [
+    "This file is the browser-enforced subset of the broader LSD v1.2 design criteria.",
+    "It focuses on requirements that are already represented in the current app surface and can be verified end to end through the UI."
+  ],
+  "criteria": [
+    {
+      "id": "AC-1",
+      "title": "Create a debate from the UI from a blank-start snapshot state",
+      "checks": [
+        "When the app starts without an active debate, the create-debate form is visible.",
+        "Submitting a motion, moderation criteria, and debate frame creates the active debate and unlocks posting.",
+        "The public posting surface remains identity-blind and centered on arguments rather than contributors."
+      ]
+    },
+    {
+      "id": "AC-2",
+      "title": "Submit opposing argument units from the UI",
+      "checks": [
+        "A FOR post can be submitted from the browser.",
+        "An AGAINST post can be submitted from the browser.",
+        "The pending-post count and list reflect both submissions."
+      ]
+    },
+    {
+      "id": "AC-3",
+      "title": "Generate an immutable scoring snapshot from the UI",
+      "checks": [
+        "Generating a snapshot from the browser succeeds.",
+        "Pending posts reset after the snapshot completes.",
+        "Snapshot metadata and verdict data appear in the page header."
+      ]
+    },
+    {
+      "id": "AC-4",
+      "title": "Inspect topic and verdict decision surfaces through the UI",
+      "checks": [
+        "The Topics page renders at least one topic row after a snapshot.",
+        "The Verdict page renders overall scores and topic contributions after a snapshot."
+      ]
+    },
+    {
+      "id": "AC-5",
+      "title": "Persist moderation template changes through the Admin UI",
+      "checks": [
+        "An authenticated user can save a moderation template draft from admin.html.",
+        "Reloading admin.html preserves the saved draft in template history."
+      ]
+    },
+    {
+      "id": "AC-6",
+      "title": "Render evidence, dossier, and governance trust surfaces from live APIs",
+      "checks": [
+        "Evidence page loads summary content from /api/debate/evidence-targets.",
+        "Decision dossier page renders snapshot-linked diagnostics from /api/debate/decision-dossier.",
+        "Governance page renders frame and health summary data from governance endpoints."
+      ]
+    },
+    {
+      "id": "AC-7",
+      "title": "Complete register, login, and logout flows through UI forms",
+      "checks": [
+        "register.html creates an account and persists token plus user metadata in localStorage.",
+        "login.html authenticates the same account and respects the next= redirect target.",
+        "Logout clears local auth/session state and redirects back to login with user feedback."
+      ]
+    },
+    {
+      "id": "AC-8",
+      "title": "Render snapshot history and latest snapshot diff after multiple runs",
+      "checks": [
+        "snapshot.html history table shows at least two rows after two snapshots are generated.",
+        "Latest diff view renders old/new snapshot ids and summary bullets from /api/debate/snapshot-diff.",
+        "History and diff surfaces stay available through the normal UI (not raw JSON)."
+      ]
+    },
+    {
+      "id": "AC-9",
+      "title": "Debate proposal lifecycle: submit, queue, accept",
+      "checks": [
+        "A regular user can submit a debate proposal via /api/debate-proposals.",
+        "The proposal appears in the admin review queue and the user's own proposals list.",
+        "An admin can accept the proposal, which creates a debate and updates the proposal status."
+      ]
+    },
+    {
+      "id": "AC-10",
+      "title": "Identity-blind public surface hardening",
+      "checks": [
+        "Authenticated nav shows a generic 'Account' indicator instead of display_name or email.",
+        "No personal identity strings appear in the public debate surfaces."
+      ]
+    },
+    {
+      "id": "AC-11",
+      "title": "Snapshot integrity and reproducibility fields",
+      "checks": [
+        "snapshot.html renders input_hash_root and output_hash_root.",
+        "Recipe versions are visible for component traceability.",
+        "Replay manifest is available in a collapsible detail view."
+      ]
+    }
+  ]
+}

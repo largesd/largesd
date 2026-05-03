@@ -1,0 +1,18 @@
+======================================================================
+Blind Debate Adjudicator Server v2
+======================================================================
+Configuration:
+  Port:          5061
+  Host:          127.0.0.1
+  Fact Mode:     OFFLINE
+  LLM Provider:  mock
+  Num Judges:    3
+  Database:      /var/folders/s0/02b0_wsn1mq81xrlbt17z04w0000gn/T/ac-ui-3-lbp4b4ct/debate_system.db
+  Debug Mode:    Disabled
+======================================================================
+
+Starting server...
+----------------------------------------------------------------------
+ * Serving Flask app 'backend.app_v2'
+ * Debug mode: off
+Operation not permitted
