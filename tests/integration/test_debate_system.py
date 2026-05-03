@@ -10,10 +10,12 @@ import tempfile
 import shutil
 import importlib
 from datetime import datetime, timedelta
+from pathlib import Path
 
-# Add paths for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'skills', 'fact_checking'))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from dataclasses import dataclass
 

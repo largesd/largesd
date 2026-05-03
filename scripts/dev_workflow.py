@@ -171,12 +171,12 @@ def bootstrap(_: argparse.Namespace) -> None:
 
 def run_unit_tests(_: argparse.Namespace) -> None:
     """Run the main unit and integration script."""
-    run_command([active_python(), "test_debate_system.py"], env=project_env())
+    run_command([active_python(), "-m", "pytest", "tests/integration/test_debate_system.py"], env=project_env())
 
 
 def run_fact_tests(_: argparse.Namespace) -> None:
     """Run the fact-checking focused test script."""
-    run_command([active_python(), "test_fact_check_skill.py"], env=project_env())
+    run_command([active_python(), "-m", "pytest", "tests/unit/test_fact_check_skill.py"], env=project_env())
 
 
 def run_check(_: argparse.Namespace) -> None:
@@ -184,11 +184,11 @@ def run_check(_: argparse.Namespace) -> None:
     env = project_env()
     failures = []
 
-    unit_code = run_command([active_python(), "test_debate_system.py"], env=env, check=False)
+    unit_code = run_command([active_python(), "-m", "pytest", "tests/integration/test_debate_system.py"], env=env, check=False)
     if unit_code != 0:
         failures.append(("unit", unit_code))
 
-    fact_code = run_command([active_python(), "test_fact_check_skill.py"], env=env, check=False)
+    fact_code = run_command([active_python(), "-m", "pytest", "tests/unit/test_fact_check_skill.py"], env=env, check=False)
     if fact_code != 0:
         failures.append(("fact", fact_code))
 
@@ -201,7 +201,7 @@ def run_manual(args: argparse.Namespace) -> None:
     """Run one of the manual API scenarios against an existing server."""
     env = project_env({"DEBATE_BASE_URL": args.base_url})
     run_command(
-        [active_python(), "test_manual.py", args.command, "--base-url", args.base_url],
+        [active_python(), "tests/manual/manual_scenarios.py", args.command, "--base-url", args.base_url],
         env=env,
     )
 
@@ -284,7 +284,7 @@ def run_smoke(args: argparse.Namespace) -> None:
     try:
         wait_for_health(base_url, args.timeout, process)
         run_command(
-            [active_python(), "test_manual.py", args.scenario, "--base-url", base_url],
+            [active_python(), "tests/manual/manual_scenarios.py", args.scenario, "--base-url", base_url],
             env=project_env({"DEBATE_BASE_URL": base_url}),
         )
     finally:
@@ -351,13 +351,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     unit_parser = subparsers.add_parser(
         "unit",
-        help="Run test_debate_system.py.",
+        help="Run tests/integration/test_debate_system.py.",
     )
     unit_parser.set_defaults(func=run_unit_tests)
 
     fact_parser = subparsers.add_parser(
         "fact",
-        help="Run test_fact_check_skill.py.",
+        help="Run tests/unit/test_fact_check_skill.py.",
     )
     fact_parser.set_defaults(func=run_fact_tests)
 
