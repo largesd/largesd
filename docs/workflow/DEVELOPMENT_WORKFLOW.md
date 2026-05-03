@@ -7,7 +7,7 @@ This project already had the pieces for a good dev loop:
 - `start_server.py`, `start_server_v2.py`, and `start_server_fast.py`
 - `test_debate_system.py` for unit and integration-style checks
 - `test_fact_check_skill.py` for the fact-checking subsystem
-- `test_manual.py` for API scenarios
+- `manual_scenarios.py` for API scenarios
 - `.env.example` and `setup_openrouter.py` for provider setup
 
 The new stateful workflow in `./wf` sits above these commands. This document covers the lower-level executor that phase implementations and CI still rely on.
