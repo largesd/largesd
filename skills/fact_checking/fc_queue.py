@@ -1,6 +1,8 @@
 """
-Async queue and workers for fact checking
-Prevents blocking debate scoring pipeline
+Async queue and workers for fact checking.
+
+Each FactCheckingSkill instance owns its own queue. That keeps connectors,
+cache interactions, and worker shutdown behavior isolated across runtimes.
 """
 import uuid
 import threading
@@ -31,8 +33,9 @@ class FactCheckQueue:
     Jobs are processed by background workers.
     """
     
-    def __init__(self, max_size: int = 1000):
+    def __init__(self, max_size: int = 1000, label: Optional[str] = None):
         self._max_size = max_size
+        self._label = label or f"fcq-{uuid.uuid4().hex[:8]}"
         self._queue: deque[FactCheckJob] = deque()
         self._jobs: Dict[str, FactCheckJob] = {}  # All jobs by ID
         self._processing: set[str] = set()  # Currently processing job IDs
@@ -158,7 +161,7 @@ class FactCheckQueue:
             for i in range(num_workers):
                 worker = threading.Thread(
                     target=self._worker_loop,
-                    name=f"FactCheckWorker-{i}",
+                    name=f"FactCheckWorker-{self._label}-{i}",
                     daemon=True
                 )
                 worker.start()
@@ -210,26 +213,15 @@ class QueueFullError(Exception):
     pass
 
 
-# Global queue instance (singleton pattern)
-_global_queue: Optional[FactCheckQueue] = None
-_global_queue_lock = threading.Lock()
-
-
 def get_global_queue(max_size: int = 1000) -> FactCheckQueue:
-    """Get or create the global fact check queue"""
-    global _global_queue
-    
-    with _global_queue_lock:
-        if _global_queue is None:
-            _global_queue = FactCheckQueue(max_size=max_size)
-        return _global_queue
+    """
+    Backward-compatible constructor.
+
+    The global singleton queue was removed; each call now returns a fresh queue.
+    """
+    return FactCheckQueue(max_size=max_size)
 
 
 def reset_global_queue():
-    """Reset the global queue (mainly for testing)"""
-    global _global_queue
-    
-    with _global_queue_lock:
-        if _global_queue:
-            _global_queue.shutdown(wait=False)
-        _global_queue = None
+    """Backward-compatible no-op after removal of the singleton queue."""
+    return None

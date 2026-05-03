@@ -1,25 +1,29 @@
 """
-Source connectors and ground-truth database for the Perfect Fact Checking Skill.
+Source connectors and ground-truth storage for the fact-checking skill.
 
-Each connector knows how to query one approved source and return
-a discrete CONFIRMS / CONTRADICTS / SILENT / AMBIGUOUS result.
+Ground truth is treated as curated Tier-1 evidence, but its decisive effect is
+still governed by the evidence policy. Legacy and partially populated rows are
+loaded defensively so older stores degrade to an empty or best-effort state
+instead of crashing the runtime.
 """
-import os
-import json
-import hashlib
-import random
-import re
-from typing import Optional, List, Dict, Any, Protocol
-from datetime import datetime
-from dataclasses import dataclass
 
-from .models import SourceConfidence, SourceResult, EvidenceTier
+import hashlib
+import json
+import os
+import random
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from .models import (
+    EvidenceRecord,
+    EvidenceTier,
+    SourceConfidence,
+    SourceResult,
+)
 
 
 class SourceConnector:
-    """
-    Protocol for source connectors.
-    """
+    """Protocol-like base class for source connectors."""
 
     def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
         raise NotImplementedError
@@ -33,29 +37,47 @@ class SourceConnector:
         raise NotImplementedError
 
 
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_tier(value: Any, default: EvidenceTier = EvidenceTier.TIER_1) -> EvidenceTier:
+    if isinstance(value, EvidenceTier):
+        return value
+    if isinstance(value, str):
+        try:
+            return EvidenceTier(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _verdict_to_confidence(verdict: str) -> SourceConfidence:
+    if verdict == "SUPPORTED":
+        return SourceConfidence.CONFIRMS
+    if verdict == "REFUTED":
+        return SourceConfidence.CONTRADICTS
+    return SourceConfidence.SILENT
+
+
 class GroundTruthDB:
     """
-    Persistent ground-truth database for known claims.
+    Persistent ground-truth database for curated fact-check outcomes.
 
-    In production this is a curated table. For the prototype,
-    it loads from a JSON file and falls back to source connectors
-    for unknown claims.
-
-    Schema (v1.0):
-    {
-      "<claim_hash>": {
-        "schema_version": "1.0",
-        "verdict": "SUPPORTED" | "REFUTED" | "INSUFFICIENT",
-        "p_true": 1.0 | 0.0 | 0.5,
-        "operationalization": str,
-        "tier_counts": {"TIER_1": int, "TIER_2": int, "TIER_3": int},
-        "evidence": [EvidenceRecord-dict, ...],
-        "stored_at": ISO-8601,
-        "reviewed_at": ISO-8601 | null,
-        "reviewed_by": str | null,
-        "review_rationale": str | null
-      }
-    }
+    The store is intentionally lenient with legacy rows:
+    - missing ``schema_version`` is treated as legacy, not fatal
+    - missing ``retrieved_at`` falls back to review/store timestamps
+    - missing review metadata is treated as absent metadata
+    - malformed files degrade to an empty store
     """
 
     SCHEMA_VERSION = "1.0"
@@ -67,30 +89,140 @@ class GroundTruthDB:
         self._load()
 
     def _load(self):
-        if os.path.exists(self.db_path):
-            try:
-                with open(self.db_path, "r", encoding="utf-8") as f:
-                    raw = f.read().strip()
-                    if raw:
-                        self._entries = json.loads(raw)
-            except (json.JSONDecodeError, OSError):
-                self._entries = {}
+        if not os.path.exists(self.db_path):
+            self._entries = {}
+            return
+
+        try:
+            with open(self.db_path, "r", encoding="utf-8") as handle:
+                raw = handle.read().strip()
+        except OSError:
+            self._entries = {}
+            return
+
+        if not raw:
+            self._entries = {}
+            return
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            self._entries = {}
+            return
+
+        self._entries = parsed if isinstance(parsed, dict) else {}
 
     def _save(self):
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
-        with open(self.db_path, "w", encoding="utf-8") as f:
-            json.dump(self._entries, f, indent=2, sort_keys=True)
+        with open(self.db_path, "w", encoding="utf-8") as handle:
+            json.dump(self._entries, handle, indent=2, sort_keys=True)
 
     def lookup(self, claim_hash: str) -> Optional[Dict[str, Any]]:
         entry = self._entries.get(claim_hash)
-        if entry is None:
+        if not isinstance(entry, dict):
             return None
-        # Backward compat: entries without schema_version are treated as legacy
-        sv = entry.get("schema_version", "0.0")
-        if sv < self.MIN_SCHEMA_VERSION:
-            # Allow legacy entries but note they lack review metadata
-            pass
         return entry
+
+    def build_source_results(self, claim_hash: str) -> List[SourceResult]:
+        entry = self.lookup(claim_hash)
+        return self.entry_to_source_results(entry) if entry else []
+
+    def build_evidence_records(self, claim_hash: str) -> List[EvidenceRecord]:
+        entry = self.lookup(claim_hash)
+        return self.entry_to_evidence_records(entry) if entry else []
+
+    @staticmethod
+    def entry_to_source_results(entry: Optional[Dict[str, Any]]) -> List[SourceResult]:
+        if not entry:
+            return []
+
+        verdict = str(entry.get("verdict", "INSUFFICIENT"))
+        confidence = _verdict_to_confidence(verdict)
+        if confidence == SourceConfidence.SILENT:
+            return []
+
+        evidence_rows = entry.get("evidence", [])
+        if not isinstance(evidence_rows, list):
+            evidence_rows = []
+
+        fallback_timestamp = (
+            _coerce_datetime(entry.get("reviewed_at"))
+            or _coerce_datetime(entry.get("stored_at"))
+            or datetime.utcnow()
+        )
+
+        results: List[SourceResult] = []
+        for index, row in enumerate(evidence_rows):
+            if not isinstance(row, dict):
+                continue
+
+            retrieved_at = (
+                _coerce_datetime(row.get("retrieved_at"))
+                or _coerce_datetime(row.get("reviewed_at"))
+                or fallback_timestamp
+            )
+            source_id = str(row.get("source_id") or f"ground_truth:{index + 1}")
+            source_title = str(row.get("source_title") or "Ground Truth Entry")
+            snippet = str(row.get("snippet") or row.get("excerpt") or "")
+            content_hash = str(
+                row.get("content_hash")
+                or hashlib.sha256(snippet.encode("utf-8")).hexdigest()[:32]
+            )
+
+            results.append(
+                SourceResult(
+                    source_id=source_id,
+                    source_url=str(row.get("source_url") or ""),
+                    source_title=source_title,
+                    confidence=confidence,
+                    excerpt=snippet,
+                    content_hash=content_hash,
+                    retrieved_at=retrieved_at,
+                    tier=_coerce_tier(row.get("evidence_tier") or row.get("tier")),
+                )
+            )
+
+        if results:
+            return results
+
+        synthetic_excerpt = str(entry.get("review_rationale") or "Curated ground-truth entry.")
+        return [
+            SourceResult(
+                source_id="ground_truth",
+                source_url="",
+                source_title="Ground Truth Entry",
+                confidence=confidence,
+                excerpt=synthetic_excerpt,
+                content_hash=hashlib.sha256(synthetic_excerpt.encode("utf-8")).hexdigest()[:32],
+                retrieved_at=fallback_timestamp,
+                tier=EvidenceTier.TIER_1,
+            )
+        ]
+
+    @staticmethod
+    def entry_to_evidence_records(entry: Optional[Dict[str, Any]]) -> List[EvidenceRecord]:
+        source_results = GroundTruthDB.entry_to_source_results(entry)
+        evidence: List[EvidenceRecord] = []
+
+        for index, result in enumerate(source_results):
+            evidence.append(
+                EvidenceRecord(
+                    source_url=result.source_url,
+                    source_id=result.source_id,
+                    source_version="v1",
+                    source_title=result.source_title,
+                    snippet=result.excerpt,
+                    content_hash=result.content_hash,
+                    retrieved_at=result.retrieved_at,
+                    relevance_score=1.0,
+                    support_score=1.0 if result.confidence == SourceConfidence.CONFIRMS else 0.0,
+                    contradiction_score=1.0 if result.confidence == SourceConfidence.CONTRADICTS else 0.0,
+                    selected_rank=index + 1,
+                    evidence_tier=result.tier,
+                )
+            )
+
+        return evidence
 
     def store(
         self,
@@ -102,6 +234,7 @@ class GroundTruthDB:
         evidence: List[Dict[str, Any]],
         reviewed_by: Optional[str] = None,
         review_rationale: Optional[str] = None,
+        reviewed_at: Optional[str] = None,
     ):
         now = datetime.utcnow().isoformat() + "Z"
         self._entries[claim_hash] = {
@@ -112,7 +245,7 @@ class GroundTruthDB:
             "tier_counts": tier_counts,
             "evidence": evidence,
             "stored_at": now,
-            "reviewed_at": now if reviewed_by else None,
+            "reviewed_at": reviewed_at or (now if reviewed_by else None),
             "reviewed_by": reviewed_by,
             "review_rationale": review_rationale,
         }
@@ -129,7 +262,6 @@ class SimulatedSourceConnector(SourceConnector):
         self._source_id = source_id
         self._domain = domain
         self._priority = priority
-        # Seed RNG deterministically from source_id for stable behavior
         self._rng = random.Random(hashlib.sha256(source_id.encode()).hexdigest())
 
     @property
@@ -140,34 +272,29 @@ class SimulatedSourceConnector(SourceConnector):
     def tier(self) -> EvidenceTier:
         if self._priority >= 8:
             return EvidenceTier.TIER_1
-        elif self._priority >= 4:
+        if self._priority >= 4:
             return EvidenceTier.TIER_2
         return EvidenceTier.TIER_3
 
     def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
-        # Deterministic behavior based on BOTH source_id and claim hash.
-        # This ensures different connectors can disagree on the same claim,
-        # which is required for meaningful consensus/disagreement tests.
         combined = f"{self._source_id}:{claim_hash}"
         hash_int = int(hashlib.sha256(combined.encode()).hexdigest()[:16], 16)
-        has_evidence = (hash_int % 100) > 30  # 70% chance
+        has_evidence = (hash_int % 100) > 30
 
         if not has_evidence:
             return None
 
-        # Determine support level deterministically
         support_level = (hash_int % 100) / 100.0
 
         if support_level > 0.70:
             confidence = SourceConfidence.CONFIRMS
         elif support_level < 0.30:
             confidence = SourceConfidence.CONTRADICTS
-        elif support_level > 0.45 and support_level < 0.55:
+        elif 0.45 < support_level < 0.55:
             confidence = SourceConfidence.AMBIGUOUS
         else:
             confidence = SourceConfidence.SILENT
 
-        # Simulate content hash for drift detection
         content = f"{self._source_id}:{normalized_claim}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()[:32]
 

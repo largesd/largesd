@@ -1,5 +1,10 @@
 """
-Data models for the Fact Checking Skill
+Data models for the Fact Checking Skill.
+
+V1 support is intentionally narrow: only atomic identity/date/status/location
+claims about notable public entities are eligible for decisive resolution.
+Unsupported, compound, poorly scoped, or stale claims should remain
+INSUFFICIENT and carry diagnostics that explain why.
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Set, Any
@@ -58,7 +63,7 @@ class SourceResult:
     confidence: SourceConfidence
     excerpt: str  # Verbatim quote or summary from the source
     content_hash: str
-    retrieved_at: datetime
+    retrieved_at: Optional[datetime]
     tier: EvidenceTier
 
 
@@ -119,7 +124,7 @@ class EvidenceRecord:
     source_title: str
     snippet: str
     content_hash: str  # SHA256 of retrieved content for drift detection
-    retrieved_at: datetime
+    retrieved_at: Optional[datetime]
     relevance_score: float
     support_score: float  # [0,1]
     contradiction_score: float  # [0,1]
@@ -134,13 +139,39 @@ class EvidenceRecord:
             'source_title': self.source_title,
             'snippet': self.snippet,
             'content_hash': self.content_hash,
-            'retrieved_at': self.retrieved_at.isoformat(),
+            'retrieved_at': self.retrieved_at.isoformat() if self.retrieved_at else None,
             'relevance_score': self.relevance_score,
             'support_score': self.support_score,
             'contradiction_score': self.contradiction_score,
             'selected_rank': self.selected_rank,
             'evidence_tier': self.evidence_tier.value,
         }
+
+
+@dataclass(frozen=True)
+class Subclaim:
+    """Deterministic atomic subclaim derived from a larger empirical claim."""
+    subclaim_id: str
+    claim_text: str
+    normalized_claim_text: str
+    claim_family: str
+    actor: Optional[str] = None
+    geography: Optional[str] = None
+    time_scope: Optional[str] = None
+    quantity: Optional[str] = None
+    negated: bool = False
+    source_fact_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class PlannerDecision:
+    """Deterministic routing decision for a subclaim."""
+    supported: bool
+    claim_family: str
+    connector_path: List[str] = field(default_factory=list)
+    reason_code: str = "unsupported_claim_family"
+    reason: str = ""
+    web_corroboration_allowed: bool = False
 
 
 @dataclass
@@ -169,6 +200,7 @@ class FactCheckResult:
     cache_result: Optional[CacheResult] = None
     contains_pii: bool = False
     temporal_context: Optional[TemporalContext] = None
+    diagnostics: Dict[str, Any] = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -199,6 +231,7 @@ class FactCheckResult:
                 'observation_date': self.temporal_context.observation_date.isoformat() if self.temporal_context and self.temporal_context.observation_date else None,
                 'expiration_policy': self.temporal_context.expiration_policy if self.temporal_context else None,
             } if self.temporal_context else None,
+            'diagnostics': self.diagnostics,
         }
 
 

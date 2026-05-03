@@ -10,7 +10,15 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 import os
 
-from .models import FactCheckResult, FactCheckStatus, FactCheckVerdict, CacheResult, EvidenceRecord
+from .models import (
+    FactCheckResult,
+    FactCheckStatus,
+    FactCheckVerdict,
+    CacheResult,
+    EvidenceRecord,
+    EvidenceTier,
+    TemporalContext,
+)
 
 
 @dataclass
@@ -68,6 +76,13 @@ class MemoryCache:
         with self._lock:
             if key in self._cache:
                 del self._cache[key]
+
+    def invalidate_by_claim_hash(self, claim_hash: str):
+        """Remove all entries associated with a claim hash."""
+        with self._lock:
+            prefix = f"{claim_hash}:"
+            for key in [item for item in self._cache if item.startswith(prefix)]:
+                del self._cache[key]
     
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
@@ -124,6 +139,8 @@ class SQLiteCache:
             'factuality_score': result.factuality_score,
             'confidence': result.confidence,
             'confidence_explanation': result.confidence_explanation,
+            'operationalization': result.operationalization,
+            'evidence_tier_counts': result.evidence_tier_counts,
             'evidence': [
                 {
                     'source_url': e.source_url,
@@ -132,11 +149,12 @@ class SQLiteCache:
                     'source_title': e.source_title,
                     'snippet': e.snippet,
                     'content_hash': e.content_hash,
-                    'retrieved_at': e.retrieved_at.isoformat(),
+                    'retrieved_at': e.retrieved_at.isoformat() if e.retrieved_at else None,
                     'relevance_score': e.relevance_score,
                     'support_score': e.support_score,
                     'contradiction_score': e.contradiction_score,
                     'selected_rank': e.selected_rank,
+                    'evidence_tier': e.evidence_tier.value,
                 }
                 for e in result.evidence
             ],
@@ -148,6 +166,18 @@ class SQLiteCache:
             'algorithm_version': result.algorithm_version,
             'processing_duration_ms': result.processing_duration_ms,
             'contains_pii': result.contains_pii,
+            'temporal_context': {
+                'is_temporal': result.temporal_context.is_temporal,
+                'observation_date': (
+                    result.temporal_context.observation_date.isoformat()
+                    if result.temporal_context and result.temporal_context.observation_date
+                    else None
+                ),
+                'expiration_policy': (
+                    result.temporal_context.expiration_policy if result.temporal_context else None
+                ),
+            } if result.temporal_context else None,
+            'diagnostics': result.diagnostics,
         }
     
     def _dict_to_result(self, data: Dict) -> FactCheckResult:
@@ -160,15 +190,30 @@ class SQLiteCache:
                 source_title=e['source_title'],
                 snippet=e['snippet'],
                 content_hash=e['content_hash'],
-                retrieved_at=datetime.fromisoformat(e['retrieved_at']),
+                retrieved_at=(
+                    datetime.fromisoformat(e['retrieved_at'])
+                    if e.get('retrieved_at') else None
+                ),
                 relevance_score=e['relevance_score'],
                 support_score=e['support_score'],
                 contradiction_score=e['contradiction_score'],
                 selected_rank=e['selected_rank'],
+                evidence_tier=EvidenceTier(e.get('evidence_tier', EvidenceTier.TIER_3.value)),
             )
             for e in data.get('evidence', [])
         ]
-        
+
+        temporal_context = None
+        if data.get('temporal_context'):
+            temporal_context = TemporalContext(
+                is_temporal=data['temporal_context'].get('is_temporal', False),
+                observation_date=(
+                    datetime.fromisoformat(data['temporal_context']['observation_date'])
+                    if data['temporal_context'].get('observation_date') else None
+                ),
+                expiration_policy=data['temporal_context'].get('expiration_policy'),
+            )
+
         return FactCheckResult(
             claim_text=data['claim_text'],
             normalized_claim_text=data['normalized_claim_text'],
@@ -180,7 +225,9 @@ class SQLiteCache:
             factuality_score=data['factuality_score'],
             confidence=data['confidence'],
             confidence_explanation=data.get('confidence_explanation'),
+            operationalization=data.get('operationalization'),
             evidence=evidence,
+            evidence_tier_counts=data.get('evidence_tier_counts', {}),
             created_at=datetime.fromisoformat(data['created_at']),
             invalidated_at=datetime.fromisoformat(data['invalidated_at']) if data.get('invalidated_at') else None,
             invalidation_reason=data.get('invalidation_reason'),
@@ -189,6 +236,8 @@ class SQLiteCache:
             algorithm_version=data.get('algorithm_version', 'fc-1.0'),
             processing_duration_ms=data.get('processing_duration_ms', 0),
             contains_pii=data.get('contains_pii', False),
+            temporal_context=temporal_context,
+            diagnostics=data.get('diagnostics', {}),
         )
     
     def get(self, key: str) -> Optional[FactCheckResult]:
@@ -340,8 +389,8 @@ class MultiLayerCache:
     
     def invalidate_by_claim(self, claim_hash: str, fact_mode: str, allowlist_version: str):
         """Invalidate specific claim entry"""
-        key = self.build_key(claim_hash, fact_mode, allowlist_version)
-        self.invalidate(key)
+        self._memory.invalidate_by_claim_hash(claim_hash)
+        self._sqlite.invalidate_by_claim_hash(claim_hash)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics from all layers"""

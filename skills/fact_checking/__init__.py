@@ -1,25 +1,18 @@
 """
-Fact Checking Agentic Skill
+Fact checking skill package.
 
-A deterministic, cacheable, auditable skill for evaluating factual claims.
-Supports OFFLINE, ONLINE_ALLOWLIST, PERFECT_CHECKER, and PERFECT modes.
-
-Usage:
-    from skills.fact_checking import FactCheckingSkill
-    
-    skill = FactCheckingSkill(mode="PERFECT", allowlist_version="v1")
-    
-    # For async operation
-    job = await skill.check_fact_async(claim_text, request_context={...})
-    
-    # For sync operation (returns immediately with PENDING if async)
-    result = skill.check_fact(claim_text)
+The v1 support contract is intentionally narrow: only atomic empirical
+identity/date/status/location claims about notable public entities with a
+clear authoritative source path may resolve decisively in PERFECT mode.
+Unsupported, compound, stale, or poorly scoped claims should remain
+INSUFFICIENT with diagnostics explaining why.
 """
 
 from .skill import FactCheckingSkill
 from .models import (
     FactCheckResult,
     EvidenceRecord,
+    EvidenceTier,
     FactCheckVerdict,
     FactCheckStatus,
     AllowlistVersion,
@@ -29,12 +22,16 @@ from .models import (
     TemporalContext,
     RequestContext,
     CacheResult,
+    PlannerDecision,
     SourceConfidence,
     SourceResult,
+    Subclaim,
 )
 from .config import FactCheckConfig
 from .connectors import SourceConnector, GroundTruthDB, SimulatedSourceConnector
+from .decomposer import ClaimDecomposer
 from .policy import EvidencePolicy, default_policy, strict_policy, apply_policy
+from .planner import ConnectorPlanner
 from .wikidata_connector import WikidataConnector
 from .web_rag_connector import WebRAGConnector, SearchBackend, LLMClient
 from .template_adapters import (
@@ -50,6 +47,7 @@ __all__ = [
     'FactCheckingSkill',
     'FactCheckResult',
     'EvidenceRecord',
+    'EvidenceTier',
     'FactCheckVerdict',
     'FactCheckStatus',
     'AllowlistVersion',
@@ -60,15 +58,19 @@ __all__ = [
     'RequestContext',
     'CacheResult',
     'FactCheckConfig',
+    'PlannerDecision',
     'SourceConfidence',
     'SourceResult',
+    'Subclaim',
     'SourceConnector',
     'GroundTruthDB',
     'SimulatedSourceConnector',
+    'ClaimDecomposer',
     'EvidencePolicy',
     'default_policy',
     'strict_policy',
     'apply_policy',
+    'ConnectorPlanner',
     'WikidataConnector',
     'WebRAGConnector',
     'SearchBackend',
