@@ -9,8 +9,12 @@ import json
 import requests
 import time
 import uuid
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 # Base URL for API
 BASE_URL = os.getenv("DEBATE_BASE_URL", "http://localhost:5000")
@@ -465,7 +469,7 @@ def print_usage():
 Blind Debate Adjudicator - Manual Testing Script
 
 Usage:
-  python test_manual.py [command] [--base-url URL]
+  python manual_scenarios.py [command] [--base-url URL]
 
 Commands:
   server-check    Check if server is running
@@ -475,10 +479,10 @@ Commands:
   custom          Interactive mode (create your own debate)
 
 Examples:
-  python test_manual.py server-check
-  python test_manual.py scenario-ai
-  python test_manual.py server-check --base-url http://127.0.0.1:5055
-  python test_manual.py modulation
+  python manual_scenarios.py server-check
+  python manual_scenarios.py scenario-ai
+  python manual_scenarios.py server-check --base-url http://127.0.0.1:5055
+  python manual_scenarios.py modulation
 
 Before running tests:
   1. Start the server: python3 scripts/dev_workflow.py server

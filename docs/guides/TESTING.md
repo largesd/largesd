@@ -24,8 +24,8 @@ python scripts/dev_workflow.py check
 python start_server.py --host 127.0.0.1 --port 5000
 # In another terminal:
 source venv/bin/activate
-python test_manual.py server-check --base-url http://127.0.0.1:5000
-python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+python manual_scenarios.py server-check --base-url http://127.0.0.1:5000
+python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 
 # 4. Run browser acceptance checks against a temporary v3 server
 python scripts/dev_workflow.py acceptance
@@ -59,7 +59,7 @@ Tests individual components against MSD requirements:
 python test_debate_system.py
 ```
 
-### 2. Manual/API Tests (`test_manual.py`)
+### 2. Manual/API Tests (`manual_scenarios.py`)
 
 Tests the system through the REST API with realistic scenarios:
 
@@ -76,7 +76,7 @@ Tests the system through the REST API with realistic scenarios:
 python start_server.py
 
 # Terminal 2: Run tests
-python test_manual.py scenario-ai
+python manual_scenarios.py scenario-ai
 ```
 
 ### 3. Fact Checking Tests (`test_fact_check_skill.py`)
@@ -120,7 +120,7 @@ print('Tokens:', r.usage)
 # 3. Run end-to-end manual scenario
 python start_server.py
 # In another terminal:
-python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 ```
 
 **Verification checklist:**
@@ -179,7 +179,7 @@ Fact-Check → Scoring → Verdict → Audits
 
 **Integration Test:**
 ```bash
-python test_manual.py scenario-ai
+python manual_scenarios.py scenario-ai
 ```
 
 This tests the full pipeline with realistic inputs.
@@ -241,7 +241,7 @@ Expected outcome: Verdict = "NO VERDICT", low confidence
 Expected: Harassment/spam blocked, valid content allowed
 
 ```bash
-python test_manual.py modulation
+python manual_scenarios.py modulation
 ```
 
 ## Audit Verification
@@ -422,7 +422,7 @@ test:
 | Import errors | Run from `debate_system` directory, check `sys.path` |
 | Database locked | Stop server, delete `data/debate_system.db`, restart |
 | Server not responding | Check port 5000, check `python start_server.py` output |
-| API connection refused | Verify server is running: `python test_manual.py server-check` |
+| API connection refused | Verify server is running: `python manual_scenarios.py server-check` |
 | Mock LLM returns weird results | Expected - mock is deterministic but simplified |
 
 ## Test Checklist
@@ -431,10 +431,10 @@ Before deploying:
 
 - [ ] All unit tests pass: `python test_debate_system.py`
 - [ ] Server starts without errors: `python start_server.py`
-- [ ] API responds: `python test_manual.py server-check`
-- [ ] Scenario completes: `python test_manual.py scenario-ai`
+- [ ] API responds: `python manual_scenarios.py server-check`
+- [ ] Scenario completes: `python manual_scenarios.py scenario-ai`
 - [ ] UI acceptance passes: `python scripts/dev_workflow.py acceptance`
-- [ ] Modulation works: `python test_manual.py modulation`
+- [ ] Modulation works: `python manual_scenarios.py modulation`
 - [ ] Web interface loads at `http://localhost:5000`
 - [ ] No identity information visible in UI
 - [ ] Template version visible in UI

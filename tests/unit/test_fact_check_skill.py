@@ -2,7 +2,7 @@
 Test script for the Fact Checking Skill
 Verifies compliance with both:
 - Fact Checking Skill Design Specification
-- Medium Scale Discussion requirements
+- Large Scale Discussion requirements
 """
 import os
 import sys
@@ -10,9 +10,12 @@ import json
 import time
 import tempfile
 from datetime import datetime
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'skills', 'fact_checking'))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from skills.fact_checking import (
     ClaimDecomposer,
@@ -75,12 +78,12 @@ def _wait_for_job(skill: FactCheckingSkill, job_id: str, timeout_seconds: float 
 
 
 def _gold_fixture_path() -> str:
-    return os.path.join(
-        os.path.dirname(__file__),
-        "skills",
-        "fact_checking",
-        "testdata",
-        "fact_check_gold_v1.jsonl",
+    return str(
+        REPO_ROOT
+        / "skills"
+        / "fact_checking"
+        / "testdata"
+        / "fact_check_gold_v1.jsonl"
     )
 
 
@@ -798,18 +801,15 @@ def test_wikidata_connector_and_perfect_mode_resolution():
     finally:
         skill.shutdown()
 
+def test_lsd_requirements():
+    """Verify compliance with Large Scale Discussion requirements"""
+    print("\n=== Verifying LSD Requirements ===")
 
-def test_msd_requirements():
-    """Verify compliance with Medium Scale Discussion requirements"""
-    print("\n=== Verifying MSD Requirements ===")
-    
-    import sys
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
-    from models import (
+    from backend.models import (
         Debate, Post, Topic, CanonicalFact, Snapshot,
         Side, ModulationOutcome
     )
-    from debate_engine_v2 import DebateEngineV2
+    from backend.debate_engine_v2 import DebateEngineV2
     
     # Test debate creation
     engine = DebateEngineV2(fact_check_mode="OFFLINE")
@@ -932,7 +932,7 @@ def run_all_tests():
         test_claim_decomposition_and_planner_diagnostics,
         test_gold_fixture_schema_and_coverage,
         test_wikidata_connector_and_perfect_mode_resolution,
-        test_msd_requirements,
+        test_lsd_requirements,
         test_temporal_claims,
         test_audit_logging,
     ]
