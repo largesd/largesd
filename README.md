@@ -40,7 +40,9 @@ Participants -> Post Submission (API or Email)
 
 ### Backend (`backend/`)
 
+- `app.py` — stable Flask API alias (currently wraps `app_v3.py`)
 - `app_v3.py` — Flask API (auth, debates, snapshots, governance, admin, metrics)
+- `debate_engine.py` — stable engine alias (currently wraps `debate_engine_v2.py`)
 - `debate_engine_v2.py` — core orchestration pipeline
 - `database.py` (legacy), `database_v3.py` — active SQLite schema with bcrypt hashing + v3 extensions (async jobs, judge pools)
 - `models.py` — dataclasses (Post, Snapshot, Fact, ArgumentUnit, DebateFrame, User, etc.)
@@ -48,14 +50,19 @@ Participants -> Post Submission (API or Email)
 - `extraction.py` — span extraction, fact/argument canonicalization
 - `topic_engine.py` — topic clustering, drift, coherence
 - `scoring_engine.py` — multi-judge scoring, replicates, verdict logic
+- `scoring.py` — scoring utilities and helpers
 - `selection_engine.py` — argument selection with centrality/rarity logic
 - `fact_checker.py` — thin wrapper around the fact-checking skill
-- `skills/fact_checking/` — full fact-checking subsystem:
+- `debate_proposal.py` — debate proposal submission and review logic
+- `tokenizer.py` — text tokenization utilities
+- `skills/fact_checking/` — full fact-checking subsystem (at project root):
   - `skill.py` — main entry point
   - `connectors.py`, `wikidata_connector.py`, `web_rag_connector.py` — evidence sources
   - `policy.py`, `template_adapters.py` — rule and template logic
   - `pii.py`, `normalization.py`, `sources.py` — preprocessing
+  - `decomposer.py`, `planner.py` — claim decomposition and planning
   - `cache.py`, `fc_queue.py`, `audit.py` — async queue, caching, audit logging
+  - `rate_limiter.py`, `models.py`, `config.py` — rate limiting, internal models, configuration
 - `governance.py` — appeals, changelogs, fairness audits, judge pool governance, incidents
 - `frame_registry.py` — LSD §5 epistemic frame registry with content hashing
 - `lsd_v1_2.py` — formula constants, feature flags, diagnostic helpers, formula registry
@@ -93,18 +100,31 @@ Participants -> Post Submission (API or Email)
 - `static/js/common.js` — Core `BDA` object: API wrapper, state management, shared component injection
 - `static/js/auth.js` — JWT auth, session management, user menu
 - `static/js/data_bridge.js` — GitHub-cached mode: fetches `consolidated_results.json`, localStorage caching, `mailto:` link generation for email submissions
+- `static/js/index.js` — Home page logic and dynamic content loading
 - `assets/styles.css` — Design system with WCAG 2.1 AA compliance
 - `components/` — Reusable HTML components (help panels, footer, back-to-top)
 
 ### Other Key Files
 
-- `start_server.py` / `start_server_v3.py` — v3 startup with CLI args
+- `start_server.py` — primary server entrypoint (delegates to `start_server_v3.py`)
+- `start_server_v3.py` — v3 server implementation with CLI args
 - `Makefile` — 20+ dev targets (`bootstrap`, `acceptance`, `smoke`, `server`, etc.)
-- `Dockerfile` / `docker-compose.yml` — containerized deployment
+- `Dockerfile` / `docker-compose.yml` — containerized deployment (Flask app + Redis)
 - `alembic.ini` / `alembic/` — database migrations (PostgreSQL + SQLite)
-- `test_debate_system.py`, `test_fact_check_skill.py`, `test_manual.py` — test suites
+- `tests/integration/test_debate_system.py`, `tests/unit/test_fact_check_skill.py`, `tests/manual/manual_scenarios.py`, `test_email_processor.py`, `test_lsd_v1_2_contracts.py`, `test_perfect_skill.py`, `test_slice4.py` — test suites
 - `acceptance/run_ui_acceptance.py` — Playwright browser acceptance suite
+- `acceptance/ui_debate_flow.json` — acceptance criteria definitions
 - `scripts/dev_workflow.py` — orchestrated dev commands
+- `scripts/agentic_workflow.py` — agentic workflow orchestration
+- `scripts/generate_lsd_compliance_report.py` — LSD compliance report generator
+- `scripts/cleanup_debates_without_user.py` — data cleanup utility
+- `scripts/run_migrations.sh` — migration runner shell script
+- `setup_openrouter.py` — interactive OpenRouter configuration helper
+- `corrected_implementation_plan.md` — UX & trust hardening plan
+- `.agents/` — agent skill definitions (design system skill)
+- `archive/` — legacy server versions (v1, v2)
+- `workflow_state/` — agentic workflow state tracking
+- `.github/ISSUE_TEMPLATE/` — GitHub issue templates
 
 ## Quick Start (Local API Development)
 
@@ -159,6 +179,8 @@ cp .env.example .env
 # Edit .env with production values
 docker-compose up --build -d
 ```
+
+Services: Flask app (port 5000) + Redis.
 
 ### 4. Validate Health
 
@@ -306,8 +328,12 @@ Migrations support both PostgreSQL and SQLite backends.
 ### Unit + Fact Check
 
 ```bash
-python test_debate_system.py
-python test_fact_check_skill.py
+python -m pytest tests/integration/test_debate_system.py
+python -m pytest tests/unit/test_fact_check_skill.py
+python test_lsd_v1_2_contracts.py
+python test_email_processor.py
+python test_perfect_skill.py
+python test_slice4.py
 ```
 
 Or via Make:
@@ -320,8 +346,8 @@ make fact
 ### Manual Scenarios
 
 ```bash
-python test_manual.py server-check --base-url http://127.0.0.1:5000
-python test_manual.py scenario-ai --base-url http://127.0.0.1:5000
+python manual_scenarios.py server-check --base-url http://127.0.0.1:5000
+python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 ```
 
 Or via Make:
@@ -367,16 +393,21 @@ Debate-level margin:
 ## Documentation
 
 - Full docs index: `docs/README.md`
-- Workflow contract: `docs/workflow/WORKFLOW.md`
-- Testing guide: `docs/guides/TESTING.md`
-- Deployment guide: `docs/guides/DEPLOYMENT.md`
-- Database migrations: `docs/guides/DATABASE_MIGRATIONS.md`
-- OpenRouter setup: `docs/guides/OPENROUTER_SETUP.md`
+- Architecture: `docs/architecture/` — design documents and product spec
+- Workflow: `docs/workflow/` — workflow contracts and development workflows
+- Guides: `docs/guides/` — testing, deployment, database migrations, OpenRouter setup, privacy, WCAG audit
+- Current status: `docs/current/` — implementation status
+- Archive: `docs/archive/` — older implementation plans and handoffs
+- Compliance: `docs/compliance/` — formula traceability matrix, LSD v1.2 compliance reports and changelog
+- Requirements: `docs/requirements/` — LSD requirements and change requests
+- Schema: `docs/schema/` — email submission schema
+- Archive: `docs/archive/` — previous README versions
 - V3 migration guide: `docs/V3_MIGRATION_GUIDE.md`
 
 ## Notes
 
-- `start_server.py` delegates to `start_server_v3.py`.
+- `start_server.py` is the recommended primary startup command. It delegates to `start_server_v3.py` internally.
+- Current stable backend modules: `backend/app.py` and `backend/debate_engine.py` (wrap v3/v2 internals).
 - Database defaults to `data/debate_system.db`.
 - Passwords are hashed with **bcrypt** (not PBKDF2).
 - For deterministic local development, `LLM_PROVIDER=mock` and `FACT_CHECK_MODE=OFFLINE` are recommended.
