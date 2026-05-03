@@ -1,0 +1,143 @@
+{
+  "criteria": [
+    {
+      "deferral": {
+        "rationale": "Out of scope for this implementation run: Phase 3 user-facing blindness hardening remains deferred to v1.3.",
+        "target_version": "v1.3"
+      },
+      "evidence_links": [
+        "acceptance/lsd_v1_2_criteria.json"
+      ],
+      "id": "LSD-UI-01",
+      "section": "2.1",
+      "status": "deferred",
+      "title": "User-facing blindness"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/debate_engine_v2.py",
+        "backend/database.py",
+        "frontend/snapshot.html",
+        "frontend/admin.html",
+        "test_lsd_v1_2_contracts.py"
+      ],
+      "id": "LSD-UI-02",
+      "section": "3",
+      "status": "pass",
+      "title": "Visible moderation metadata"
+    },
+    {
+      "deferral": {
+        "rationale": "Out of scope for this implementation run: Phases 0.5 and 1 snapshot immutability/replay expansion are tracked separately.",
+        "target_version": "v1.3"
+      },
+      "evidence_links": [
+        "backend/debate_engine_v2.py",
+        "frontend/snapshot.html"
+      ],
+      "id": "LSD-UI-03",
+      "section": "4",
+      "status": "deferred",
+      "title": "Immutable snapshot dossier"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/app_v3.py",
+        "backend/database.py",
+        "frontend/governance.html",
+        "frontend/frame-dossier.html"
+      ],
+      "id": "LSD-UI-04",
+      "section": "5",
+      "status": "pass",
+      "title": "Frame transparency"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/scoring_engine.py",
+        "backend/lsd_v1_2.py",
+        "frontend/topics.html",
+        "frontend/audits.html"
+      ],
+      "id": "LSD-UI-05",
+      "section": "6",
+      "status": "pass",
+      "title": "Topic diagnostics"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/extraction.py",
+        "backend/selection_engine.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ],
+      "id": "LSD-UI-06",
+      "section": "8.1",
+      "status": "pass",
+      "title": "AU completeness proxy"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/lsd_v1_2.py",
+        "backend/debate_engine_v2.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ],
+      "id": "LSD-UI-07",
+      "section": "10 and 11",
+      "status": "pass",
+      "title": "Integrity and selection transparency"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/app_v3.py",
+        "backend/debate_engine_v2.py",
+        "frontend/verdict.html",
+        "frontend/dossier.html",
+        "test_lsd_v1_2_contracts.py"
+      ],
+      "id": "LSD-UI-08",
+      "section": "13 to 17",
+      "status": "pass",
+      "title": "Decision dossier outputs"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/debate_engine_v2.py",
+        "backend/app_v3.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py"
+      ],
+      "id": "LSD-UI-09",
+      "section": "18 and 19",
+      "status": "pass",
+      "title": "Replicates and audits"
+    },
+    {
+      "deferral": null,
+      "evidence_links": [
+        "backend/governance.py",
+        "backend/app_v3.py",
+        "frontend/governance.html",
+        "frontend/dossier.html"
+      ],
+      "id": "LSD-UI-10",
+      "section": "20",
+      "status": "pass",
+      "title": "Governance and incident hooks"
+    }
+  ],
+  "source_version": "LSD v1.2",
+  "summary": {
+    "deferred": 2,
+    "pass": 8
+  },
+  "undocumented_partial_or_missing": []
+}
