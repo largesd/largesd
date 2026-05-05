@@ -1,0 +1,546 @@
+LARGE-SCALE BLIND DEBATE → DECISION SUPPORT SYSTEM (v1.2)
+Assumption: DETERMINISTIC TERNARY FACT CHECK AGENT for empirical premises. p ∈ {1.0, 0.5, 0.0}. Status is determined by hard-coded evidence-policy rules (Tier 1/2/3, cross-verification, scope, entity resolution), not by probabilistic estimation. 0.5 is an "undetermined" token, not a probability.
+
+============================================================
+0. PURPOSE
+============================================================
+
+Provide a scalable, manipulation-resistant, auditable decision-support pipeline for large-scale debates.
+
+Principles:
+- Judge arguments, not people.
+- Preserve mass participation while keeping evaluation compute bounded.
+- Make values explicit via a declared Frame (or a small fixed set of Frames).
+- Produce traceable “why” outputs with uncertainty and sensitivity.
+
+Output: a decision dossier (not a single oracle verdict).
+
+============================================================
+1. ARCHITECTURE: TWO-LOOP SYSTEM
+============================================================
+
+LOOP A — INTAKE (mass scale, cheap):
+- ingest submissions, apply moderation, topic formation, AU extraction, canonicalization
+- detect manipulation patterns in aggregate
+- publish transparent public artifacts and diagnostics
+
+LOOP B — ADJUDICATION (bounded, expensive):
+- deterministically select a representative slice for deep evaluation
+- multi-judge scoring with replicates and audits
+- publish uncertainty + sensitivity + “what evidence/value changes this”
+
+Robustness from:
+- deterministic stratified selection
+- rarity slice
+- capped centrality gain
+- replication across judges and extraction reruns
+- median/robust aggregation
+- simple, visible audits
+
+============================================================
+2. BLINDNESS + INTEGRITY
+============================================================
+
+2.1 User-facing blindness
+- no identity signals, likes, follower counts, contribution totals
+- no “top contributors” or leaderboards
+
+2.2 Internal integrity (never publicly identifying)
+- hidden contributor_id used only for:
+  - rate limiting, anomaly detection
+  - internal distinct-counting for selection fairness
+  - manipulation detection
+Public outputs:
+- only aggregate integrity indicators (bucketed, small-count suppressed)
+
+2.3 Participation concentration diagnostics (NEW v1.2)
+Per topic and overall publish:
+- contributor concentration buckets (e.g., top 1% share bucketed)
+- participation entropy (bucketed)
+- channel mix proportions (public vs org vs accredited vs invited experts)
+All with small-count suppression.
+
+============================================================
+3. MODERATION (ALWAYS FIRST)
+============================================================
+
+A versioned moderation template determines Allowed vs Blocked.
+
+Only Allowed content enters:
+- topic formation
+- AU extraction
+- scoring
+
+Per snapshot publish:
+- moderation template version + changelog pointer
+- allowed/blocked counts
+- block reasons histogram
+- borderline-rate (NEW v1.2): fraction of items within a small score band near threshold
+- small-count suppression rules (published)
+
+============================================================
+4. SNAPSHOTS (IMMUTABLE, AUDITABLE)
+============================================================
+
+System runs in immutable snapshots.
+
+Each snapshot publishes:
+- snapshot_id, timestamp, trigger
+- moderation template version
+- Frame mode + Frame set used
+- deterministic recipes (tokenizer/embedding/clustering/extraction versions + seeds)
+- compute budget parameters (caps)
+- replay manifest (NEW v1.2): machine-readable parameter pack
+- tamper-evident hashes of inputs/outputs (Merkle roots)
+
+============================================================
+5. FRAMES (NORMATIVE TRANSPARENCY, HARDENED)
+============================================================
+
+Modes (choose one policy; publish it):
+
+A) SINGLE FRAME MODE:
+- one GLOBAL Frame (1–3 sentences) set by governance
+
+B) MULTI-FRAME MODE (RECOMMENDED):
+- small admin-approved set of Frames (3–7)
+- system reports results per Frame + “Frame sensitivity”
+- no open-ended frame contests at scale
+
+All normative acceptability is P(acceptable | Frame).
+
+5.1 Frame Justification Dossier (REQUIRED)
+For each Frame publish:
+- scope and intended decision domain
+- grounding rationale
+- inclusion justification
+- exclusion note (why others not included)
+- known tensions/tradeoffs with other Frames
+- “what this Frame prioritizes” examples (2–4 bullets)
+
+5.2 Frame Stability Rule (NEW v1.2)
+- Frames may only change on a fixed cadence (e.g., every N snapshots),
+  except “emergency change” with published rationale and supermajority governance vote.
+- Publish: “Frame_set_version” and next scheduled review date.
+
+5.3 Frame Inclusion Petition Track (NEW v1.2)
+- Public can submit candidate Frames (not used for scoring in current snapshot).
+- System publishes:
+  - candidate Frame summaries (non-scored)
+  - governance decision at next review window
+This reduces legitimacy disputes without opening the floodgates.
+
+============================================================
+6. TOPICS (BOUNDED, NEUTRAL, DIAGNOSTIC AUDITS)
+============================================================
+
+Bounded topic count T (policy-set; e.g., 20–60).
+
+Deterministic topic recipe:
+- embed spans → cluster → merge/split to stay within T
+- neutral naming rules:
+  - symmetry and non-verdict language
+  - disallow loaded labels
+
+Per topic publish:
+- name + scope (neutral)
+- summary_FOR / summary_AGAINST generated only from canonical AUs
+- topic relevance weight (see §12)
+
+6.1 Topic Fragmentation / Merge Sensitivity Audit (kept)
+Per snapshot publish:
+- canonical mass distribution across topics:
+  - histogram + quantiles + Gini (or top-k share)
+- micro-topic rate: fraction of topics below minimum mass M_min
+- merge-sensitivity replicate:
+  - run one additional deterministic merge variant
+  - publish mapping stability
+  - publish change in overall scores per Frame
+
+6.2 Topic Dominance Indicators (NEW v1.2)
+Publish:
+- top-3 topics share of canonical mass
+- top-3 topics share of selected mass
+Diagnostic only.
+
+============================================================
+7. TRACEABILITY: SPANS
+============================================================
+
+Allowed posts → spans.
+
+Span record:
+- span_id, post_id, offsets, topic_id, span_text (stored with access controls)
+All scored premises/arguments MUST cite spans.
+
+============================================================
+8. ARGUMENT UNITS (AUs)
+============================================================
+
+Within each topic, extract AUs:
+- side ∈ {FOR, AGAINST}
+- premises (typed) → inference
+- provenance spans for each premise and inference
+
+Premise types:
+- EMPIRICAL (checkable factual)
+- NORMATIVE (value/criterion under Frame)
+- DEFINITIONAL (optional; treated as normative subtype)
+
+Hard rules:
+- AU has ≥1 premise
+- every premise and inference has provenance spans
+
+8.1 AU Completeness Score (NEW v1.2)
+Each AU gets a structural completeness proxy:
+- presence of clear conclusion
+- premise count >= 1
+- provenance richness (span count and diversity)
+- explicit inference link
+Used only as a quality proxy in selection diagnostics and rarity slice ranking.
+
+============================================================
+9. CANONICALIZATION / DEDUPLICATION
+============================================================
+
+Goal: avoid repetition counting, not perfect philosophical parsing.
+
+Within (topic, side, type):
+- run a deterministic canonicalizer to merge near-duplicates
+- output canonical premises and canonical arguments:
+  - canon_id, text, member refs, provenance union
+
+Stability check:
+- rerun extraction+dedupe twice (different seed/prompt)
+- publish overlap rates and use as a confidence/sensitivity signal
+
+============================================================
+10. INTEGRITY & MANIPULATION DETECTION (AGGREGATE, PUBLIC SAFE)
+============================================================
+
+Compute (internal):
+- anomaly scores for burst submissions
+- similarity clusters suggesting coordinated templates
+- suspicious contributor graph patterns (internal only)
+
+Publish (aggregate, bucketed, small-count suppressed):
+- burstiness indicators by topic/channel
+- template-similarity prevalence by topic (bucketed)
+- concentration/entropy indicators (from §2.3)
+
+No automated exclusion from scoring solely due to integrity flags in v1.2:
+- flags are diagnostic + governance triggers only
+- any exclusion requires published rule change in next snapshot
+
+============================================================
+11. COMPUTE CONTROL: STRATIFIED SELECTION (HARDENED)
+============================================================
+
+You cannot adjudicate everything.
+
+11.1 Compute budget (published per snapshot)
+Caps per topic-side:
+- K_E: empirical premises to fact-check
+- K_N: normative premises to assess
+- K_A: canonical arguments to judge
+Judge count J and replicate plan R.
+
+11.2 Deterministic stratified selection
+Strata examples:
+- region/admin unit
+- language
+- participation channel (public vs org vs expert)
+- topic subclusters
+
+Within each stratum compute:
+- centrality: how often a canon item is referenced across distinct AUs
+- distinct_support: internal distinct contributor count (public only bucketed)
+
+11.3 Capped Centrality Gain (NEW v1.2)
+To prevent amplification attacks:
+- define centrality as: centrality = log(1 + distinct_AU_refs)
+- apply per-stratum cap: centrality capped at P95 within the pool
+Publish: which transform/cap used.
+
+11.4 Deterministic selection score
+S(canon_id) = f(centrality_capped, distinct_support_bucketed_internal, AU_quality_proxy)
+- f is published, simple, monotone.
+
+Guarantees:
+- each stratum minimum representation
+- no single stratum can dominate
+- deterministic tie-break via stable hash(seed, canon_id)
+
+11.5 Minority / Rarity Slice (MANDATORY, kept)
+For each (topic, side, type) selection pool:
+- MAJORITY slice: (1 - ρ) of K_* selected by S()
+- RARITY slice: ρ of K_* selected from low-centrality set
+
+Defaults:
+- ρ = 0.20
+- low-centrality set defined as bottom X% by capped centrality within stratum/topic/side/type
+  (X published, e.g., 60%)
+
+RARITY deterministic rule:
+- rank by AU_quality_proxy then provenance richness
+- tie-break via stable hash(seed, canon_id)
+
+Publish:
+- selected ids (canon_id only), stratum coverage counts
+- selection coverage: what % of total canonical reference mass is represented
+- rarity utilization and impact diagnostics
+
+11.6 Budget Adequacy Indicators (NEW v1.2)
+Publish per topic-side:
+- fraction of canonical reference mass represented by selected set
+- coverage of top-k central items (k fixed, published)
+Diagnostic only.
+
+============================================================
+12. TOPIC RELEVANCE WEIGHTING (ANTI-VERBOSITY, LESS BUDGET-SKEWED)
+============================================================
+
+Two masses:
+- PreMass_t: total canonical items in topic t (diagnostic only)
+- SelMass_t: selected canonical items in topic t (used for scoring)
+
+Primary weight:
+Rel_t = sqrt(SelMass_t) normalized across topics
+
+Publish sensitivity:
+- alternative Rel'_t = log(1 + SelMass_t)
+- publish PreMass_t vs SelMass_t ratio to reveal budget truncation effects
+
+============================================================
+13. EMPIRICAL FACT CHECK (DETERMINISTIC TERNARY)
+============================================================
+
+For each selected canonical EMPIRICAL premise:
+- Status ∈ {SUPPORTED, REFUTED, INSUFFICIENT}
+- p ∈ {1.0, 0.5, 0.0} (deterministic ternary; 0.5 means undetermined, not 50 % probability)
+
+Deterministic mapping:
+- SUPPORTED → p = 1.0 (decisive evidence confirms the premise under the declared evidence policy)
+- REFUTED → p = 0.0 (decisive evidence contradicts the premise under the declared evidence policy)
+- INSUFFICIENT → p = 0.5 (evidence is unavailable, ambiguous, outside scope, fails policy requirements, or is Tier-3-only; no verdict rendered)
+
+Sufficient-evidence rules (hard-coded):
+- SUPPORTED/REFUTED require evidence meeting the minimum tier and cross-verification thresholds defined by the evidence policy.
+- INSUFFICIENT is returned for: no evidence retrieved, scope mismatch, entity resolution failure, connector failure, policy gap, contradictory Tier-1 evidence without resolvable authority ranking, predictive claims, or normative claims routed out of empirical checking.
+
+Also publish:
+- citations (or “insufficient evidence”)
+- operationalization (what would confirm/refute)
+- evidence tier flag:
+  - Tier 1: primary/official
+  - Tier 2: reputable secondary synthesis
+  - Tier 3: limited/uncertain
+Publish tier counts per topic-side.
+
+13.1 Aggregation treatment of INSUFFICIENT (kept)
+- F_{t,s} = mean(p) over all selected empirical premises (INSUFFICIENT premises contribute p = 0.5)
+- F_supported_only = mean(p) over SUPPORTED and REFUTED premises only (excludes all INSUFFICIENT)
+  - If n_SR = 0 (no SUPPORTED or REFUTED premises), F_supported_only is published as null
+- insufficiency_rate = count(INSUFFICIENT) / count(total empirical premises)
+- Sensitivity analysis (publish per topic-side and overall):
+  - delta_D_true = D computed with all INSUFFICIENT premises set to p = 1.0
+  - delta_D_false = D computed with all INSUFFICIENT premises set to p = 0.0
+  - max_abs_delta_D = max(|delta_D_true|, |delta_D_false|)
+  - decisive_premise_rank = per topic-side, sort INSUFFICIENT premises by marginal swing δ_i = |D(p_i=1.0) − D(p_i=0.0)| holding all other premises at their current values
+
+============================================================
+14. NORMATIVE PREMISE ASSESSMENT
+============================================================
+
+For each selected canonical NORMATIVE premise under each Frame:
+- q = P(acceptable | Frame) in [0,1]
+- mandatory symmetry tests (NEW v1.2):
+  - at least one role-swap test
+  - at least one comparable-case test (if applicable)
+Publish (short) test descriptions.
+
+If MULTI-FRAME mode:
+- publish q per frame and frame dispersion.
+
+============================================================
+15. ARGUMENT JUDGING (MULTI-JUDGE, ROBUST, WITH ADEQUACY TRACE)
+============================================================
+
+Per topic-side:
+
+A) Empirical factuality component:
+- F_{t,s} = mean(p) over selected empirical premises, where p ∈ {1.0, 0.5, 0.0}
+- also publish:
+  - F_supported_only (mean over SUPPORTED/REFUTED only)
+  - insufficiency_rate
+  - delta_D_true, delta_D_false, max_abs_delta_D (from §13.1)
+
+B) Normative acceptability component per Frame:
+- N_{t,s,Frame} = mean(q) over selected normative premises
+
+C) Reasoning strength:
+- Reason_{t,s} = median over selected arguments of judge score in [0,1]
+Judges must provide a brief proof sketch referencing premise ids.
+
+D) Coverage (BINARY, HARDENED)
+Targets are opposing selected arguments.
+For each target, judges label:
+- 0 = NOT ADDRESSED
+- 1 = ADDRESSED (direct rebuttal trace citing target premise/argument ids + provenance)
+
+Coverage_{t,s} = mean(label) over targets.
+
+15.1 Coverage Adequacy Trace (NEW v1.2, diagnostic)
+For each label=1, judge additionally tags rebuttal type:
+- EMPIRICAL rebuttal
+- NORMATIVE rebuttal
+- INFERENCE rebuttal
+- SCOPE/DEFINITION shift
+Publish distribution of rebuttal types (no scoring impact).
+
+15.2 Aggregation across judges
+For each component:
+- aggregate = median across judges
+- publish dispersion (IQR)
+- publish judge assignment recipe/seed (not identities)
+
+============================================================
+16. COMPONENT COMBINATION PER FRAME
+============================================================
+
+Per topic-side-frame:
+Q_{t,s,Frame} = geometric_mean(components present, epsilon floor)
+
+Publish:
+- component breakdown
+- geomean vs arimean sensitivity
+- “drop-component” sensitivity (NEW v1.2, diagnostic):
+  recompute Q with each component removed one-at-a-time to show dominance.
+
+============================================================
+17. OVERALL AGGREGATION + DECISION DOSSIER OUTPUTS
+============================================================
+
+Overall_{s,Frame} = Σ_t(Rel_t * Q_{t,s,Frame})
+
+Define per replicate r:
+D_{r,Frame} = Overall_FOR - Overall_AGAINST
+
+Primary outputs (per Frame):
+- Overall_FOR, Overall_AGAINST, D distribution
+- verdict status:
+  - FOR if CI(D) entirely > 0
+  - AGAINST if CI(D) entirely < 0
+  - else NO VERDICT
+- confidence:
+  - max( fraction(D_r>0), fraction(D_r<0) )
+
+Explainability outputs:
+- topic contribution decomposition
+- “remove topic” counterfactuals
+- decisive premises/arguments list with spans
+- “what would change this”:
+  - top decisive empirical premises currently INSUFFICIENT, from decisive_premise_rank (§13.1)
+  - top decisive normative premises with highest judge dispersion
+  - max_abs_delta_D: overall swing bound from resolving all INSUFFICIENT empirical premises
+- evidence-gap summary:
+  - insufficiency_rate by topic-side
+  - max_abs_delta_D by topic-side
+  - tier distribution by topic-side
+
+============================================================
+18. REPLICATES (ROBUSTNESS ENGINE)
+============================================================
+
+Replicates combine:
+- multiple judges (randomized assignment)
+- 2 extraction/dedupe reruns
+- optional bootstrap over selected items (not full corpus)
+- topic merge-sensitivity replicate channel
+
+For each replicate:
+- recompute D_{r,Frame}
+
+Publish:
+- replicate count and composition
+- CI method used (published, simple)
+- replicate-by-replicate D values (or histogram buckets if needed for privacy)
+
+============================================================
+19. AUDITS (MINIMAL, HIGH-LEVERAGE)
+============================================================
+
+Publish distributions (no hard thresholds):
+
+1) Side-label swap (label-only) → evaluator bias check
+2) Extraction/dedupe overlap → representation stability
+3) Judge dispersion (IQR) → evaluator variance
+4) Frame sensitivity (multi-frame) → agenda-capture resistance
+5) Integrity indicators (aggregate) → manipulation visibility
+6) Rarity slice utilization/impact → minority visibility
+7) Topic merge sensitivity impact → boundary power visibility
+8) Budget adequacy indicators (NEW v1.2) → truncation transparency
+9) Centrality cap effect (NEW v1.2) → amplification resistance visibility
+
+============================================================
+20. GOVERNANCE HOOKS (REQUIRED)
+============================================================
+
+Publish:
+- changelog for moderation templates, frames, budgets, selection function f, and topic recipe
+- independent audits of sampling/selection fairness (cadenced)
+- appeal pathway focused on:
+  - moderation errors
+  - topic misframing
+  - missing key arguments / provenance errors
+- publish “unselected tail” summaries (non-scored) by topic-side so people see they were ingested
+
+20.1 Judge Pool Governance (HARDENED, kept + clarified)
+Publish and enforce:
+- judge pool composition categories and counts (no identities)
+- qualification rubric for each category
+- randomized assignment recipe/seed per snapshot
+- rotation policy (max consecutive snapshots; cooldown)
+- conflict-of-interest procedure (internal) + aggregate COI stats (public)
+- calibration protocol:
+  - shared scoring guidelines
+  - periodic inter-judge consistency checks (published dispersion distributions)
+
+20.2 Emergency Protocols (NEW v1.2)
+If integrity indicators spike or major moderation/template bug is discovered:
+- snapshot can be marked “INCIDENT”
+- publish incident report:
+  - what happened
+  - what outputs are unreliable
+  - remediation in next snapshot
+No silent retractions; only additive correction snapshots.
+
+============================================================
+21. NON-GOALS (v1.2)
+============================================================
+
+- Not a single truth oracle; outputs are conditional on Frames and bounded selection.
+- Not a system for identifying or rewarding individuals.
+- Not a full philosophical argument parser; canonicalization is pragmatic.
+- Not an automated censoring engine; integrity flags are diagnostic, governance-triggering.
+
+============================================================
+22. SUMMARY OF v1.2 CHANGES
+============================================================
+
+- Participation concentration + entropy diagnostics added.
+- Borderline moderation rate added.
+- Replay manifest added for reproducibility.
+- Frame Stability Rule + Petition Track added.
+- Topic dominance indicators added.
+- AU completeness score added (quality proxy).
+- Capped/log centrality to resist amplification attacks.
+- Budget adequacy indicators added.
+- Topic relevance now publishes PreMass vs SelMass ratio.
+- Normative symmetry tests made mandatory.
+- Coverage adequacy trace (rebuttal type tags) added.
+- Drop-component sensitivity added.
+- Emergency incident protocol added.
+
+End v1.2
+

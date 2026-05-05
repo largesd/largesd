@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional, Tuple
 import hashlib
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -40,7 +40,7 @@ class SelectionRecipe:
     centrality_cap_percentile: float = 95.0
     version: str = SELECTION_FORMULA_VERSION
     version_id: str = SELECTION_FORMULA_VERSION
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
     score_formula: str = "S_i = w1 * centrality_i_capped + w2 * log(1 + distinct_support_i_internal) + w3 * AU_quality_proxy_i"
     weights: Dict[str, float] = field(default_factory=lambda: dict(SELECTION_WEIGHTS))
 

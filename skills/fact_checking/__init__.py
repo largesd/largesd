@@ -34,6 +34,22 @@ from .policy import EvidencePolicy, default_policy, strict_policy, apply_policy
 from .planner import ConnectorPlanner
 from .wikidata_connector import WikidataConnector
 from .web_rag_connector import WebRAGConnector, SearchBackend, LLMClient
+from .v15_connectors import (
+    WikidataEntityConnector,
+    BLSStatisticsConnector,
+    CrossrefConnector,
+    CuratedRAGConnector,
+    BraveSearchConnector,
+    ConnectorRegistry,
+    EvidenceConnector,
+    BaseEvidenceConnector,
+)
+from .scoring_inputs import (
+    ScoringAdapter,
+    TopicSideScore,
+    compute_scoring_inputs,
+)
+from .v15_skill import V15FactCheckingSkill
 from .template_adapters import (
     ClaimTypeDetector,
     ClaimAnalysis,
@@ -75,6 +91,17 @@ __all__ = [
     'WebRAGConnector',
     'SearchBackend',
     'LLMClient',
+    'WikidataEntityConnector',
+    'BLSStatisticsConnector',
+    'CrossrefConnector',
+    'CuratedRAGConnector',
+    'BraveSearchConnector',
+    'ConnectorRegistry',
+    'EvidenceConnector',
+    'BaseEvidenceConnector',
+    'ScoringAdapter',
+    'TopicSideScore',
+    'compute_scoring_inputs',
     'ClaimTypeDetector',
     'ClaimAnalysis',
     'ClaimType',

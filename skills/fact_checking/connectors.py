@@ -11,7 +11,7 @@ import hashlib
 import json
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .models import (
@@ -20,6 +20,7 @@ from .models import (
     SourceConfidence,
     SourceResult,
 )
+from .v15_models import EvidenceItem
 
 
 class SourceConnector:
@@ -148,7 +149,7 @@ class GroundTruthDB:
         fallback_timestamp = (
             _coerce_datetime(entry.get("reviewed_at"))
             or _coerce_datetime(entry.get("stored_at"))
-            or datetime.utcnow()
+            or datetime.now(timezone.utc)
         )
 
         results: List[SourceResult] = []
@@ -236,7 +237,7 @@ class GroundTruthDB:
         review_rationale: Optional[str] = None,
         reviewed_at: Optional[str] = None,
     ):
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self._entries[claim_hash] = {
             "schema_version": self.SCHEMA_VERSION,
             "verdict": verdict,
@@ -308,3 +309,21 @@ class SimulatedSourceConnector(SourceConnector):
             retrieved_at=datetime.now(),
             tier=self.tier,
         )
+
+
+class MockEvidenceConnector:
+    """
+    Deterministic mock connector for the LSD Fact-Checking System v1.5.
+    Returns pre-canned EvidenceItem lists keyed by subclaim_id.
+    Intended for Phase 1 deterministic testing without live retrieval.
+    """
+
+    def __init__(self, fixture_map: Dict[str, List[EvidenceItem]]):
+        """
+        fixture_map: dict mapping subclaim_id -> list of EvidenceItem objects.
+        """
+        self._fixture_map = fixture_map
+
+    def retrieve(self, subclaim_id: str) -> List[EvidenceItem]:
+        """Return the fixture evidence for a given subclaim_id."""
+        return list(self._fixture_map.get(subclaim_id, []))

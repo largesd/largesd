@@ -1,0 +1,46 @@
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
+  <div class="help-panel-header">
+    <h3 id="help-panel-title">Glossary & Help</h3>
+    <button class="close-help" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+
+    <div class="glossary-term">CI(D)</div>
+    <div class="glossary-def">Confidence Interval of D (the difference score). If this interval crosses zero, the verdict is "NO VERDICT" because FOR and AGAINST are statistically indistinguishable.</div>
+
+    <div class="glossary-term">D = FOR − AGAINST</div>
+    <div class="glossary-def">The margin between overall FOR and AGAINST scores. Positive = FOR leading; Negative = AGAINST leading.</div>
+
+    <div class="glossary-term">F<sub>t,s</sub> (Factuality)</div>
+    <div class="glossary-def">Mean truth probability across canonical FACT nodes for topic t, side s. Calculated as average of P(fact true).</div>
+
+    <div class="glossary-term">Reason<sub>t,s</sub> (Reasoning)</div>
+    <div class="glossary-def">Median reasoning strength across canonical ARGUMENT nodes for topic t, side s. Scored by independent judges.</div>
+
+    <div class="glossary-term">Cov<sub>t,s</sub> (Coverage)</div>
+    <div class="glossary-def">How well side s addresses the opposing side's arguments, weighted by argument leverage. Higher = better rebuttal coverage.</div>
+
+    <div class="glossary-term">Q<sub>t,s</sub> (Quality)</div>
+    <div class="glossary-def">Geometric mean of Factuality, Reasoning, and Coverage. Balances all three components without tuned weights.</div>
+
+    <div class="glossary-term">Rel<sub>t</sub> (Relevance)</div>
+    <div class="glossary-def">Topic relevance weight based on claim-producing content mass. Determines how much each topic contributes to the overall score.</div>
+
+    <div class="glossary-term">Steelman</div>
+    <div class="glossary-def">A summary that presents the strongest version of each side's arguments, not a strawman. Generated from canonical arguments.</div>
+
+    <div class="glossary-term">IQR</div>
+    <div class="glossary-def">Interquartile Range — shows spread of judge scores. Wider IQR = more disagreement among evaluators.</div>
+
+    <div class="glossary-term">Drift Score</div>
+    <div class="glossary-def">Measures how much a topic has changed from its previous snapshot. Higher = more change.</div>
+
+    <div class="glossary-term">Canonical FACT/ARGUMENT</div>
+    <div class="glossary-def">Deduplicated, normalized representations of claims and arguments extracted from posts. Used for consistent scoring.</div>
+
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>

@@ -1,5 +1,5 @@
 {
-  "source_document": "/Users/jonathanleung/Documents/C++/LSD req.txt",
+  "source_document": "docs/requirements/LSD_req.txt",
   "source_version": "LSD v1.2",
   "phase": "Phase 1 browser-enforced subset",
   "task": "Verify the core blind-debate experience through the real browser UI.",

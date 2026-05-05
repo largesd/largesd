@@ -2,8 +2,10 @@
 Topic Extraction and Management Engine
 Handles dynamic topic extraction, clustering, and drift detection
 """
+import copy
+import hashlib
 import uuid
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -363,41 +365,83 @@ class TopicEngine:
         return topics
     
     def _merge_topics(self, topics: List[Topic],
-                     target_count: int) -> List[Topic]:
-        """Merge most similar topics until target count reached"""
+                     target_count: int,
+                     variant_mode: str = "max_sim",
+                     id_factory: Optional[Callable[[Topic, Topic], str]] = None) -> List[Topic]:
+        """Merge topics until target count reached.
+
+        Args:
+            topics: List of Topic objects to merge.
+            target_count: Desired final topic count.
+            variant_mode: "max_sim" (primary, greedy) or "min_sim" (stress-test variant).
+            id_factory: Optional callable(t1, t2) -> topic_id. If provided, merged
+                topics get deterministic IDs and timestamps (for replicates).
+                If None, uses uuid4() and datetime.now() (for primary path).
+        """
         while len(topics) > target_count:
-            # Find most similar pair
+            # Find best pair according to variant_mode
             best_pair = None
-            best_sim = -1
-            
+            best_metric = -1.0 if variant_mode == "max_sim" else float('inf')
+
             for i, t1 in enumerate(topics):
                 for t2 in topics[i+1:]:
                     sim = self._text_similarity(t1.scope, t2.scope)
-                    if sim > best_sim:
-                        best_sim = sim
-                        best_pair = (t1, t2)
-            
+                    if variant_mode == "max_sim":
+                        if sim > best_metric:
+                            best_metric, best_pair = sim, (t1, t2)
+                    else:  # min_sim
+                        if sim < best_metric:
+                            best_metric, best_pair = sim, (t1, t2)
+
             if not best_pair:
                 break
-            
+
             t1, t2 = best_pair
-            
-            # Create merged topic
+
+            if id_factory:
+                merged_id = id_factory(t1, t2)
+                fixed_ts = t1.created_at or ""
+            else:
+                merged_id = f"topic_{uuid.uuid4().hex[:8]}"
+                fixed_ts = datetime.now().isoformat()
+
             merged = Topic(
-                topic_id=f"topic_{uuid.uuid4().hex[:8]}",
+                topic_id=merged_id,
                 name=f"{t1.name} / {t2.name}"[:50],
                 scope=f"Combined topic covering: {t1.scope[:50]}... and {t2.scope[:50]}...",
                 relevance=t1.relevance + t2.relevance,
                 parent_topic_ids=[t1.topic_id, t2.topic_id],
                 operation="merged",
-                created_at=datetime.now().isoformat()
+                created_at=fixed_ts,
             )
-            
+
             # Replace t1 and t2 with merged
             topics = [t for t in topics if t not in (t1, t2)]
             topics.append(merged)
-        
+
         return topics
+
+    def merge_variant_replicate(self, topics: List[Topic],
+                                variant_seed: int = 99) -> List[Topic]:
+        """Produce a deterministic extra-merge variant topic set.
+
+        Targets one fewer topic than the primary count (bounded by MIN_TOPICS).
+        Uses min-sim merging as a structural stress test.
+        """
+        cloned = [copy.deepcopy(t) for t in topics]
+
+        def _variant_id(t1: Topic, t2: Topic) -> str:
+            id_seed = f"{t1.topic_id}:{t2.topic_id}:{variant_seed}"
+            id_hash = hashlib.sha256(id_seed.encode()).hexdigest()[:8]
+            return f"topic_{id_hash}"
+
+        variant_target = max(self.MIN_TOPICS, len(cloned) - 1)
+        return self._merge_topics(
+            cloned,
+            variant_target,
+            variant_mode="min_sim",
+            id_factory=_variant_id,
+        )
     
     def _split_topics(self, topics: List[Topic],
                      posts: List[Dict],

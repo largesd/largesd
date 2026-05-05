@@ -1,0 +1,843 @@
+================================================================================
+FRONTEND IMPLEMENTATION PLAN
+LSD_FactCheck_v1_5_1 + LSD_req v1.2 Updates
+================================================================================
+
+Generated: 2026-05-03
+Scope:    Frontend HTML/JS/CSS updates only. No backend API changes required
+          for most items — data already returned by existing endpoints.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. NEW PAGE: human-review.html
+   1.1 Page Overview
+   1.2 Workspace Tab Bar (copied from admin.html pattern)
+   1.3 Workspace 1: Human Review Queue
+   1.4 Workspace 2: Fact-Check Audit (Artifact Replay)
+   1.5 Workspace 3: Aggregate Flag Dashboard
+   1.6 Workspace 4: Coverage Adequacy Trace
+   1.7 JavaScript State + Binding Pattern
+   1.8 CSS Classes Needed
+   1.9 API Endpoints to Call
+
+2. UPDATES TO EXISTING PAGES
+   2.1 topic.html
+   2.2 dossier.html
+   2.3 verdict.html
+   2.4 audits.html
+   2.5 snapshot.html
+   2.6 governance.html
+   2.7 Navigation Link Updates
+
+3. BACKEND DATA ALREADY AVAILABLE
+
+4. IMPLEMENTATION ORDER (Recommended)
+
+================================================================================
+1. NEW PAGE: human-review.html
+================================================================================
+
+Create a new standalone page at:
+  frontend/human-review.html
+
+It is an ADMIN-ONLY page (same auth gate pattern as admin.html).
+Follow the exact admin.html workspace-tab architecture:
+  - Horizontal button row at top of workspaces section
+  - Each button has title, copy, and meta pill
+  - Clicking switches visibility of matching workspace panel
+  - Keyboard navigation (ArrowLeft/ArrowRight/Home/End)
+  - URL hash sync (#workspace-queue, #workspace-audit, etc.)
+
+------------------------------------------------------------------------------
+1.1 Page Overview
+------------------------------------------------------------------------------
+
+Title:    Human Review & Fact-Check Audit
+Subtitle: Review flagged empirical premises, inspect artifact replay records,
+          and audit coverage traces.
+
+Auth:     Same route-auth-pending gate as admin.html (token + is_admin check).
+          Redirect to login.html?reason=admin-login-required on failure.
+
+Nav:      Add link in the "More" dropdown on all pages:
+            <a href="human-review.html" role="menuitem">Human Review</a>
+
+------------------------------------------------------------------------------
+1.2 Workspace Tab Bar
+------------------------------------------------------------------------------
+
+Insert a 5th workspace into the admin.html-style tab bar.
+
+HTML structure (copy admin-workspace-tabs exactly):
+
+  <section class="admin-workspace-bar" aria-label="Human review workspaces">
+    <div class="admin-workspace-tabs" role="tablist" aria-label="Human review workspaces">
+
+      <button class="admin-workspace-tab" id="workspace-tab-queue" type="button"
+              role="tab" aria-selected="true" aria-controls="workspace-queue"
+              data-workspace-target="queue">
+        <span class="admin-workspace-tab-title">Review Queue</span>
+        <span class="admin-workspace-tab-copy">
+          Triage empirical premises flagged by the deterministic synthesis engine
+          for human review.
+        </span>
+        <span class="admin-workspace-tab-meta" id="workspace-tab-queue-meta">
+          Loading queue...
+        </span>
+      </button>
+
+      <button class="admin-workspace-tab" id="workspace-tab-audit" type="button"
+              role="tab" aria-selected="false" aria-controls="workspace-audit"
+              data-workspace-target="audit" tabindex="-1">
+        <span class="admin-workspace-tab-title">Fact-Check Audit</span>
+        <span class="admin-workspace-tab-copy">
+          Inspect artifact replay records, authoritative hashes, and replay
+          manifests for individual fact checks.
+        </span>
+        <span class="admin-workspace-tab-meta" id="workspace-tab-audit-meta">
+          Select a premise to inspect
+        </span>
+      </button>
+
+      <button class="admin-workspace-tab" id="workspace-tab-flags" type="button"
+              role="tab" aria-selected="false" aria-controls="workspace-flags"
+              data-workspace-target="flags" tabindex="-1">
+        <span class="admin-workspace-tab-title">Flag Dashboard</span>
+        <span class="admin-workspace-tab-copy">
+          Aggregate public counts by human-review flag with small-count
+          suppression.
+        </span>
+        <span class="admin-workspace-tab-meta" id="workspace-tab-flags-meta">
+          Aggregate view
+        </span>
+      </button>
+
+      <button class="admin-workspace-tab" id="workspace-tab-coverage" type="button"
+              role="tab" aria-selected="false" aria-controls="workspace-coverage"
+              data-workspace-target="coverage" tabindex="-1">
+        <span class="admin-workspace-tab-title">Coverage Trace</span>
+        <span class="admin-workspace-tab-copy">
+          Distribution of rebuttal types across coverage adequacy labels.
+        </span>
+        <span class="admin-workspace-tab-meta" id="workspace-tab-coverage-meta">
+          Diagnostic only
+        </span>
+      </button>
+
+    </div>
+  </section>
+
+JavaScript constants (copy from admin.html):
+
+  const WORKSPACE_ORDER = ['queue', 'audit', 'flags', 'coverage'];
+  const WORKSPACE_HASH_MAP = {
+    'workspace-queue': 'queue',
+    'workspace-audit': 'audit',
+    'workspace-flags': 'flags',
+    'workspace-coverage': 'coverage',
+  };
+
+Use the EXACT same bindWorkspaceTabs(), setActiveWorkspace(),
+resolveWorkspaceFromHash() functions from admin.html (just change selectors
+from .admin-workspace-tab to target the new page).
+
+------------------------------------------------------------------------------
+1.3 Workspace 1: Human Review Queue (workspace-queue)
+------------------------------------------------------------------------------
+
+Purpose: List all canonical empirical premises flagged for human review.
+
+Layout:  Two-column grid (copy admin-shell--policy layout):
+         - Left sidebar: filters + summary stats
+         - Right main: scrollable table of flagged premises
+
+Sidebar contents:
+  - Filter by flag type (multi-select checkboxes):
+      ENTITY_AMBIGUITY
+      POLICY_GAP
+      CONTRADICTORY_TIER1_EVIDENCE
+      HIGH_IMPACT_INSUFFICIENT
+      HIGH_IMPACT_LLM_DIRECTION
+      CAUSAL_COMPLEXITY
+      SCIENTIFIC_SCOPE_OVERCLAIM
+      LLM_VALIDATION_FAILURE
+      CONNECTOR_FAILURE
+      TEMPORAL_SCOPE_AMBIGUITY
+      SOURCE_CONFLICT
+      SCOPE_MISMATCH
+  - Filter by status: All / SUPPORTED / REFUTED / INSUFFICIENT
+  - Filter by evidence tier: 1 / 2 / 3
+  - Summary stats (pills):
+      Total flagged: <count>
+      Pending review: <count>
+      Reviewed no change: <count>
+      Reviewed correction: <count>
+
+Main table columns:
+  | Flag(s) | Premise ID | Topic | Side | Status | p | Best Tier | Reason | Review |
+
+Row actions:
+  - "Open detail" → opens the fact-check audit workspace with this premise pre-selected
+  - "Add review" → inline modal or form to submit a HumanReviewRecord
+
+Review form fields (when adding a review):
+  - Reviewer role (text, default "admin")
+  - Review outcome (select):
+      REVIEWED_NO_CHANGE
+      REVIEWED_CORRECTION
+      REVIEWED_POLICY_GAP
+      REVIEWED_SOURCE_DISPUTE
+  - Review note (textarea, min 10 chars)
+  - Submit → POST /api/human-review (new endpoint, see backend plan)
+
+Table row display rules:
+  - Status pill colors: SUPPORTED=green, REFUTED=red, INSUFFICIENT=yellow
+  - p displayed as exactly 1.0, 0.0, or 0.5 (mono font)
+  - Tier displayed as T1/T2/T3 pill
+  - Flags as small tag pills (e.g., <span class="pill warn">SCOPE_MISMATCH</span>)
+  - If small-count suppression applies to a flag aggregate, show "<k suppressed"
+
+Empty state:
+  "No premises are currently flagged for human review. The deterministic
+   synthesis engine has not raised any flags requiring review."
+
+------------------------------------------------------------------------------
+1.4 Workspace 2: Fact-Check Audit (Artifact Replay) (workspace-audit)
+------------------------------------------------------------------------------
+
+Purpose: Deep-dive into a single FactCheckResult with full replay metadata.
+
+Layout:  Two-column grid:
+         - Left sidebar: premise selector (searchable dropdown + recent list)
+         - Right main: audit panels
+
+Right main panels (stacked vertically):
+
+  A) Authoritative Result Header
+     Row of pills:
+       - Premise ID
+       - Snapshot ID
+       - Status + p
+       - Best tier
+       - Authoritative hash (truncated, with copy button)
+       - Display summary hash (truncated, with copy button)
+       - Merkle root (truncated, with copy button)
+
+  B) Claim Expression Tree (collapsible, default open)
+     Visual tree showing:
+       Root node type (AND, OR, NOT, IF_THEN, COMPARISON, QUANTIFIER, ATOMIC)
+       Each ATOMIC leaf:
+         - subclaim_id
+         - text (truncated to 120 chars)
+         - status + p
+         - best_evidence_tier
+         - insufficiency_reason (if any)
+         - human_review_flags (if any)
+     Use nested indented divs (not a table) for tree visualization.
+
+  C) Evidence Items Table
+     Columns:
+       | Evidence ID | Source | Tier | Direction | Confidence | Relevance | Retrieved |
+     Row details:
+       - source_type (OFFICIAL_STAT, GOV_DB, SCIENTIFIC_DB, etc.)
+       - source_tier (1/2/3)
+       - direction (SUPPORTS, REFUTES, UNCLEAR, NEUTRAL)
+       - direction_confidence
+       - direction_method (DETERMINISTIC_STRUCTURED, LLM_CLASSIFIER, MANUAL)
+       - relevance_score
+       - retrieval_timestamp
+       - connector_version
+       - For decisive items: show decisive_quote_span (blockquote style)
+       - For structured sources: show claimed_value vs source_value comparison result
+
+  D) Synthesis Logic (collapsible)
+     Display the SynthesisLogic object as a structured read-only panel:
+       - status_rule_applied
+       - policy_rule_id
+       - decisive_evidence (list of evidence_ids)
+       - contradictory_evidence (list of evidence_ids)
+       - insufficiency_trigger (if any)
+       - authority_ranking_applied (true/false)
+       - claim_expression_node_type
+
+  E) Replay Manifest (collapsible, default closed)
+     Codebox with formatted JSON of ReplayManifest:
+       - manifest_id
+       - parameter_pack (decomposition version, connector versions, etc.)
+       - input_hashes
+       - authoritative_output_hashes
+       - merkle_root
+
+  F) Human Review Records (collapsible)
+     Table of existing HumanReviewRecord objects for this premise:
+       | Review ID | Role | Outcome | Note | Timestamp | Hash |
+     If none: "No human review records exist for this premise."
+
+  G) Non-Authoritative Display Summary (visually separated)
+     Grayed/bordered panel labeled "Non-authoritative display summary"
+     Shows the display_summary prose. Include a warning note:
+     "This prose is generated after the authoritative result and cannot change
+      status or p."
+
+------------------------------------------------------------------------------
+1.5 Workspace 3: Aggregate Flag Dashboard (workspace-flags)
+------------------------------------------------------------------------------
+
+Purpose: Public-safe aggregate counts by review flag with small-count suppression.
+
+Layout:  Single-column dashboard with KPI tiles + bar chart.
+
+KPI tiles (4 across, auto-fit):
+  - Total flagged premises
+  - Total premises reviewed
+  - Premises with correction outcome
+  - Premises with no-change outcome
+
+Flag distribution table:
+  | Flag | Count | % of flagged | Small-count suppressed? |
+
+Small-count suppression rules (frontend logic):
+  - If count < 5, display "<5" instead of exact number
+  - If count == 0, display "0"
+  - Add explanatory note: "Counts below 5 are suppressed to protect review integrity."
+
+Severity grouping (optional visualization):
+  Group flags by severity:
+    - High impact: CONTRADICTORY_TIER1_EVIDENCE, HIGH_IMPACT_INSUFFICIENT, HIGH_IMPACT_LLM_DIRECTION
+    - Scope/entity: ENTITY_AMBIGUITY, SCOPE_MISMATCH, TEMPORAL_SCOPE_AMBIGUITY, SCIENTIFIC_SCOPE_OVERCLAIM
+    - Policy/system: POLICY_GAP, LLM_VALIDATION_FAILURE, CONNECTOR_FAILURE, SOURCE_CONFLICT
+    - Complexity: CAUSAL_COMPLEXITY
+
+Bar chart (simple CSS bar chart, no external library):
+  Horizontal bars for each flag, length proportional to count.
+  Suppressed counts shown as "<5" with faded bar.
+
+------------------------------------------------------------------------------
+1.6 Workspace 4: Coverage Adequacy Trace (workspace-coverage)
+------------------------------------------------------------------------------
+
+Purpose: Display the distribution of rebuttal types from coverage adequacy labels.
+
+Data source: /api/debate/audits → coverage_adequacy_trace
+
+Layout:  Two-column grid.
+
+Left panel: Overall distribution
+  KPI tiles:
+    - Total targets: <count>
+    - Coverage rate (mean label): <rate>
+    - EMPIRICAL rebuttals: <count>
+    - NORMATIVE rebuttals: <count>
+    - INFERENCE rebuttals: <count>
+    - SCOPE/DEFINITION shifts: <count>
+
+Right panel: Per-topic breakdown table
+  | Topic | Targets | Coverage Rate | EMPIRICAL | NORMATIVE | INFERENCE | SCOPE/DEF |
+
+Note banner:
+  "Coverage adequacy trace is diagnostic only and does not impact scoring.
+   Rebuttal type tags are collected per judge for each ADDRESSED label."
+
+------------------------------------------------------------------------------
+1.7 JavaScript State + Binding Pattern
+------------------------------------------------------------------------------
+
+Copy the admin.html state pattern exactly:
+
+  const HRState = {
+    currentWorkspace: 'queue',
+    flaggedPremises: [],
+    selectedPremiseId: null,
+    reviewRecords: [],
+    aggregateFlags: {},
+    coverageTrace: {},
+    filters: {
+      flags: new Set(),
+      status: 'all',
+      tier: 'all',
+    },
+  };
+
+Functions to implement (copy admin.html signatures):
+
+  function bindWorkspaceTabs() { ... }
+  function setActiveWorkspace(workspaceName, options) { ... }
+  function resolveWorkspaceFromHash(hashValue) { ... }
+  function setWorkspaceMeta(id, text) { ... }
+
+  async function loadReviewQueue() {
+    // GET /api/human-review/flagged-premises
+    // Populate HRState.flaggedPremises
+    // Render table + update sidebar stats
+  }
+
+  async function loadFactCheckAudit(premiseId) {
+    // GET /api/human-review/fact-check/{premiseId}
+    // Populate audit panels
+  }
+
+  async function loadAggregateFlags() {
+    // GET /api/human-review/aggregate-flags
+    // Apply small-count suppression client-side
+    // Render KPI tiles + table + bars
+  }
+
+  async function loadCoverageTrace() {
+    // GET /api/debate/audits (already exists)
+    // Extract coverage_adequacy_trace
+    // Render distribution + per-topic table
+  }
+
+  async function submitHumanReview(premiseId, reviewData) {
+    // POST /api/human-review
+    // On success: reload queue + audit panels
+  }
+
+------------------------------------------------------------------------------
+1.8 CSS Classes Needed
+------------------------------------------------------------------------------
+
+Reuse existing CSS from admin.html and assets/styles.css:
+  - .admin-workspace-bar, .admin-workspace-tabs, .admin-workspace-tab
+  - .admin-workspace, .admin-workspace-panel
+  - .admin-shell, .admin-policy-sidebar, .admin-main
+  - .admin-sidebar-card, .config-section
+  - .admin-step, .admin-step-head, .step-label
+  - .table, .table-wrap
+  - .pill, .pill.good, .pill.bad, .pill.warn
+  - .codebox (for JSON dumps)
+  - .callout.soft
+  - .row (flex row)
+
+Additional custom styles for this page (add in <style> block):
+
+  /* Flag tag pills */
+  .flag-tag {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--warn), white 78%);
+    color: color-mix(in oklch, var(--warn), black 30%);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* Claim expression tree */
+  .claim-tree {
+    font-family: var(--mono);
+    font-size: 0.84rem;
+  }
+  .claim-tree-node {
+    padding-left: 20px;
+    border-left: 1px solid var(--line);
+    margin-left: 8px;
+  }
+  .claim-tree-leaf {
+    padding: 8px 12px;
+    background: var(--surface-muted);
+    border-radius: var(--radius-sm);
+    margin: 4px 0;
+  }
+
+  /* Non-authoritative panel */
+  .non-authoritative-panel {
+    border: 1px dashed var(--line);
+    background: var(--surface-muted);
+    opacity: 0.9;
+  }
+
+  /* Small-count suppressed */
+  .suppressed-count {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+------------------------------------------------------------------------------
+1.9 API Endpoints to Call
+------------------------------------------------------------------------------
+
+Existing endpoints (no backend work needed):
+  GET  /api/debate/topics/{topicId}        → for topic names
+  GET  /api/debate/audits                  → for coverage_adequacy_trace
+  GET  /api/debate/decision-dossier        → for decisive premises list
+
+New endpoints needed (backend TODO, but frontend should call them):
+  GET  /api/human-review/flagged-premises?flag=&status=&tier=
+       Returns: { premises: [FactCheckResultSummary] }
+
+  GET  /api/human-review/fact-check/{premiseId}
+       Returns: { fact_check: FactCheckResult, review_records: [HumanReviewRecord] }
+
+  GET  /api/human-review/aggregate-flags
+       Returns: { flags: [{flag, count}], total_flagged, total_reviewed }
+
+  POST /api/human-review
+       Body: { premise_id, snapshot_id, reviewer_role, review_outcome, review_note }
+       Returns: { review_record: HumanReviewRecord }
+
+================================================================================
+2. UPDATES TO EXISTING PAGES
+================================================================================
+
+------------------------------------------------------------------------------
+2.1 topic.html
+------------------------------------------------------------------------------
+
+Current: Shows legacy p_true, evidence_tier_counts, member_count for each fact.
+Required: Show full v1.5.1 deterministic ternary metadata.
+
+Changes:
+
+A) Fact cards redesign
+   Each fact card currently shows:
+     canon_fact_text
+     p=..., member_count sources
+
+   Replace with:
+     canon_fact_text
+     Row of pills:
+       - Status: <SUPPORTED|REFUTED|INSUFFICIENT> (colored pill)
+       - p: <1.0|0.0|0.5> (mono)
+       - Best tier: <T1|T2|T3|—>
+       - Decisive tier: <T1|T2|T3|—>
+     If INSUFFICIENT:
+       - Insufficiency reason pill (e.g., "only_tier3_evidence")
+     If human_review_flags present:
+       - Flag tags (see CSS in §1.8)
+     Operationalization (collapsible, default collapsed):
+       "What would confirm/refute: {operationalization}"
+     Evidence tier counts (keep existing, but rename to "Tier distribution")
+
+B) Add "Synthesis Logic" collapsible section per fact
+   Inside each fact card, add a <details> element:
+     <summary>Show synthesis logic</summary>
+     <div class="codebox">
+       status_rule_applied: ...
+       policy_rule_id: ...
+       decisive_evidence: [...]
+       insufficiency_trigger: ...
+       authority_ranking_applied: ...
+     </div>
+
+C) Add "Resolved Value" display (for numeric/comparison claims)
+   If resolved_value is present:
+     Pill: Value: {value} {unit}
+     Pill: Type: {NUMBER|DATE|BOOLEAN|...}
+     If bounds present: [{lower_bound}, {upper_bound}]
+
+D) Add "Provenance Spans" collapsible
+   List of span_ids with post_id links.
+
+E) Arguments section additions
+   Add AU completeness score pill to each argument:
+     completeness_proxy: <0.00–1.00>
+   Add reasoning score pill.
+
+F) Scores table additions
+   Add column for Coverage (already partially there, verify it renders).
+
+------------------------------------------------------------------------------
+2.2 dossier.html
+------------------------------------------------------------------------------
+
+Current: Evidence gaps, selection diagnostics, decisive outputs, counterfactuals,
+         priority gaps, insufficiency sensitivity, unselected tail.
+
+Additions:
+
+A) New section: "Insufficiency Swing Analysis" (after existing sensitivity)
+   Row of pills:
+     - max_abs_delta_D: <value>
+     - Overall swing bound: <value>
+   Explanation text:
+     "If all currently INSUFFICIENT empirical premises were resolved,
+      the overall margin D could move by at most this amount."
+
+B) New section: "Decisive Premise Rank" (after swing analysis)
+   Table:
+     | Rank | Premise ID | Topic-side | Current status | Marginal swing δ_i |
+   Sort by |δ_i| descending.
+   Show top 10.
+   Empty state: "No INSUFFICIENT premises are currently decisive."
+
+C) New section: "Component Breakdown" (before counterfactuals)
+   Per topic-side-frame table:
+     | Topic-side | F (factuality) | N (normative) | Reason | Coverage | Q (geomean) |
+   If MULTI-FRAME mode: add Frame column and show q per frame.
+
+D) New section: "Drop-Component Sensitivity" (§16, NEW v1.2)
+   Table:
+     | Topic | D without F | D without N | D without Reason | D without Coverage |
+   Each cell shows the recomputed D with that component removed.
+   Note: "Diagnostic only. Shows which component most influences the verdict."
+
+E) New section: "Coverage Adequacy Trace" (§15.1)
+   Show rebuttal type distribution as a small bar chart or pill row:
+     EMPIRICAL: <count> | NORMATIVE: <count> | INFERENCE: <count> | SCOPE/DEF: <count>
+
+F) Enhance Evidence Gap Summary table
+   Add column:
+     - max_abs_delta_D (per topic-side)
+   Current columns: Topic-side, Insufficiency rate, Supported-only, All-claims, Tier dist
+
+G) Enhance Priority Gaps list
+   Currently shows insufficient_empirical_items and high_dispersion_normative_items.
+   Add:
+     - For each insufficient empirical item, show its marginal swing δ_i.
+     - Sort by δ_i descending instead of arbitrary slice(0,4).
+
+------------------------------------------------------------------------------
+2.3 verdict.html
+------------------------------------------------------------------------------
+
+Current: Shows verdict, confidence, margin D, CI, drivers, per-topic contributions
+         (Rel, Q_FOR, Q_AGAINST, Contribution to D), replicate metadata.
+
+Additions:
+
+A) Expand "Per-topic contributions" table
+   Add columns:
+     | Topic | Rel | F_FOR | F_AGAINST | N_FOR | N_AGAINST | Reason_FOR | Reason_AGAINST | Cov_FOR | Cov_AGAINST | Q_FOR | Q_AGAINST | Contribution |
+   Since this is wide, make it horizontally scrollable (table-wrap already does this).
+   Alternatively, use a detail-expand row pattern.
+
+B) Add section: "Factuality Breakdown" (new, below per-topic contributions)
+   Table:
+     | Topic-side | F_{t,s} | F_supported_only | insufficiency_rate | Tier counts |
+   Note: F_supported_only may be null if no SUPPORTED/REFUTED premises exist.
+
+C) Add section: "Judge Dispersion" (§15.2)
+   Table:
+     | Component | Median | IQR | Interpretation |
+   Rows: Reasoning, Coverage, Normative (per frame if multi-frame)
+
+D) Add section: "Replicate Distribution" (§18)
+   Instead of just showing d_sample_count, show:
+     - Histogram of D_r values (simple CSS bar chart with 10 buckets)
+     - CI method label
+     - Replicate count and composition
+   If replicates are few, show a table of individual D_r values.
+
+E) Add section: "Drop-Component Sensitivity" (same as dossier §2.2D)
+   Can be a small summary table or link to dossier.
+
+F) Add section: "Frame Sensitivity" (if multi-frame mode)
+   Table:
+     | Frame | Overall FOR | Overall AGAINST | D | Verdict |
+   Add max_delta_D pill.
+
+------------------------------------------------------------------------------
+2.4 audits.html
+------------------------------------------------------------------------------
+
+Current: Has v1.2 audit matrix with topic dominance, integrity, budget/centrality,
+         coverage + frame sensitivity. Raw JSON dump at bottom.
+
+Additions:
+
+A) Budget Adequacy Indicators (§11.6, NEW v1.2)
+   Currently in raw JSON only. Add dedicated UI in the "Budget and centrality cap" card:
+   Row of pills:
+     - Canonical mass represented: <fraction>
+     - Top-k central coverage: <fraction>
+     - Selection coverage: <fraction>
+   Add note: "Diagnostic only. Shows what fraction of total canonical reference
+              mass is represented by the selected set."
+
+B) Rarity Utilization / Impact (§11.5)
+   Add new card in the v1.2 audit matrix or expand existing:
+   Row of pills:
+     - Rarity slice ρ: <value>
+     - Low-centrality set size: <count>
+     - Rarity utilization: <fraction>
+     - Impact on verdict: <description>
+
+C) Participation Concentration (§2.3, NEW v1.2)
+   Currently only shows entropy + top-10% share. Add:
+   Row of pills:
+     - Concentration buckets: <display>
+     - Channel mix: public=<pct> / org=<pct> / accredited=<pct> / expert=<pct>
+   Note: "Aggregate, bucketed, small-count suppressed."
+
+D) Add "Drop-Component Sensitivity" link or mini-panel
+   If backend sends it in audits response, render it. Currently it may only be
+   in the scoring engine, not the audit API.
+
+------------------------------------------------------------------------------
+2.5 snapshot.html
+------------------------------------------------------------------------------
+
+Current: Shows snapshot metadata, moderation outcomes, frame info, integrity hashes,
+         governance context, diff summary, history.
+
+Additions:
+
+A) Incident Report Section (§20.2, NEW v1.2)
+   Conditionally displayed when snapshot.status === 'incident'.
+   Banner: "This snapshot is marked INCIDENT. Some outputs may be unreliable."
+   Panel showing:
+     - Incident title
+     - What happened (description)
+     - What outputs are unreliable
+     - Remediation planned for next snapshot
+     - Incident report timestamp
+   If status !== 'incident', show small note: "No incidents reported."
+
+B) AU Completeness Score (§8.1)
+   Add to moderation outcomes or governance context:
+     - Mean AU completeness proxy: <value>
+     - Distribution: <histogram or p25/p50/p75>
+
+C) Participation Concentration Diagnostics (§2.3)
+   Small panel below moderation outcomes:
+     Row of pills:
+       - Participation entropy: <bucketed>
+       - Top-1% share bucket: <bucket>
+       - Channel mix: public/org/accredited/expert proportions
+
+D) Frame Set Version (§5.2)
+   In Governance Context section, add:
+     - Frame set version: <version>
+     - Next scheduled review: <date>
+
+E) Replay Manifest Enhancement
+   Currently shown in a <details> codebox. Good. Just verify it includes:
+     - decomposition_prompt_template_version
+     - decomposition_model
+     - decomposition_temperature
+     - linking_api_versions
+     - evidence_policy_version
+     - connector_versions
+     - synthesis_rule_engine_version
+     - random_seeds
+
+------------------------------------------------------------------------------
+2.6 governance.html
+------------------------------------------------------------------------------
+
+Current: Frame metadata, frame petitions, judge pool + fairness audits, incidents,
+         changelog.
+
+Additions:
+
+A) Judge Pool Governance Details (§20.1)
+   Expand "Judge Pool + Fairness Audits" table with rows:
+     - Judge pool composition categories and counts
+     - Qualification rubric summary (link or inline)
+     - Randomized assignment recipe/seed per snapshot
+     - Rotation policy (max consecutive snapshots; cooldown)
+     - Aggregate COI stats (public-safe, bucketed)
+     - Calibration protocol status
+
+B) Independent Fairness Audits (§20)
+   Add section or link:
+     "Independent audits of sampling/selection fairness are conducted on a
+      published cadence. Last audit: <date>. Next audit: <date>."
+
+C) Unselected Tail Summaries (§20)
+   Add link or small panel:
+     "View unselected tail summaries by topic-side"
+     Links to dossier.html (which already has unselected tail raw JSON).
+
+------------------------------------------------------------------------------
+2.7 Navigation Link Updates
+------------------------------------------------------------------------------
+
+Add "Human Review" link to the "More" dropdown in EVERY page's nav:
+  - index.html
+  - new_debate.html
+  - snapshot.html
+  - verdict.html
+  - topics.html
+  - audits.html
+  - dossier.html
+  - governance.html
+  - frame-dossier.html
+  - appeals.html
+  - admin.html
+  - about.html
+  - propose.html
+  - setup.html
+
+HTML to insert inside each <div class="nav-more-menu">:
+  <a href="human-review.html" role="menuitem">Human Review</a>
+
+================================================================================
+3. BACKEND DATA ALREADY AVAILABLE
+================================================================================
+
+The following data is ALREADY returned by existing APIs. No backend work is
+needed for the frontend to consume it:
+
+  /api/debate/topics/{topicId}
+    → v15_status, v15_p, v15_insufficiency_reason, v15_human_review_flags,
+      v15_best_evidence_tier, operationalization, evidence_tier_counts,
+      synthesis_logic_json, resolved_value, provenance_spans
+
+  /api/debate/audits
+    → budget_adequacy, coverage_adequacy_trace, participation_concentration,
+      rarity_utilization, centrality_cap_effect, frame_sensitivity,
+      integrity_indicators, evaluator_disagreement, selection_transparency
+
+  /api/debate/decision-dossier
+    → evidence_gaps, insufficiency_sensitivity, decisive_premises,
+      decisive_arguments, counterfactuals, priority_gaps, selection_diagnostics
+
+  /api/debate/verdict
+    → topic_contributions, d_distribution, replicate_composition_metadata,
+      formula_metadata, factuality.tier_counts
+
+  /api/governance/frames
+    → mode, frame_set_version, review_schedule, active_frame.dossier
+
+The following data requires NEW backend endpoints (see §1.9):
+  - Full FactCheckResult with EvidenceItem list for a single premise
+  - HumanReviewRecord list for a premise
+  - Aggregate flag counts with small-count metadata
+  - POST endpoint for submitting new HumanReviewRecords
+
+================================================================================
+4. IMPLEMENTATION ORDER (Recommended)
+================================================================================
+
+Phase A — New page skeleton (no data)
+  1. Create human-review.html with workspace tab bar, 4 workspace panels,
+     CSS, and JS binding pattern (copied from admin.html).
+  2. Add nav link to all existing pages.
+  3. Test workspace switching, keyboard nav, hash sync.
+
+Phase B — Populate with existing API data
+  4. Workspace 4 (Coverage Trace): uses /api/debate/audits which already works.
+  5. Workspace 3 (Flag Dashboard): build with mock data first, then wire to
+     new backend endpoint when ready.
+
+Phase C — Existing page updates (independent work)
+  6. topic.html — add v1.5 fields to fact cards.
+  7. dossier.html — add max_abs_delta_D, decisive_premise_rank, component
+     breakdown, drop-component sensitivity, coverage trace.
+  8. verdict.html — add component breakdown, factuality breakdown, judge
+     dispersion, replicate distribution.
+  9. audits.html — add budget adequacy UI, rarity utilization, participation
+     concentration buckets.
+  10. snapshot.html — add incident report panel, AU completeness, participation
+      concentration.
+  11. governance.html — add judge pool details, fairness audit dates,
+      unselected tail link.
+
+Phase D — Human review queue (requires backend)
+  12. Workspace 1 (Review Queue): wire to GET /api/human-review/flagged-premises.
+  13. Workspace 2 (Fact-Check Audit): wire to GET /api/human-review/fact-check/{id}.
+  14. Implement review submission form → POST /api/human-review.
+  15. Workspace 3 (Flag Dashboard): wire to GET /api/human-review/aggregate-flags.
+
+Phase E — Polish
+  16. Add help/glossary entries for all new terms.
+  17. Responsive testing (mobile table layouts).
+  18. Accessibility audit (ARIA labels on new tables, live regions for updates).
+
+================================================================================
+END OF PLAN
+================================================================================

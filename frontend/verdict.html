@@ -69,6 +69,7 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
+          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -104,48 +105,69 @@
   <div class="callout soft" id="verdict-empty" style="display:none;"></div>
 
   <div id="verdict-content" style="display:none;">
-    <div class="kpis">
-      <div class="kpi">
-        <div class="label">Overall FOR</div>
-        <div class="value mono" id="overall-for">-</div>
-        <div class="hint">weighted quality sum</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Overall AGAINST</div>
-        <div class="value mono" id="overall-against">-</div>
-        <div class="hint">weighted quality sum</div>
-      </div>
-      <div class="kpi">
-        <div class="label">D (Margin)</div>
-        <div class="value mono" id="margin-d">-</div>
-        <div class="hint">FOR minus AGAINST</div>
-      </div>
+    <div class="callout soft" id="plain-readout" style="font-size:1.05rem;"><strong>Summary:</strong> Loading...</div>
+
+    <hr />
+    <h3>What drives this result</h3>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>Side push</th>
+            <th>Strength</th>
+          </tr>
+        </thead>
+        <tbody id="drivers-tbody">
+          <tr><td colspan="3" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <hr />
-    <h3>Confidence interval of D</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">This interval is live snapshot data, not a schematic placeholder.</p>
-    <div class="callout soft">
-      <div class="range-track" role="img" aria-label="Confidence interval visualization. Exact values are provided in text nearby.">
-        <div class="range-ci" id="ci-band"></div>
-        <div class="range-zero" id="ci-zero"></div>
-        <div class="range-point" id="ci-point"></div>
-      </div>
-      <div class="range-axis">
-        <span id="axis-min">-</span>
-        <span>0</span>
-        <span id="axis-max">-</span>
-      </div>
-      <div class="row" style="margin-top:16px;">
-        <span class="pill">CI(D): <span class="mono" id="ci-d">-</span></span>
-        <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
-        <span class="pill">Confidence: <span class="mono" id="confidence-badge">-</span></span>
-      </div>
-      <small style="display:block;margin-top:12px" id="dist-explanation">Loading interval explanation...</small>
-    </div>
+    <details class="trace">
+      <summary>Technical details: scores, margin, and confidence interval</summary>
+      <div style="margin-top:16px;">
+        <div class="kpis">
+          <div class="kpi">
+            <div class="label">Overall FOR</div>
+            <div class="value mono" id="overall-for">-</div>
+            <div class="hint">weighted quality sum</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Overall AGAINST</div>
+            <div class="value mono" id="overall-against">-</div>
+            <div class="hint">weighted quality sum</div>
+          </div>
+          <div class="kpi">
+            <div class="label">D (Margin)</div>
+            <div class="value mono" id="margin-d">-</div>
+            <div class="hint">FOR minus AGAINST</div>
+          </div>
+        </div>
 
-    <hr />
-    <div class="callout soft" id="plain-readout"><strong>Plain-language readout:</strong> Loading...</div>
+        <h4 style="margin-top:16px;">Confidence interval of D</h4>
+        <p style="font-size:12px;color:var(--muted);margin-top:0">This interval is live snapshot data, not a schematic placeholder.</p>
+        <div class="callout soft">
+          <div class="range-track" role="img" aria-label="Confidence interval visualization. Exact values are provided in text nearby.">
+            <div class="range-ci" id="ci-band"></div>
+            <div class="range-zero" id="ci-zero"></div>
+            <div class="range-point" id="ci-point"></div>
+          </div>
+          <div class="range-axis">
+            <span id="axis-min">-</span>
+            <span>0</span>
+            <span id="axis-max">-</span>
+          </div>
+          <div class="row" style="margin-top:16px;">
+            <span class="pill">CI(D): <span class="mono" id="ci-d">-</span></span>
+            <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
+            <span class="pill">Confidence: <span class="mono" id="confidence-badge">-</span></span>
+          </div>
+          <small style="display:block;margin-top:12px" id="dist-explanation">Loading interval explanation...</small>
+        </div>
+      </div>
+    </details>
 
     <hr />
     <h3>Per-topic contributions</h3>
@@ -155,17 +177,83 @@
         <thead>
           <tr>
             <th>Topic</th>
-            <th>Rel<sub>t</sub></th>
-            <th>Q<sub>FOR</sub></th>
-            <th>Q<sub>AGAINST</sub></th>
-            <th>Contribution to D</th>
+            <th>Rel</th>
+            <th>F_FOR</th>
+            <th>F_AGAINST</th>
+            <th>N_FOR</th>
+            <th>N_AGAINST</th>
+            <th>Reason_FOR</th>
+            <th>Reason_AGAINST</th>
+            <th>Cov_FOR</th>
+            <th>Cov_AGAINST</th>
+            <th>Q_FOR</th>
+            <th>Q_AGAINST</th>
+            <th>Contribution</th>
           </tr>
         </thead>
         <tbody id="contributions-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          <tr><td colspan="13" style="text-align:center;color:var(--muted)">Loading...</td></tr>
         </tbody>
       </table>
     </div>
+
+    <hr />
+    <h3>Factuality Breakdown</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Per topic-side factuality metrics and tier counts.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Topic-side</th><th>F<sub>t,s</sub></th><th>F_supported_only</th><th>Insufficiency rate</th><th>Tier counts</th></tr>
+        </thead>
+        <tbody id="factuality-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading factuality breakdown...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <h3>Judge Dispersion</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Median and IQR of judge scores per component.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Component</th><th>Median</th><th>IQR</th><th>Interpretation</th></tr></thead>
+        <tbody id="dispersion-tbody">
+          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading dispersion data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <h3>Replicate Distribution</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Distribution of replicate margin D values.</p>
+    <div id="replicate-distribution">
+      <small style="color:var(--muted)">Loading replicate distribution...</small>
+    </div>
+
+    <hr />
+    <h3>Drop-Component Sensitivity</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Diagnostic only. Shows which component most influences the verdict.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Topic</th><th>D without F</th><th>D without N</th><th>D without Reason</th><th>D without Coverage</th></tr></thead>
+        <tbody id="verdict-drop-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading drop-component sensitivity...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <h3>Frame Sensitivity</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Verdict sensitivity to frame choice (multi-frame mode only).</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Frame</th><th>Overall FOR</th><th>Overall AGAINST</th><th>D</th><th>Verdict</th></tr></thead>
+        <tbody id="frame-sensitivity-tbody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted)">No multi-frame data available.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="row" id="frame-sensitivity-meta"></div>
 
     <hr />
     <h3>Replicate + formula metadata</h3>
@@ -310,6 +398,44 @@ function buildIntervalExplanation(ciLow, ciHigh, verdict) {
   return 'The system is using the live interval to decide whether the margin is truly separated from zero.';
 }
 
+function renderHistogram(values, containerId) {
+  const container = document.getElementById(containerId);
+  if (!values || values.length < 2) {
+    container.innerHTML = '<small style="color:var(--muted)">Not enough replicate values for histogram.</small>';
+    return;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const buckets = 10;
+  const counts = new Array(buckets).fill(0);
+  const span = Math.max(max - min, 0.0001);
+  values.forEach((v) => {
+    const idx = Math.min(buckets - 1, Math.floor(((v - min) / span) * buckets));
+    counts[idx]++;
+  });
+  const maxCount = Math.max(...counts);
+  container.innerHTML = `
+    <div style="display:grid;gap:4px;margin-top:8px;">
+      ${counts.map((c, i) => {
+        const left = BDA.formatNumber(min + (i * span) / buckets, 3);
+        const widthPct = maxCount > 0 ? (c / maxCount) * 100 : 0;
+        return `<div style="display:grid;grid-template-columns:80px 1fr auto;gap:8px;align-items:center;font-size:0.78rem;">
+          <span class="mono">${left}</span>
+          <div style="height:14px;background:var(--surface-muted);border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--line);">
+            <div style="height:100%;background:color-mix(in oklch,var(--accent),white 42%);width:${widthPct}%"></div>
+          </div>
+          <span class="mono">${c}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <span class="pill">n=${values.length}</span>
+      <span class="pill">min=${BDA.formatNumber(min, 4)}</span>
+      <span class="pill">max=${BDA.formatNumber(max, 4)}</span>
+    </div>
+  `;
+}
+
 function renderVerdict(snapshot, verdictData) {
   const verdict = snapshot.verdict || verdictData.verdict || 'NO VERDICT';
   const verdictCss = verdictClass(verdict);
@@ -329,10 +455,107 @@ function renderVerdict(snapshot, verdictData) {
   renderInterval(ciLow, ciHigh, margin);
 
   const contributions = verdictData.topic_contributions || [];
-  document.getElementById('plain-readout').innerHTML = `<strong>Plain-language readout:</strong> ${BDA.escapeHtml(buildReadout(verdict, contributions, [ciLow, ciHigh]))}`;
+  document.getElementById('plain-readout').innerHTML = `<strong>Summary:</strong> ${BDA.escapeHtml(buildReadout(verdict, contributions, [ciLow, ciHigh]))}`;
+  renderDrivers(contributions);
   renderVerdictMetadata(verdictData);
 
   renderContributions(contributions);
+
+  // Factuality breakdown
+  const factuality = verdictData.factuality || {};
+  const fbEntries = Object.entries(factuality.topic_breakdown || {});
+  const fbTbody = document.getElementById('factuality-tbody');
+  if (!fbEntries.length) {
+    fbTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No factuality breakdown available.</td></tr>';
+  } else {
+    fbTbody.innerHTML = fbEntries.map(([key, val]) => `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(key)}</td>
+        <td class="mono">${BDA.formatNumber(val.f_ts, 3)}</td>
+        <td class="mono">${val.f_supported_only !== null && val.f_supported_only !== undefined ? BDA.formatNumber(val.f_supported_only, 3) : '—'}</td>
+        <td class="mono">${BDA.formatNumber(val.insufficiency_rate || 0, 3)}</td>
+        <td class="mono">${BDA.escapeHtml(JSON.stringify(val.tier_counts || {}))}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Judge dispersion
+  const dispersion = verdictData.judge_dispersion || {};
+  const dispRows = [
+    { component: 'Reasoning', ...dispersion.reasoning },
+    { component: 'Coverage', ...dispersion.coverage },
+    { component: 'Normative', ...dispersion.normative },
+  ].filter(r => r.median !== undefined);
+  const dispTbody = document.getElementById('dispersion-tbody');
+  if (!dispRows.length) {
+    dispTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No dispersion data available.</td></tr>';
+  } else {
+    dispTbody.innerHTML = dispRows.map((r) => `
+      <tr>
+        <td>${BDA.escapeHtml(r.component)}</td>
+        <td class="mono">${BDA.formatNumber(r.median, 3)}</td>
+        <td class="mono">${BDA.formatNumber(r.iqr, 3)}</td>
+        <td>${BDA.escapeHtml(r.interpretation || '-')}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Replicate distribution
+  const dDist = verdictData.d_distribution || [];
+  renderHistogram(dDist, 'replicate-distribution');
+  const repMeta = verdictData.replicate_composition_metadata || {};
+  const repContainer = document.getElementById('replicate-distribution');
+  if (repContainer && dDist.length) {
+    const extra = document.createElement('div');
+    extra.className = 'row';
+    extra.style.marginTop = '8px';
+    extra.innerHTML = `
+      <span class="pill">CI method: <span class="mono">${BDA.escapeHtml(verdictData.ci_method || 'bootstrap')}</span></span>
+      <span class="pill">Replicates: <span class="mono">${dDist.length}</span></span>
+      <span class="pill">Judges: <span class="mono">${repMeta.judge_count ?? '-'}</span></span>
+    `;
+    repContainer.appendChild(extra);
+  }
+
+  // Drop-component sensitivity
+  const drop = verdictData.drop_component_sensitivity || {};
+  const dropEntries = Object.entries(drop);
+  const dropTbody = document.getElementById('verdict-drop-tbody');
+  if (!dropEntries.length) {
+    dropTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No drop-component sensitivity data available.</td></tr>';
+  } else {
+    dropTbody.innerHTML = dropEntries.map(([key, val]) => `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(key)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_factuality, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_normative, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_reasoning, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_coverage, 4)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Frame sensitivity
+  const frameSens = verdictData.frame_sensitivity || {};
+  const frames = frameSens.frames || [];
+  const fsTbody = document.getElementById('frame-sensitivity-tbody');
+  if (!frames.length) {
+    fsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No multi-frame data available.</td></tr>';
+  } else {
+    fsTbody.innerHTML = frames.map((f) => `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(f.frame_id || '-')}</td>
+        <td class="mono">${BDA.formatNumber(f.overall_for, 3)}</td>
+        <td class="mono">${BDA.formatNumber(f.overall_against, 3)}</td>
+        <td class="mono">${BDA.formatNumber(f.margin_d, 4)}</td>
+        <td>${BDA.escapeHtml(f.verdict || 'NO VERDICT')}</td>
+      </tr>
+    `).join('');
+  }
+  const fsMeta = document.getElementById('frame-sensitivity-meta');
+  if (fsMeta && frameSens.max_delta_d !== undefined) {
+    fsMeta.innerHTML = `<span class="pill">max_delta_D: <span class="mono">${BDA.formatNumber(frameSens.max_delta_d, 4)}</span></span>`;
+  }
 }
 
 function renderVerdictMetadata(verdictData) {
@@ -345,10 +568,34 @@ function renderVerdictMetadata(verdictData) {
   document.getElementById('verdict-formula-raw').textContent = JSON.stringify(formulas, null, 2);
 }
 
+function renderDrivers(contributions) {
+  const tbody = document.getElementById('drivers-tbody');
+  if (!contributions.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted)">No driver data available yet.</td></tr>';
+    return;
+  }
+  const rows = contributions
+    .slice()
+    .sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d))
+    .slice(0, 5)
+    .map((item) => {
+      const side = item.contribution_to_d > 0 ? 'FOR' : item.contribution_to_d < 0 ? 'AGAINST' : 'Neutral';
+      const color = item.contribution_to_d > 0 ? 'var(--good)' : item.contribution_to_d < 0 ? 'var(--warn)' : 'var(--muted)';
+      return `
+        <tr>
+          <td>${BDA.escapeHtml(item.name || item.topic_id)}</td>
+          <td style="color:${color}">${side}</td>
+          <td class="mono">${BDA.formatNumber(Math.abs(item.contribution_to_d), 4)}</td>
+        </tr>
+      `;
+    });
+  tbody.innerHTML = rows.join('');
+}
+
 function renderContributions(contributions) {
   const tbody = document.getElementById('contributions-tbody');
   if (!contributions.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No contribution data available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--muted)">No contribution data available.</td></tr>';
     return;
   }
 
@@ -365,6 +612,14 @@ function renderContributions(contributions) {
         <tr>
           <td><a href="topic.html?id=${encodeURIComponent(item.topic_id)}">${BDA.escapeHtml(item.topic_id)} ${BDA.escapeHtml(item.name || '')}</a></td>
           <td class="mono">${BDA.formatNumber(item.relevance, 2)}</td>
+          <td class="mono">${BDA.formatNumber(item.f_for, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.f_against, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.n_for, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.n_against, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.reason_for, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.reason_against, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.cov_for, 3)}</td>
+          <td class="mono">${BDA.formatNumber(item.cov_against, 3)}</td>
           <td class="mono">${BDA.formatNumber(item.q_for, 2)}</td>
           <td class="mono">${BDA.formatNumber(item.q_against, 2)}</td>
           <td class="mono" ${style}>${item.contribution_to_d > 0 ? '+' : ''}${BDA.formatNumber(item.contribution_to_d, 4)}</td>
@@ -399,6 +654,10 @@ async function initVerdictPage() {
 
   try {
     const verdictData = await BDA.api('/api/debate/verdict');
+    if (verdictData.insufficient_data) {
+      showVerdictEmpty(`<strong>Insufficient adjudication data</strong><p>${BDA.escapeHtml(verdictData.message || 'No allowed posts or scores are available for this debate yet.')}</p>`);
+      return;
+    }
     renderVerdict(snapshot, verdictData);
     showVerdictContent();
     BDA.setupTableScroll();

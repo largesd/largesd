@@ -31,6 +31,7 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
+          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -395,14 +396,12 @@ async function loadTopics() {
     console.warn('Could not load topics from cache:', e);
   }
 
-  // Fall back to hardcoded topics if none available
+  // No hardcoded fallback: show honest empty state
+  const topicHint = document.getElementById('topic-hint');
   if (topics.length === 0) {
-    topics = [
-      { topic_id: 't1', label: 'Safety & misuse risk' },
-      { topic_id: 't2', label: 'Economic & social impact' },
-      { topic_id: 't3', label: 'Enforceability & geopolitics' },
-      { topic_id: 't4', label: 'Rights, freedom & innovation' },
-    ];
+    if (topicHint) topicHint.style.display = '';
+  } else {
+    if (topicHint) topicHint.style.display = 'none';
   }
 
   const seenTopicLabels = new Set();
@@ -457,16 +456,23 @@ function updatePostSectionState() {
   const emailMode = currentDebateSource === 'github';
 
   if (postSection) {
-    postSection.style.opacity = hasActiveDebate ? '1' : '0.5';
-    postSection.style.pointerEvents = hasActiveDebate ? 'auto' : 'none';
+    if (hasActiveDebate) {
+      postSection.style.opacity = '1';
+      postSection.style.pointerEvents = 'auto';
+    } else {
+      postSection.style.opacity = '0.5';
+      postSection.style.pointerEvents = 'none';
+    }
   }
 
   if (postAccessHint) {
-    postAccessHint.textContent = hasActiveDebate
-      ? (emailMode
+    if (hasActiveDebate) {
+      postAccessHint.textContent = emailMode
         ? 'Posting is available for the active debate via email.'
-        : 'Posting is available for the active debate.')
-      : 'Create or select a debate to start posting.';
+        : 'Posting is available for the active debate.';
+    } else {
+      postAccessHint.innerHTML = 'No active debate. <a href="propose.html">Propose one now →</a>';
+    }
   }
 }
 
@@ -531,7 +537,9 @@ function submitPost() {
     return;
   }
 
-  if (!topic.value) {
+  // Topic is optional when no topics have been generated yet
+  const topicHint = document.getElementById('topic-hint');
+  if (!topic.value && !(topicHint && topicHint.style.display !== 'none')) {
     BDA.showStatus('Please select a topic area.', true);
     return;
   }

@@ -6,7 +6,7 @@ via an OpenAI-compatible API.
 """
 import os
 from typing import Optional
-from llm_client import LLMProvider, LLMResponse
+from backend.llm_client import LLMProvider, LLMResponse
 
 
 class OpenRouterProvider(LLMProvider):

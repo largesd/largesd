@@ -1,8 +1,8 @@
 # LSD v1.2 Traceability
 
-Source document: `/Users/jonathanleung/Documents/C++/LSD req.txt`
+Source document: `docs/requirements/LSD_req.txt`
 
-Implementation run: `2026-04-28`, covering Phase 2 and Phases 4-10 from `LSD_v1_2_gap_closure_plan.txt`.
+Implementation run: `2026-04-28`, covering Phase 2 and Phases 4-10 from `docs/implementation/LSD_v1_2_gap_closure_plan.txt`.
 
 ## Final Status
 

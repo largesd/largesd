@@ -1,0 +1,42 @@
+================================================================================
+  TASK 2.3: Fix sys.path manipulation and package skills/ properly
+  Phase: 2 — Backend Decomposition (Weeks 1–2)
+  Priority: 🔴 Critical | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • Multiple files: sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../skills"))
+  • Fragile, breaks in different execution contexts
+
+TARGET STATE
+────────────
+  • skills/ is a proper Python package
+  • Absolute imports work everywhere
+  • No sys.path mutation in application code
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Add skills/__init__.py
+
+  2. Add skills/fact_checking/__init__.py
+
+  3. Ensure skills/fact_checking/ submodules have proper __init__.py files
+
+  4. In all files that use sys.path manipulation:
+       OLD: sys.path.insert(0, "..."); from fact_checking import foo
+       NEW: from skills.fact_checking import foo
+
+  5. If skills/ is outside Python path, install in editable mode:
+       pip install -e ./skills  (requires setup.py or pyproject.toml in skills/)
+     OR add to PYTHONPATH in .env and docker-compose.yml
+
+  6. Remove all sys.path.insert / sys.path.append lines
+
+  7. Verify: python -c "from skills.fact_checking import main_skill"
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] Zero sys.path manipulations in backend/, scripts/, tests/
+  [ ] All skill imports use absolute package paths
+  [ ] Application starts without import errors

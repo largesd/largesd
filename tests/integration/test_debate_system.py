@@ -9,7 +9,7 @@ import copy
 import tempfile
 import shutil
 import importlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -325,10 +325,10 @@ def test_scoring_formulas():
     assert abs(factuality - expected) < 0.01, f"Factuality should be mean of p_true: {factuality} vs {expected}"
     print(f"✓ Factuality F = {factuality:.3f} (mean of P(true) values)")
     
-    # Test empty facts
+    # Test empty facts (per v1.5 spec: no empirical premises → F=null)
     empty_factuality = engine.compute_factuality([])
-    assert empty_factuality == 0.5, "Empty facts should return 0.5"
-    print("✓ Empty facts return neutral 0.5")
+    assert empty_factuality is None, "Empty facts should return None per v1.5 spec"
+    print("✓ Empty facts return None per v1.5 spec")
     
     # Test quality calculation (MSD §10.4)
     quality = engine.compute_quality(0.8, 0.7, 0.6)
@@ -336,10 +336,12 @@ def test_scoring_formulas():
     assert abs(quality - expected_q) < 0.01, "Quality should be geometric mean"
     print(f"✓ Quality Q = {quality:.3f} (geometric mean of F × Reason × Cov)")
     
-    # Test zero handling
+    # Test epsilon floor handling (v1.5: epsilon floor prevents zero collapse)
     zero_quality = engine.compute_quality(0.8, 0.0, 0.6)
-    assert zero_quality == 0.0, "Zero component should yield zero quality"
-    print("✓ Zero component yields zero quality")
+    # Per v1.5 spec: max(Ck, epsilon) applied to each component
+    # 0.0 becomes Q_EPSILON (0.01), so Q = (0.8 * 0.01 * 0.6)^(1/3) ≈ 0.169
+    assert zero_quality > 0.0, "Epsilon floor should prevent zero collapse"
+    print(f"✓ Epsilon floor prevents zero collapse: Q={zero_quality:.3f}")
     
     # Test topic relevance (MSD §11)
     topics = [{'topic_id': 't1'}, {'topic_id': 't2'}]
@@ -511,8 +513,8 @@ def test_v2_uses_skill_fact_checker():
             num_judges=3,
         )
 
-        assert engine.fact_checker.__class__.__name__ == "FactCheckingSkill", \
-            f"Expected FactCheckingSkill, got {type(engine.fact_checker)}"
+        assert engine.fact_checker.__class__.__name__ == "V15FactCheckingSkill", \
+            f"Expected V15FactCheckingSkill, got {type(engine.fact_checker)}"
         assert engine.extraction_engine.fact_checker is engine.fact_checker, \
             "ExtractionEngine should share the same fact-check provider"
 
@@ -1019,6 +1021,7 @@ def test_api_auth_session_and_admin_access_consistency():
         "ADMIN_ACCESS_MODE",
         "ADMIN_USER_EMAILS",
         "ADMIN_USER_IDS",
+        "DISABLE_JOB_WORKER",
     )
     old_env = {key: os.environ.get(key) for key in env_keys}
     app_module = None
@@ -1029,6 +1032,7 @@ def test_api_auth_session_and_admin_access_consistency():
         os.environ["ADMIN_ACCESS_MODE"] = "restricted"
         os.environ["ADMIN_USER_EMAILS"] = ""
         os.environ["ADMIN_USER_IDS"] = ""
+        os.environ["DISABLE_JOB_WORKER"] = "1"
 
         try:
             import backend.app_v3 as app_v3
@@ -1130,8 +1134,8 @@ def test_api_auth_session_and_admin_access_consistency():
             "user_id": auth_data["user_id"],
             "email": auth_data["email"],
             "display_name": auth_data["display_name"],
-            "exp": datetime.utcnow() - timedelta(minutes=5),
-            "iat": datetime.utcnow() - timedelta(hours=1),
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=5),
+            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
             "type": "access",
         }
         expired_token = app_module.jwt.encode(
@@ -1224,6 +1228,7 @@ def test_rate_limiter_exempts_navigation_and_read_only_requests():
         "DEBATE_DB_PATH",
         "SECRET_KEY",
         "ENABLE_RATE_LIMITER",
+        "DISABLE_JOB_WORKER",
     )
     old_env = {key: os.environ.get(key) for key in env_keys}
     app_module = None
@@ -1232,6 +1237,7 @@ def test_rate_limiter_exempts_navigation_and_read_only_requests():
         os.environ["DEBATE_DB_PATH"] = db_path
         os.environ["SECRET_KEY"] = "test-secret-rate-limit-32-bytes-min"
         os.environ["ENABLE_RATE_LIMITER"] = "true"
+        os.environ["DISABLE_JOB_WORKER"] = "1"
 
         try:
             import backend.app_v3 as app_v3
@@ -1376,12 +1382,14 @@ def test_accepting_proposal_activates_debate_for_proposer():
         "LLM_PROVIDER": os.environ.get("LLM_PROVIDER"),
         "NUM_JUDGES": os.environ.get("NUM_JUDGES"),
         "ADMIN_ACCESS_MODE": os.environ.get("ADMIN_ACCESS_MODE"),
+        "DISABLE_JOB_WORKER": os.environ.get("DISABLE_JOB_WORKER"),
     }
     os.environ["DEBATE_DB_PATH"] = db_path
     os.environ["FACT_CHECK_MODE"] = "OFFLINE"
     os.environ["LLM_PROVIDER"] = "mock"
     os.environ["NUM_JUDGES"] = "3"
     os.environ["ADMIN_ACCESS_MODE"] = "authenticated"
+    os.environ["DISABLE_JOB_WORKER"] = "1"
 
     app_module = None
     try:
@@ -1662,3 +1670,256 @@ def run_all_tests():
 if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)
+
+
+def test_rate_limit_json_body_shape():
+    """Rate-limit responses must return structured JSON with error, code, and retry_after."""
+    print("\n=== Testing Rate Limit JSON Body Shape ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_rate_limit_json.db")
+    env_keys = (
+        "DEBATE_DB_PATH",
+        "SECRET_KEY",
+        "ENABLE_RATE_LIMITER",
+        "DISABLE_JOB_WORKER",
+    )
+    old_env = {key: os.environ.get(key) for key in env_keys}
+    app_module = None
+
+    try:
+        os.environ["DEBATE_DB_PATH"] = db_path
+        os.environ["SECRET_KEY"] = "test-secret-rate-limit-32-bytes-min"
+        os.environ["ENABLE_RATE_LIMITER"] = "true"
+        os.environ["DISABLE_JOB_WORKER"] = "1"
+
+        import backend.app_v3 as app_v3
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        # Exhaust the write limit
+        for idx in range(51):
+            last_response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": f"rate-limit-body-{idx}@example.com",
+                    "password": "password123",
+                    "display_name": f"Rate User {idx}",
+                },
+            )
+
+        assert last_response.status_code == 429
+        data = last_response.get_json()
+        assert data is not None, "429 response must be JSON"
+        assert data.get("error") == "Rate limit exceeded. Please slow down and retry."
+        assert data.get("code") == "RATE_LIMITED"
+        assert "retry_after" in data
+        print("✓ Rate-limit JSON body has correct shape")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+        shutil.rmtree(temp_dir)
+
+
+def test_sufficiency_checks_return_insufficient_data():
+    """Verdict and dossier endpoints must return INSUFFICIENT_DATA when no posts are allowed."""
+    print("\n=== Testing Sufficiency Checks Return INSUFFICIENT_DATA ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_sufficiency.db")
+    old_env = {
+        "DEBATE_DB_PATH": os.environ.get("DEBATE_DB_PATH"),
+        "FACT_CHECK_MODE": os.environ.get("FACT_CHECK_MODE"),
+        "LLM_PROVIDER": os.environ.get("LLM_PROVIDER"),
+        "NUM_JUDGES": os.environ.get("NUM_JUDGES"),
+        "ADMIN_ACCESS_MODE": os.environ.get("ADMIN_ACCESS_MODE"),
+    }
+    app_module = None
+
+    try:
+        os.environ["DEBATE_DB_PATH"] = db_path
+        os.environ["FACT_CHECK_MODE"] = "OFFLINE"
+        os.environ["LLM_PROVIDER"] = "mock"
+        os.environ["NUM_JUDGES"] = "3"
+        os.environ["ADMIN_ACCESS_MODE"] = "authenticated"
+        os.environ["DISABLE_JOB_WORKER"] = "1"
+
+        import backend.app_v3 as app_v3
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        # Register and create a debate
+        reg = client.post("/api/auth/register", json={
+            "email": "sufficiency@example.com",
+            "password": "password123",
+            "display_name": "Sufficiency Tester",
+        })
+        assert reg.status_code == 201
+        token = reg.get_json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        create = client.post("/api/debates", headers=headers, json={
+            "resolution": "Should sufficiency checks work? This is the resolution text.",
+            "scope": "Test whether empty adjudication data returns INSUFFICIENT_DATA correctly.",
+        })
+        assert create.status_code == 201
+        debate_id = create.get_json()["debate_id"]
+
+        # Insert an empty snapshot directly (allowed_count=0, no scores)
+        from backend.database import DebateDatabase
+        ddb = DebateDatabase(db_path)
+        ddb.save_snapshot({
+            "snapshot_id": "snap_empty_001",
+            "debate_id": debate_id,
+            "timestamp": datetime.now().isoformat(),
+            "trigger_type": "manual",
+            "template_name": "test",
+            "template_version": "1.0",
+            "allowed_count": 0,
+            "blocked_count": 0,
+            "overall_for": None,
+            "overall_against": None,
+            "margin_d": None,
+            "ci_d_lower": None,
+            "ci_d_upper": None,
+            "confidence": None,
+            "verdict": "NO VERDICT",
+        })
+
+        # Test verdict endpoint
+        verdict_resp = client.get(f"/api/debate/verdict?debate_id={debate_id}", headers=headers)
+        assert verdict_resp.status_code == 200
+        vdata = verdict_resp.get_json()
+        assert vdata.get("verdict") == "INSUFFICIENT_DATA", f"Expected INSUFFICIENT_DATA, got {vdata.get('verdict')}"
+        assert vdata.get("insufficient_data") is True
+        assert vdata.get("message") is not None
+        assert vdata.get("replicate_composition_metadata") is not None
+        assert vdata["replicate_composition_metadata"]["structural_replicate_count"] == 0
+
+        # Test dossier endpoint
+        dossier_resp = client.get(f"/api/debate/decision-dossier?debate_id={debate_id}", headers=headers)
+        assert dossier_resp.status_code == 200
+        ddata = dossier_resp.get_json()
+        assert ddata.get("verdict") == "INSUFFICIENT_DATA"
+        assert ddata.get("insufficient_data") is True
+        assert ddata.get("message") is not None
+        assert "formula_metadata" in ddata
+
+        # Test snapshot endpoint still returns frame metadata even when empty
+        snap_resp = client.get(f"/api/debate/snapshot?debate_id={debate_id}", headers=headers)
+        assert snap_resp.status_code == 200
+        sdata = snap_resp.get_json()
+        assert sdata.get("has_snapshot") is False or sdata.get("allowed_count") == 0
+        assert "frame_mode" in sdata
+
+        print("✓ Sufficiency checks return INSUFFICIENT_DATA correctly")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+        shutil.rmtree(temp_dir)
+
+
+def test_replicate_composition_metadata_on_sufficient_snapshot():
+    """A real snapshot with data must include replicate_composition_metadata with correct counts."""
+    print("\n=== Testing Replicate Composition Metadata on Sufficient Snapshot ===")
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_replicate_meta.db")
+    old_env = {
+        "DEBATE_DB_PATH": os.environ.get("DEBATE_DB_PATH"),
+        "FACT_CHECK_MODE": os.environ.get("FACT_CHECK_MODE"),
+        "LLM_PROVIDER": os.environ.get("LLM_PROVIDER"),
+        "NUM_JUDGES": os.environ.get("NUM_JUDGES"),
+        "ADMIN_ACCESS_MODE": os.environ.get("ADMIN_ACCESS_MODE"),
+    }
+    app_module = None
+
+    try:
+        os.environ["DEBATE_DB_PATH"] = db_path
+        os.environ["FACT_CHECK_MODE"] = "OFFLINE"
+        os.environ["LLM_PROVIDER"] = "mock"
+        os.environ["NUM_JUDGES"] = "3"
+        os.environ["ADMIN_ACCESS_MODE"] = "authenticated"
+        os.environ["DISABLE_JOB_WORKER"] = "1"
+
+        import backend.app_v3 as app_v3
+        app_module = importlib.reload(app_v3)
+        app_module.app.config["TESTING"] = True
+        client = app_module.app.test_client()
+
+        # Register and create a debate
+        reg = client.post("/api/auth/register", json={
+            "email": "replicate@example.com",
+            "password": "password123",
+            "display_name": "Replicate Tester",
+        })
+        assert reg.status_code == 201
+        token = reg.get_json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        create = client.post("/api/debates", headers=headers, json={
+            "resolution": "Should replicate metadata appear? This is the resolution text.",
+            "scope": "Test whether replicate composition metadata is present in verdict responses.",
+        })
+        assert create.status_code == 201
+        debate_id = create.get_json()["debate_id"]
+
+        # Use engine directly to generate a real snapshot with posts
+        engine = DebateEngineV2(
+            db_path=db_path,
+            fact_check_mode="OFFLINE",
+            llm_provider="mock",
+            num_judges=3,
+        )
+        engine.submit_post(debate_id, "FOR", None,
+                           "Renewables create jobs.", "Therefore subsidize.")
+        engine.submit_post(debate_id, "AGAINST", None,
+                           "Subsidies distort markets.", "Therefore do not subsidize.")
+        snap = engine.generate_snapshot(debate_id, trigger_type="manual")
+        assert snap["allowed_count"] > 0
+        engine.shutdown()
+
+        # Call verdict endpoint
+        verdict_resp = client.get(f"/api/debate/verdict?debate_id={debate_id}", headers=headers)
+        assert verdict_resp.status_code == 200
+        vdata = verdict_resp.get_json()
+        assert vdata.get("verdict") != "INSUFFICIENT_DATA"
+        meta = vdata.get("replicate_composition_metadata")
+        assert meta is not None, "replicate_composition_metadata must be present"
+        assert "judge_count" in meta
+        assert "replicate_count" in meta
+        assert "structural_replicate_count" in meta
+        assert "extraction_reruns" in meta
+        assert "bootstrap_samples" in meta
+        assert "merge_sensitivity_channel" in meta
+        print(f"✓ Replicate composition metadata present: {meta}")
+    finally:
+        if app_module is not None:
+            try:
+                app_module.debate_engine.shutdown()
+            except Exception:
+                pass
+        for key, old_value in old_env.items():
+            if old_value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old_value
+        shutil.rmtree(temp_dir)

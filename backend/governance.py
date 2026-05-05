@@ -8,7 +8,7 @@ import hashlib
 import uuid
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from collections import defaultdict
 import math
@@ -295,7 +295,7 @@ class GovernanceManager:
                (entry_id, timestamp, change_type, description, previous_value, new_value,
                 justification, changed_by, approval_references)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (entry_id, datetime.utcnow().isoformat(), change_type, description,
+            (entry_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), change_type, description,
              previous_value, new_value, justification, changed_by,
              json.dumps(approval_references or []))
         )
@@ -362,7 +362,7 @@ class GovernanceManager:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (appeal_id, debate_id, snapshot_id, claimant_id, grounds,
              json.dumps(evidence_references), requested_relief,
-             AppealStatus.PENDING.value, datetime.utcnow().isoformat())
+             AppealStatus.PENDING.value, datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         )
         self._commit_close(conn)
         return appeal_id
@@ -383,7 +383,7 @@ class GovernanceManager:
                 reviewed_at = ?
                WHERE appeal_id = ?""",
             (decision.value, reviewer_id, decision_reason, resolution,
-             datetime.utcnow().isoformat(), appeal_id)
+             datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), appeal_id)
         )
         self._commit_close(conn)
         return True
@@ -452,7 +452,7 @@ class GovernanceManager:
             """INSERT INTO judge_pool
                (judge_id, name, role, appointed_at, term_expires, specialties)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (judge_id, name, role, datetime.utcnow().isoformat(), term_expires,
+            (judge_id, name, role, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), term_expires,
              json.dumps(specialties or []))
         )
         self._commit_close(conn)
@@ -556,7 +556,7 @@ class GovernanceManager:
             """INSERT INTO judge_pool_composition
                (composition_id, timestamp, category, count, qualification_rubric, snapshot_id)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (composition_id, datetime.utcnow().isoformat(), category, count,
+            (composition_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), category, count,
              json.dumps(qualification_rubric or {}), snapshot_id)
         )
         self._commit_close(conn)
@@ -597,7 +597,7 @@ class GovernanceManager:
             """INSERT INTO judge_rotation_policy
                (policy_id, timestamp, max_consecutive_snapshots, cooldown_snapshots, active)
                VALUES (?, ?, ?, ?, 1)""",
-            (policy_id, datetime.utcnow().isoformat(), max_consecutive_snapshots, cooldown_snapshots)
+            (policy_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), max_consecutive_snapshots, cooldown_snapshots)
         )
         self._commit_close(conn)
         return policy_id
@@ -631,7 +631,7 @@ class GovernanceManager:
             """INSERT INTO conflict_of_interest_log
                (entry_id, timestamp, judge_id, debate_id, topic_id, conflict_type, description, resolved)
                VALUES (?, ?, ?, ?, ?, ?, ?, 0)""",
-            (entry_id, datetime.utcnow().isoformat(), judge_id, debate_id, topic_id,
+            (entry_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), judge_id, debate_id, topic_id,
              conflict_type, description)
         )
         self._commit_close(conn)
@@ -694,7 +694,7 @@ class GovernanceManager:
             """INSERT INTO calibration_protocol
                (protocol_id, timestamp, guideline_version, shared_guidelines, inter_judge_consistency_check, active)
                VALUES (?, ?, ?, ?, ?, 1)""",
-            (protocol_id, datetime.utcnow().isoformat(), guideline_version,
+            (protocol_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), guideline_version,
              json.dumps(shared_guidelines or {}),
              json.dumps(inter_judge_consistency_check or {}))
         )
@@ -733,7 +733,7 @@ class GovernanceManager:
             """INSERT INTO calibration_protocol
                (protocol_id, timestamp, guideline_version, shared_guidelines, inter_judge_consistency_check, active)
                VALUES (?, ?, ?, ?, ?, 0)""",
-            (check_id, datetime.utcnow().isoformat(), 'calibration-check-v1',
+            (check_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), 'calibration-check-v1',
              json.dumps({'snapshot_id': snapshot_id}),
              json.dumps({'consistency_score': consistency, 'scores_by_judge': scores_by_judge}))
         )
@@ -809,7 +809,7 @@ class GovernanceManager:
                (audit_id, timestamp, metric_name, metric_value, demographic_slice,
                 benchmark_value, status, details)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (audit_id, datetime.utcnow().isoformat(), metric_name, metric_value,
+            (audit_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), metric_name, metric_value,
              demographic_slice, benchmark_value, status, json.dumps(details or {}))
         )
         self._commit_close(conn)
@@ -906,7 +906,7 @@ class GovernanceManager:
     ) -> str:
         """Report a new incident."""
         incident_id = f"inc_{uuid.uuid4().hex[:12]}"
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         
         conn, cursor = self._get_conn_cursor()
         cursor.execute(
@@ -944,7 +944,7 @@ class GovernanceManager:
             """UPDATE incidents SET
                 status = ?, resolution_notes = ?, additive_snapshot_id = ?, resolved_at = ?
                WHERE incident_id = ?""",
-            ('resolved', resolution_notes, additive_snapshot_id, datetime.utcnow().isoformat(), incident_id)
+            ('resolved', resolution_notes, additive_snapshot_id, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), incident_id)
         )
         self._commit_close(conn)
     

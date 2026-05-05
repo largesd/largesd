@@ -7,7 +7,7 @@ import hashlib
 import json
 from dataclasses import dataclass, asdict
 from typing import Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -115,7 +115,7 @@ class FrameRegistry:
                 "Transparency (auditability of reasoning)",
                 "Accountability (attribution of claims to sources)"
             ],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             next_review_date="2026-10-28",
             review_cadence_months=6,
             emergency_override_path="Admin emergency override must publish a reason, affected outputs, and a remediation plan before any superseding snapshot."

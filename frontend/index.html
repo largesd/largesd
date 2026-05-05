@@ -34,6 +34,7 @@
           <a href="audits.html">Audits</a>
           <a href="evidence.html">Evidence</a>
           <a href="admin.html">Admin</a>
+          <a href="human-review.html">Human Review</a>
           <a href="about.html">About</a>
         </div>
       </details>
@@ -113,10 +114,12 @@
         <p class="lede">Choose one path based on your intent: contribute, inspect, or audit.</p>
 
         <div class="action-lanes">
-          <article class="action-lane action-lane-primary">
+          <article class="action-lane action-lane-primary" id="home-cta-primary">
             <p class="action-lane-label">Contribute</p>
-            <a class="action-link prominent" href="new_debate.html">Post an argument</a>
-            <p class="action-lane-copy">Submit FOR or AGAINST argument units with explicit facts and inference.</p>
+            <p class="action-lane-copy" id="home-cta-copy">Submit FOR or AGAINST argument units with explicit facts and inference.</p>
+            <div class="action-link-list">
+              <a class="action-link prominent" id="home-cta-link" href="new_debate.html">Post an argument</a>
+            </div>
           </article>
           <article class="action-lane">
             <p class="action-lane-label">Inspect</p>
@@ -196,7 +199,7 @@
       <section class="panel">
         <h3>Need help?</h3>
         <p class="lede">Use the glossary for term definitions and the About page for system rules.</p>
-        <div class="row">
+        <div class="row spaced-before">
           <button class="button" type="button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Open Glossary</button>
           <a class="button" href="about.html">Open About</a>
         </div>
@@ -207,7 +210,8 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="human-review.html">Human Review</a>
+          <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -257,7 +261,8 @@
     <p class="glossary-def">Normalized, deduplicated claim and argument units used for stable scoring.</p>
 
     <hr />
-    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="about.html">About</a>.</p>
+    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="human-review.html">Human Review</a>
+          <a href="about.html">About</a>.</p>
   </div>
 </div>
 

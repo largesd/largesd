@@ -11,7 +11,7 @@ import sys
 import re
 import uuid
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from typing import Any, Dict, Optional
 from flask import Flask, jsonify, request, send_from_directory, g
@@ -25,7 +25,7 @@ from werkzeug.exceptions import BadRequest
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_obj = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
@@ -89,6 +89,22 @@ limiter = Limiter(
     enabled=_enable_limiter,
 )
 
+
+@app.errorhandler(429)
+def rate_limit_handler(e):
+    """Return structured JSON for rate-limit errors instead of raw HTML."""
+    retry_after = getattr(e, 'retry_after', None)
+    response = jsonify({
+        'error': 'Rate limit exceeded. Please slow down and retry.',
+        'code': 'RATE_LIMITED',
+        'retry_after': retry_after,
+    })
+    response.status_code = 429
+    if retry_after:
+        response.headers['Retry-After'] = str(retry_after)
+    return response
+
+
 # Environment validation on startup
 ENV = os.getenv('ENV', 'development')
 if ENV != 'development':
@@ -150,7 +166,7 @@ def _handle_snapshot_job(job_id: str, parameters: dict, queue):
         publisher = get_publisher_from_env()
         if publisher:
             try:
-                builder = PublishedResultsBuilder(db_path=DB_PATH)
+                builder = PublishedResultsBuilder(db_path=DB_PATH, engine=debate_engine)
                 bundle = builder.build_bundle(
                     debate_id=debate_id,
                     commit_message=f"Snapshot {snapshot['snapshot_id']} — {trigger_type}",
@@ -192,7 +208,8 @@ def _handle_verify_job(job_id: str, parameters: dict, queue):
 
 job_worker.register_handler('snapshot', _handle_snapshot_job)
 job_worker.register_handler('verify', _handle_verify_job)
-job_worker.start()
+if os.environ.get("DISABLE_JOB_WORKER") != "1":
+    job_worker.start()
 
 DEFAULT_MODERATION_SETTINGS = {
     "topic_requirements": {
@@ -310,8 +327,8 @@ def generate_token(user_id, email, display_name, is_admin=False):
         'email': email,
         'display_name': display_name,
         'is_admin': bool(is_admin),
-        'exp': datetime.utcnow() + timedelta(hours=app.config['JWT_EXPIRATION_HOURS']),
-        'iat': datetime.utcnow(),
+        'exp': datetime.now(timezone.utc) + timedelta(hours=app.config['JWT_EXPIRATION_HOURS']),
+        'iat': datetime.now(timezone.utc),
         'type': 'access'
     }
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
@@ -401,8 +418,8 @@ def optional_auth(f):
 
 def get_admin_access_mode() -> str:
     """Return API admin access mode: open, authenticated, or restricted."""
-    mode = (os.getenv('ADMIN_ACCESS_MODE') or 'authenticated').strip().lower()
-    return mode if mode in {'open', 'authenticated', 'restricted'} else 'authenticated'
+    mode = (os.getenv('ADMIN_ACCESS_MODE') or 'restricted').strip().lower()
+    return mode if mode in {'open', 'authenticated', 'restricted'} else 'restricted'
 
 
 def parse_csv_env(value: Optional[str]) -> set[str]:
@@ -417,6 +434,19 @@ def is_user_in_restricted_admin_list(user: Dict[str, str]) -> bool:
     user_email = (user.get('email') or '').lower()
     user_id = (user.get('user_id') or '').lower()
     return bool((allowed_emails and user_email in allowed_emails) or (allowed_ids and user_id in allowed_ids))
+
+
+# Admin access startup warning
+_admin_mode = get_admin_access_mode()
+if _admin_mode != 'restricted':
+    import warnings
+    warnings.warn(
+        f"ADMIN_ACCESS_MODE is set to '{_admin_mode}'. "
+        "For production deployments, use 'restricted' with explicit ADMIN_USER_EMAILS or ADMIN_USER_IDS. "
+        f"Current mode: {_admin_mode}",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 
 def log_admin_action(action_type: str, description: str):
@@ -455,12 +485,19 @@ def admin_required(f):
                 'code': 'AUTH_REQUIRED',
             }), 401
 
-        # Primary check: user must have is_admin flag in their JWT
-        if g.user.get('is_admin'):
-            return f(*args, **kwargs)
+        if mode == 'restricted':
+            # Restricted mode: explicit env allowlist ONLY.
+            # The is_admin JWT flag is NOT sufficient on its own.
+            if is_user_in_restricted_admin_list(g.user):
+                return f(*args, **kwargs)
+            return jsonify({
+                'error': 'Admin access restricted to explicitly allowlisted accounts',
+                'code': 'ADMIN_RESTRICTED',
+                'detail': 'Contact the operator to be added to ADMIN_USER_EMAILS or ADMIN_USER_IDS',
+            }), 403
 
-        # Fallback: restricted mode allows env-listed users even without the flag
-        if mode == 'restricted' and is_user_in_restricted_admin_list(g.user):
+        # authenticated mode: user must have is_admin flag in their JWT
+        if g.user.get('is_admin'):
             return f(*args, **kwargs)
 
         return jsonify({
@@ -1412,6 +1449,13 @@ def get_current_snapshot():
     
     snapshot = db.get_latest_snapshot(debate_id)
     
+    frame_info = db.get_active_debate_frame(debate_id) if debate_id else None
+    moderation_template = db.get_active_moderation_template() or {}
+    policy_context = {
+        'moderation_template_name': moderation_template.get('template_name') or moderation_template.get('name'),
+        'moderation_template_version': moderation_template.get('version'),
+    }
+
     if not snapshot:
         return jsonify({
             'has_debate': True,
@@ -1432,7 +1476,10 @@ def get_current_snapshot():
             'margin_d': None,
             'ci_d': None,
             'confidence': None,
-            'verdict': 'NO VERDICT'
+            'verdict': 'NO VERDICT',
+            'frame_mode': frame_info.get('frame_mode') if frame_info else get_frame_mode_flag(),
+            'review_cadence_months': frame_info.get('review_cadence_months', 6) if frame_info else 6,
+            'policy_context': policy_context,
         })
     
     return jsonify({
@@ -1461,6 +1508,9 @@ def get_current_snapshot():
         'recipe_versions': json.loads(snapshot.get('recipe_versions_json', '{}') or '{}'),
         'provider_metadata': json.loads(snapshot.get('provider_metadata_json', '{}') or '{}'),
         'cost_estimate': snapshot.get('cost_estimate'),
+        'frame_mode': frame_info.get('frame_mode') if frame_info else get_frame_mode_flag(),
+        'review_cadence_months': frame_info.get('review_cadence_months', 6) if frame_info else 6,
+        'policy_context': policy_context,
     })
 
 
@@ -1658,7 +1708,13 @@ def get_topic(topic_id):
                 'operationalization': f.get('operationalization', ''),
                 'normative_provenance': f.get('normative_provenance', ''),
                 'evidence_tier_counts': json.loads(f.get('evidence_tier_counts_json', '{}') or '{}'),
-                'member_count': len(json.loads(f.get('member_fact_ids', '[]')))
+                'member_count': len(json.loads(f.get('member_fact_ids', '[]'))),
+                # LSD_FactCheck_v1_5_1 ternary fields
+                'v15_status': f.get('v15_status'),
+                'v15_p': f.get('v15_p', f['p_true']),
+                'v15_insufficiency_reason': f.get('v15_insufficiency_reason'),
+                'v15_human_review_flags': json.loads(f.get('v15_human_review_flags_json', '[]') or '[]'),
+                'v15_best_evidence_tier': f.get('v15_best_evidence_tier'),
             }
             for f in facts
         ],
@@ -1694,6 +1750,38 @@ def get_verdict():
     
     if not snapshot:
         return jsonify({'error': 'No snapshot available'}), 404
+    
+    # Sufficiency check: empty adjudication data should not render as a real verdict
+    allowed_count = snapshot.get('allowed_count', 0) or 0
+    has_scores = (
+        snapshot.get('overall_for') is not None
+        or snapshot.get('overall_against') is not None
+        or snapshot.get('margin_d') is not None
+    )
+    if allowed_count == 0 or not has_scores:
+        return jsonify({
+            'snapshot_id': snapshot['snapshot_id'],
+            'insufficient_data': True,
+            'verdict': 'INSUFFICIENT_DATA',
+            'message': 'Insufficient adjudication data. No allowed posts or scores are available for this debate.',
+            'overall_for': None,
+            'overall_against': None,
+            'margin_d': None,
+            'ci_d': [None, None],
+            'confidence': None,
+            'topic_contributions': [],
+            'd_distribution': [],
+            'replicate_composition_metadata': {
+                'judge_count': int(os.getenv('NUM_JUDGES', '5')),
+                'replicate_count': 0,
+                'extraction_reruns': 2,
+                'bootstrap_samples': 0,
+                'structural_replicate_count': 0,
+                'merge_sensitivity_channel': False,
+            },
+            'formula_metadata': formula_registry(),
+            'factuality': {'tier_counts': {}},
+        })
     
     topic_scores = json.loads(snapshot.get('topic_scores', '{}'))
     topics = db.get_topics_by_debate(debate_id)
@@ -1732,9 +1820,10 @@ def get_verdict():
         'd_distribution': verdict_replicates.get('d_distribution', []),
         'replicate_composition_metadata': {
             'judge_count': int(os.getenv('NUM_JUDGES', '5')),
-            'replicate_count': len(verdict_replicates.get('d_distribution', [])),
+            'replicate_count': verdict_replicates.get('replicate_composition', {}).get('replicate_count', len(verdict_replicates.get('d_distribution', []))),
             'extraction_reruns': 2,
-            'bootstrap_samples': len(verdict_replicates.get('d_distribution', [])),
+            'bootstrap_samples': verdict_replicates.get('replicate_composition', {}).get('bootstrap_samples', len(verdict_replicates.get('d_distribution', []))),
+            'structural_replicate_count': verdict_replicates.get('replicate_composition', {}).get('structural_replicate_count', 0),
             'merge_sensitivity_channel': bool(audits.get('topic_merge_sensitivity')),
         },
         'formula_metadata': formula_registry(),
@@ -2091,6 +2180,35 @@ def get_decision_dossier():
     snapshot = db.get_latest_snapshot(debate_id)
     if not snapshot:
         return jsonify({'error': 'No snapshot available'}), 404
+    
+    # Sufficiency check
+    allowed_count = snapshot.get('allowed_count', 0) or 0
+    has_scores = (
+        snapshot.get('overall_for') is not None
+        or snapshot.get('overall_against') is not None
+        or snapshot.get('margin_d') is not None
+    )
+    if allowed_count == 0 or not has_scores:
+        return jsonify({
+            'snapshot_id': snapshot['snapshot_id'],
+            'insufficient_data': True,
+            'verdict': 'INSUFFICIENT_DATA',
+            'message': 'Insufficient adjudication data. No allowed posts or scores are available for this debate.',
+            'frame': debate_engine.get_frame_info(),
+            'overall_for': None,
+            'overall_against': None,
+            'margin_d': None,
+            'evidence_gaps': {},
+            'evidence_gap_summary': {},
+            'decisive_premises': [],
+            'decisive_arguments': [],
+            'counterfactuals': {},
+            'priority_gaps': {},
+            'insufficiency_sensitivity': {},
+            'unselected_tail_summary': {},
+            'formula_metadata': formula_registry(),
+            'selection_diagnostics': {},
+        })
     
     # Retrieve decision dossier from snapshot audits if available
     audits = debate_engine.get_audits_for_snapshot(snapshot['snapshot_id'])

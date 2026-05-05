@@ -5,6 +5,7 @@ Implements immutable, queryable audit logs
 import json
 import sqlite3
 import threading
+import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict
@@ -79,9 +80,13 @@ class AuditLogger:
         self._lock = threading.Lock()
         self._init_db()
     
+    def _connect(self):
+        """Open a SQLite connection with a sensible timeout."""
+        return sqlite3.connect(self._db_path, timeout=10.0)
+
     def _init_db(self):
         """Initialize database schema"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
                     entry_id TEXT PRIMARY KEY,
@@ -148,7 +153,7 @@ class AuditLogger:
             entry_id of the created log entry
         """
         with self._lock:
-            entry_id = f"audit_{datetime.now().strftime('%Y%m%d%H%M%S')}_{request_context.request_id[:8]}"
+            entry_id = f"audit_{uuid.uuid4().hex}"
             
             # Hash claim text if it contains PII
             claim_text_for_log = result.claim_text
@@ -184,7 +189,7 @@ class AuditLogger:
             )
             
             # Store in database
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.execute(
                     """
                     INSERT INTO audit_log (
@@ -229,7 +234,7 @@ class AuditLogger:
     def query_by_claim_hash(self, claim_hash: str, 
                            limit: int = 100) -> List[Dict[str, Any]]:
         """Query audit log by claim hash"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
@@ -245,7 +250,7 @@ class AuditLogger:
     
     def query_by_request_id(self, request_id: str) -> Optional[Dict[str, Any]]:
         """Query audit log by request ID"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM audit_log WHERE request_id = ?",
@@ -257,7 +262,7 @@ class AuditLogger:
     def query_by_post_id(self, post_id: str, 
                         limit: int = 100) -> List[Dict[str, Any]]:
         """Query audit log by post ID"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
@@ -273,7 +278,7 @@ class AuditLogger:
     
     def get_stats(self) -> Dict[str, Any]:
         """Get audit log statistics"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute("SELECT COUNT(*) FROM audit_log")
             total_entries = cursor.fetchone()[0]
             

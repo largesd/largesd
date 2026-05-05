@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evidence & Audits — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
+  <style>
+    .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .audit-grid { display: grid; gap: 16px; }
+    .analysis-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 18px; }
+    .analysis-tab {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-muted);
+      color: var(--ink-default);
+      cursor: pointer;
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      padding: 7px 11px;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+    .analysis-tab:hover {
+      background: var(--surface-accent);
+      border-color: var(--line-strong);
+      color: var(--ink-strong);
+    }
+    .analysis-tab.active {
+      border-color: color-mix(in oklch, var(--accent), white 45%);
+      background: color-mix(in oklch, var(--surface-accent), white 42%);
+      color: var(--ink-strong);
+      font-weight: 600;
+    }
+    .analysis-panel { display: block; }
+    .analysis-panel[hidden] { display: none; }
+    @media(min-width:900px) {
+      .audit-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Topic focus bar */
+    .topic-focus-bar {
+      display: grid;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+    .topic-focus-bar .row {
+      margin-bottom: 0;
+    }
+    .topic-focus-select {
+      min-width: 0;
+      flex: 1 1 280px;
+      padding: 8px 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface-raised);
+      color: var(--ink-default);
+      font-family: var(--sans);
+      font-size: 0.88rem;
+    }
+    .topic-focus-pill {
+      cursor: pointer;
+    }
+    .topic-focus-summary {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-raised);
+      padding: var(--space-sm);
+    }
+    .topic-focus-summary h4 {
+      margin: 0 0 6px;
+      font-size: 0.86rem;
+    }
+    .topic-focus-summary .row {
+      margin-bottom: 0;
+    }
+    .topic-focus-context {
+      color: var(--ink-soft);
+      font-size: 0.82rem;
+      margin-top: 8px;
+    }
+    .section-break-heading {
+      margin-top: var(--space-lg);
+    }
+  </style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="verdict.html">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem" class="active" aria-current="page">Audits</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
+  </div>
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main id="main-content">
+<section class="card" id="analysis-shell">
+  <div class="section-head">
+    <div>
+      <h1>Evidence & Audits</h1>
+      <p class="lede">Inspect high-impact evidence targets and stress-test robustness from a single review surface.</p>
+    </div>
+    <a class="button secondary" href="verdict.html">Jump to verdict</a>
+  </div>
+
+  <div class="callout soft" id="analysis-empty" style="display:none;"></div>
+
+  <div id="analysis-content" style="display:none;">
+    <div class="analysis-tabs" role="tablist" aria-label="Evidence and audits views">
+      <button type="button" class="analysis-tab" id="analysis-tab-evidence" data-tab="evidence" role="tab" aria-controls="analysis-panel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
+      <button type="button" class="analysis-tab" id="analysis-tab-audits" data-tab="audits" role="tab" aria-controls="analysis-panel-audits" aria-selected="false" tabindex="-1">Audits</button>
+    </div>
+
+    <section class="analysis-panel" id="analysis-panel-evidence" data-tab-panel="evidence" role="tabpanel" aria-labelledby="analysis-tab-evidence" hidden>
+      <div class="callout soft" id="evidence-panel-error" style="display:none;"></div>
+
+      <div class="callout soft">
+        <div class="row">
+          <span class="pill">Verdict: <span class="mono" id="evidence-verdict">-</span></span>
+          <span class="pill">Confidence: <span class="mono" id="evidence-confidence">-</span></span>
+          <span class="pill">Margin D: <span class="mono" id="evidence-margin">-</span></span>
+          <span class="pill">Margin needed for flip: <span class="mono" id="evidence-flip-margin">-</span></span>
+        </div>
+        <p style="margin-bottom:0" id="evidence-summary">Loading evidence targets...</p>
+      </div>
+
+      <hr />
+      <h3>High-impact targets</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Target</th><th>Side</th><th>Current state</th><th>Impact on D</th><th>Evidence needed</th></tr></thead>
+          <tbody id="high-impact-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Medium-impact targets</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Target</th><th>Side</th><th>Leverage</th><th>Impact on D</th><th>Evidence type</th></tr></thead>
+          <tbody id="medium-impact-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Update triggers</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">These are the live threshold statements most likely to change the current outcome.</p>
+      <div class="callout soft">
+        <ul class="compact-list" id="trigger-list">
+          <li>Loading update triggers...</li>
+        </ul>
+      </div>
+
+      <hr />
+      <div class="row">
+        <a class="pill" href="verdict.html">← Back to Verdict</a>
+        <button class="pill" type="button" onclick="setAnalysisTab('audits')">View audit stress tests →</button>
+      </div>
+    </section>
+
+    <section class="analysis-panel" id="analysis-panel-audits" data-tab-panel="audits" role="tabpanel" aria-labelledby="analysis-tab-audits" hidden>
+      <div class="callout soft" id="audits-panel-error" style="display:none;"></div>
+
+      <p><small>Audit outputs are live calculations tied to the current snapshot rather than canned examples.</small></p>
+
+      <!-- Topic focus bar -->
+      <div class="topic-focus-bar" id="topic-focus-bar">
+        <div class="row" style="align-items:stretch;">
+          <select class="topic-focus-select" id="topic-focus-select" aria-label="Focus audits on a topic">
+            <option value="">All topics</option>
+          </select>
+          <button type="button" class="pill" id="topic-focus-clear" style="display:none;">Clear focus</button>
+        </div>
+        <div class="row" id="topic-focus-pills"></div>
+        <div class="topic-focus-context" id="topic-focus-context" style="display:none;"></div>
+      </div>
+
+      <hr />
+      <h3 id="topic-geometry">Topic geometry audit</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
+
+      <!-- Selected topic summary -->
+      <div class="topic-focus-summary" id="selected-topic-summary" style="display:none;"></div>
+
+      <h4>Lineage map</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>Parent topic ids</th><th>Operation</th><th>Drift</th></tr></thead>
+          <tbody id="lineage-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="section-break-heading">Content mass share + geometry quality</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
+          <tbody id="geometry-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row" id="geometry-summary-row"></div>
+
+      <hr />
+      <h3>Side-label symmetry audit</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests whether the verdict changes when FOR and AGAINST labels are swapped.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">median ΔD: <span class="mono" id="symmetry-median-delta">-</span></span>
+            <span class="pill">|ΔD|: <span class="mono" id="symmetry-abs-delta">-</span></span>
+          </div>
+          <p style="margin-bottom:0" id="symmetry-interpretation">Loading symmetry audit...</p>
+        </div>
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">Original D: <span class="mono" id="symmetry-original-d">-</span></span>
+            <span class="pill">Swapped D: <span class="mono" id="symmetry-swapped-d">-</span></span>
+          </div>
+          <small>Swapped D is reflected back into the original orientation to show how far the label flip moves the margin.</small>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px;">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>ΔQ FOR</th><th>ΔQ AGAINST</th><th>Asymmetry</th></tr></thead>
+          <tbody id="symmetry-topics-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic-level symmetry deltas available.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Extraction stability</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Measures consistency of FACT and ARGUMENT extraction across reruns.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Layer</th><th>Jaccard</th><th>Precision</th><th>Recall</th><th>Set sizes</th></tr></thead>
+          <tbody id="stability-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row">
+        <span class="pill">Runs: <span class="mono" id="stability-runs">-</span></span>
+        <span class="pill">Stability score: <span class="mono" id="stability-score">-</span></span>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Mismatch report</summary>
+        <div class="codebox" id="mismatch-report">No mismatch report yet.</div>
+      </details>
+
+      <hr />
+      <h3>Evaluator disagreement</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Shows how much judge scores diverge in the current run.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Quantity</th><th>Median / IQR</th><th>Interpretation</th></tr></thead>
+          <tbody id="disagreement-tbody"></tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Relevance sensitivity</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests how perturbing topic relevance weights affects the verdict.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">mean D: <span class="mono" id="rel-d-mean">-</span></span>
+            <span class="pill">std D: <span class="mono" id="rel-d-std">-</span></span>
+            <span class="pill">range: <span class="mono" id="rel-d-range">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <div class="row">
+            <span class="pill">Stability ratio: <span class="mono" id="rel-stability-ratio">-</span></span>
+            <span class="pill">Interpretation: <span class="mono" id="rel-interpretation">-</span></span>
+          </div>
+          <div class="row" id="rel-verdict-distribution" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <hr />
+      <h3>v1.2 audit matrix</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">High-leverage LSD v1.2 channels: dominance, merge sensitivity, integrity, rarity, budget adequacy, and cap effects.</p>
+      <div class="audit-grid">
+        <div class="callout soft">
+          <h4>Topic dominance + merge sensitivity</h4>
+          <div class="row">
+            <span class="pill">Top-3 canonical: <span class="mono" id="audit-top3-pre">-</span></span>
+            <span class="pill">Top-3 selected: <span class="mono" id="audit-top3-sel">-</span></span>
+            <span class="pill">Mapping stability: <span class="mono" id="audit-merge-stability">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Integrity indicators</h4>
+          <div class="row">
+            <span class="pill">Entropy: <span class="mono" id="audit-participation-entropy">-</span></span>
+            <span class="pill">Top 10% share: <span class="mono" id="audit-top10-share">-</span></span>
+            <span class="pill">Template similarity: <span class="mono" id="audit-template-sim">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Budget and centrality cap</h4>
+          <div class="row">
+            <span class="pill">Items capped: <span class="mono" id="audit-items-capped">-</span></span>
+            <span class="pill">Cap value: <span class="mono" id="audit-cap-value">-</span></span>
+            <span class="pill">Pool capped: <span class="mono" id="audit-pool-capped">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Coverage + frame sensitivity</h4>
+          <div class="row">
+            <span class="pill">Coverage mode: <span class="mono" id="audit-coverage-mode">-</span></span>
+            <span class="pill">Frame ΔD max: <span class="mono" id="audit-frame-delta">-</span></span>
+            <span class="pill">Audit schema: <span class="mono" id="audit-schema-version">-</span></span>
+          </div>
+        </div>
+      </div>
+      <details class="trace" style="margin-top:16px;">
+        <summary>Show raw v1.2 audit channels</summary>
+        <div class="codebox" id="audit-v12-raw">No v1.2 audit channels loaded.</div>
+      </details>
+    </section>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
+  <div class="help-panel-header">
+    <h3 id="help-panel-title">Glossary & Help</h3>
+    <button class="close-help" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms used in evidence-target analysis and robustness audits.</p>
+
+    <div class="glossary-term">Impact on D</div>
+    <div class="glossary-def">Estimated movement in the verdict margin if the target changes substantially.</div>
+
+    <div class="glossary-term">Update trigger</div>
+    <div class="glossary-def">A threshold statement describing what evidence would materially change the verdict.</div>
+
+    <div class="glossary-term">Side-label symmetry</div>
+    <div class="glossary-def">Audit that swaps FOR and AGAINST labels to detect evaluator bias. Smaller movement in D means better symmetry.</div>
+
+    <div class="glossary-term">Extraction stability</div>
+    <div class="glossary-def">Consistency of FACT and ARGUMENT extraction across reruns of the pipeline.</div>
+
+    <div class="glossary-term">Relevance sensitivity</div>
+    <div class="glossary-def">How much the verdict changes when topic relevance weights are perturbed.</div>
+
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>
+
+<script>
+const ANALYSIS_TABS = ['evidence', 'audits'];
+
+const AUDITS_STATE = {
+  topics: [],
+  selectedTopicId: null,
+  audits: null,
+};
+
+function toggleHelp() {
+  BDA.toggleHelp();
+}
+
+function getRequestedTab() {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  return ANALYSIS_TABS.includes(tab) ? tab : 'audits';
+}
+
+function getRequestedTopicId() {
+  return new URLSearchParams(window.location.search).get('topic') || null;
+}
+
+function setAnalysisTab(tab, options = {}) {
+  const { updateUrl = true } = options;
+  const safeTab = ANALYSIS_TABS.includes(tab) ? tab : 'audits';
+
+  document.querySelectorAll('.analysis-tab').forEach((button) => {
+    const active = button.dataset.tab === safeTab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.setAttribute('tabindex', active ? '0' : '-1');
+  });
+
+  document.querySelectorAll('.analysis-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== safeTab;
+  });
+
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', safeTab);
+    const query = url.searchParams.toString();
+    const next = `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+    window.history.replaceState({}, '', next);
+  }
+}
+
+function bindTabEvents() {
+  document.querySelectorAll('.analysis-tab').forEach((button) => {
+    button.addEventListener('click', () => setAnalysisTab(button.dataset.tab));
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      const currentIndex = ANALYSIS_TABS.indexOf(button.dataset.tab);
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      const nextIndex = (currentIndex + direction + ANALYSIS_TABS.length) % ANALYSIS_TABS.length;
+      const nextTab = ANALYSIS_TABS[nextIndex];
+      setAnalysisTab(nextTab);
+      const nextButton = document.querySelector(`.analysis-tab[data-tab="${nextTab}"]`);
+      if (nextButton) nextButton.focus();
+    });
+  });
+}
+
+function showAnalysisEmpty(messageHtml) {
+  const empty = document.getElementById('analysis-empty');
+  document.getElementById('analysis-content').style.display = 'none';
+  empty.innerHTML = messageHtml;
+  empty.style.display = 'block';
+}
+
+function showAnalysisContent() {
+  document.getElementById('analysis-empty').style.display = 'none';
+  document.getElementById('analysis-content').style.display = 'block';
+}
+
+function renderDebateChoices(debates) {
+  if (!debates.length) {
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to unlock evidence and audits.';
+  }
+
+  const buttons = debates.map((debate) => `
+    <button class="pill" data-debate-id="${BDA.escapeHtml(debate.debate_id)}">${BDA.escapeHtml(debate.resolution)}</button>
+  `).join('');
+
+  return `
+    <strong>No active debate selected.</strong> Choose a public debate to inspect evidence targets and audit stress tests.
+    <div class="choice-list">${buttons}</div>
+  `;
+}
+
+function currentStateText(target) {
+  if (target.type === 'fact' && target.current_p !== null && target.current_p !== undefined) {
+    return `p=${BDA.formatNumber(target.current_p, 2)}, leverage=${BDA.formatNumber(target.leverage_score, 2)}`;
+  }
+  return `leverage=${BDA.formatNumber(target.leverage_score, 2)}`;
+}
+
+function renderTargets(tbodyId, targets, includeEvidenceNeeded) {
+  const tbody = document.getElementById(tbodyId);
+  if (!targets.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No targets in this bucket.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = targets.map((target) => {
+    if (includeEvidenceNeeded) {
+      return `
+        <tr>
+          <td><strong>${BDA.escapeHtml(target.title)}</strong><br><small>${BDA.escapeHtml(target.type)}</small></td>
+          <td>${BDA.escapeHtml(target.side || '—')}</td>
+          <td class="mono">${BDA.escapeHtml(currentStateText(target))}</td>
+          <td class="mono">${BDA.formatNumber(target.impact_on_margin, 4)}</td>
+          <td>${BDA.escapeHtml(target.evidence_needed || '—')}</td>
+        </tr>
+      `;
+    }
+
+    return `
+      <tr>
+        <td><strong>${BDA.escapeHtml(target.title)}</strong><br><small>${BDA.escapeHtml(target.type)}</small></td>
+        <td>${BDA.escapeHtml(target.side || '—')}</td>
+        <td class="mono">${BDA.formatNumber(target.leverage_score, 2)}</td>
+        <td class="mono">${BDA.formatNumber(target.impact_on_margin, 4)}</td>
+        <td>${BDA.escapeHtml(target.evidence_type || 'mixed')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderEvidence(data) {
+  document.getElementById('evidence-verdict').textContent = data.verdict || '-';
+  document.getElementById('evidence-confidence').textContent = BDA.formatNumber(data.confidence, 2);
+  document.getElementById('evidence-margin').textContent = BDA.formatNumber(data.margin_d, 4);
+  document.getElementById('evidence-flip-margin').textContent = BDA.formatNumber(data.margin_needed_for_flip, 4);
+  document.getElementById('evidence-summary').textContent = data.summary || 'No evidence-target summary available.';
+
+  renderTargets('high-impact-tbody', data.high_impact_targets || [], true);
+  renderTargets('medium-impact-tbody', data.medium_impact_targets || [], false);
+
+  const allTargets = [...(data.high_impact_targets || []), ...(data.medium_impact_targets || [])];
+  const triggerList = document.getElementById('trigger-list');
+  if (!allTargets.length) {
+    triggerList.innerHTML = '<li>No update triggers available for the current snapshot.</li>';
+    return;
+  }
+
+  triggerList.innerHTML = allTargets.slice(0, 6).map((target) => `
+    <li><strong>${BDA.escapeHtml(target.title)}:</strong> ${BDA.escapeHtml(target.update_trigger || 'No trigger available.')}</li>
+  `).join('');
+}
+
+function quantiles(values) {
+  if (!values.length) return ['-', '-', '-'];
+  const sorted = values.slice().sort((a, b) => a - b);
+  const pick = (ratio) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * ratio))];
+  return [pick(0.1), pick(0.5), pick(0.9)].map((value) => BDA.formatNumber(value, 2));
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function computeLeadMargin(scores) {
+  if (!scores || typeof scores !== 'object') return null;
+  const qualities = Object.values(scores)
+    .map((sideScore) => toFiniteNumber(sideScore && sideScore.quality, Number.NaN))
+    .filter((quality) => Number.isFinite(quality))
+    .sort((a, b) => b - a);
+
+  if (qualities.length < 2) return null;
+  return Math.abs(qualities[0] - qualities[1]);
+}
+
+function getSelectedTopicMeta() {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return null;
+  return AUDITS_STATE.topics.find((t) => String(t.topic_id) === id) || null;
+}
+
+function filterTopicGeometry(items) {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return items;
+  return items.filter((item) => String(item.topic_id) === id);
+}
+
+function filterSymmetryTopicDeltas(topicDeltas) {
+  const id = AUDITS_STATE.selectedTopicId;
+  if (!id) return topicDeltas;
+  const filtered = {};
+  Object.entries(topicDeltas).forEach(([topicId, delta]) => {
+    if (String(topicId) === id) filtered[topicId] = delta;
+  });
+  return filtered;
+}
+
+function renderTopicGeometrySection() {
+  const items = filterTopicGeometry(AUDITS_STATE.audits?.topic_geometry || []);
+  const lineageTbody = document.getElementById('lineage-tbody');
+  const geometryTbody = document.getElementById('geometry-tbody');
+
+  if (!items.length) {
+    lineageTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No lineage data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
+    geometryTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No geometry data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
+    document.getElementById('geometry-summary-row').innerHTML = '';
+    return;
+  }
+
+  lineageTbody.innerHTML = items.map((topic) => `
+    <tr>
+      <td><a href="topic.html?id=${encodeURIComponent(topic.topic_id)}">${BDA.escapeHtml(topic.topic_id)} ${BDA.escapeHtml(topic.name || '')}</a></td>
+      <td class="mono">${BDA.escapeHtml((topic.parent_topic_ids || []).join(', ') || '—')}</td>
+      <td>${BDA.escapeHtml(topic.operation || 'created')}</td>
+      <td class="mono">${BDA.formatNumber(topic.drift_score, 2)}</td>
+    </tr>
+  `).join('');
+
+  geometryTbody.innerHTML = items.map((topic) => `
+    <tr>
+      <td><a href="topic.html?id=${encodeURIComponent(topic.topic_id)}">${BDA.escapeHtml(topic.topic_id)} ${BDA.escapeHtml(topic.name || '')}</a></td>
+      <td class="mono">${BDA.formatNumber(topic.content_mass, 2)}</td>
+      <td class="mono">${BDA.formatNumber(topic.drift_score, 2)}</td>
+      <td class="mono">${BDA.formatNumber(topic.coherence, 2)} / ${BDA.formatNumber(topic.distinctness, 2)}</td>
+    </tr>
+  `).join('');
+
+  const drift = quantiles(items.map((item) => item.drift_score || 0));
+  const coherence = quantiles(items.map((item) => item.coherence || 0));
+  const distinctness = quantiles(items.map((item) => item.distinctness || 0));
+  document.getElementById('geometry-summary-row').innerHTML = `
+    <span class="pill">Drift p10/p50/p90: <span class="mono">${drift.join(' / ')}</span></span>
+    <span class="pill">Coherence p10/p50/p90: <span class="mono">${coherence.join(' / ')}</span></span>
+    <span class="pill">Distinctness p10/p50/p90: <span class="mono">${distinctness.join(' / ')}</span></span>
+  `;
+}
+
+function renderSymmetrySection() {
+  const symmetry = AUDITS_STATE.audits?.label_symmetry || {};
+  document.getElementById('symmetry-median-delta').textContent = BDA.formatNumber(symmetry.median_delta_d, 4);
+  document.getElementById('symmetry-abs-delta').textContent = BDA.formatNumber(symmetry.abs_delta_d, 4);
+  document.getElementById('symmetry-original-d').textContent = BDA.formatNumber(symmetry.original_d, 4);
+  document.getElementById('symmetry-swapped-d').textContent = BDA.formatNumber(symmetry.swapped_d, 4);
+  document.getElementById('symmetry-interpretation').textContent = symmetry.interpretation || 'No symmetry interpretation available.';
+
+  const topicDeltas = Object.entries(filterSymmetryTopicDeltas(symmetry.topic_deltas || {}));
+  const tbody = document.getElementById('symmetry-topics-tbody');
+  if (!topicDeltas.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No symmetry deltas for the selected topic.' : 'No topic-level symmetry deltas available.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = topicDeltas.map(([topicId, delta]) => `
+    <tr>
+      <td><a href="topic.html?id=${encodeURIComponent(topicId)}">${BDA.escapeHtml(topicId)}</a></td>
+      <td class="mono">${BDA.formatNumber(delta.q_for_delta, 3)}</td>
+      <td class="mono">${BDA.formatNumber(delta.q_against_delta, 3)}</td>
+      <td class="mono">${BDA.formatNumber(delta.asymmetry_score, 3)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderGlobalAuditSections() {
+  const audits = AUDITS_STATE.audits || {};
+  renderStability(audits.extraction_stability || {});
+  renderDisagreement(audits.evaluator_disagreement || {});
+  renderRelevanceSensitivity(audits.relevance_sensitivity || {});
+  renderV12AuditMatrix(audits);
+}
+
+function renderSelectedTopicSummary() {
+  const container = document.getElementById('selected-topic-summary');
+  const meta = getSelectedTopicMeta();
+  if (!meta || !AUDITS_STATE.selectedTopicId) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = `
+    <h4>${BDA.escapeHtml(meta.name || 'Untitled')}</h4>
+    <div class="row">
+      <span class="pill">ID: <span class="mono">${BDA.escapeHtml(meta.topic_id)}</span></span>
+      <span class="pill">Rel: <span class="mono">${BDA.formatNumber(meta.relevance, 2)}</span></span>
+      <span class="pill">Drift: <span class="mono">${BDA.formatNumber(meta.drift_score, 2)}</span></span>
+      <span class="pill">Coherence: <span class="mono">${BDA.formatNumber(meta.coherence, 2)}</span></span>
+      <span class="pill">Distinctness: <span class="mono">${BDA.formatNumber(meta.distinctness, 2)}</span></span>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <a class="pill" href="topic.html?id=${encodeURIComponent(meta.topic_id)}">Open topic detail</a>
+      <a class="pill" href="topics.html">Back to full topics list</a>
+    </div>
+  `;
+  container.style.display = 'block';
+}
+
+function renderTopicFocusContext() {
+  const contextEl = document.getElementById('topic-focus-context');
+  const meta = getSelectedTopicMeta();
+  if (!meta || !AUDITS_STATE.selectedTopicId) {
+    contextEl.style.display = 'none';
+    contextEl.textContent = '';
+    return;
+  }
+  contextEl.innerHTML = `Topic focus is set to <strong>${BDA.escapeHtml(meta.name || meta.topic_id)}</strong>. The sections below (Extraction stability, Evaluator disagreement, Relevance sensitivity, v1.2 audit matrix) remain snapshot-wide because they are not topic-specific.`;
+  contextEl.style.display = 'block';
+}
+
+function renderTopicFocusBar() {
+  const select = document.getElementById('topic-focus-select');
+  const clearBtn = document.getElementById('topic-focus-clear');
+  const pillsRow = document.getElementById('topic-focus-pills');
+
+  // Build dropdown options from union of topics, geometry, and symmetry
+  const allIds = new Set();
+  AUDITS_STATE.topics.forEach((t) => allIds.add(String(t.topic_id)));
+  (AUDITS_STATE.audits?.topic_geometry || []).forEach((t) => allIds.add(String(t.topic_id)));
+  Object.keys(AUDITS_STATE.audits?.label_symmetry?.topic_deltas || {}).forEach((id) => allIds.add(String(id)));
+
+  const idToName = new Map();
+  AUDITS_STATE.topics.forEach((t) => idToName.set(String(t.topic_id), t.name || t.topic_id));
+  (AUDITS_STATE.audits?.topic_geometry || []).forEach((t) => {
+    if (!idToName.has(String(t.topic_id))) idToName.set(String(t.topic_id), t.name || t.topic_id);
+  });
+
+  const options = Array.from(allIds)
+    .sort((a, b) => {
+      const nameA = String(idToName.get(a) || a).toLowerCase();
+      const nameB = String(idToName.get(b) || b).toLowerCase();
+      return nameA.localeCompare(nameB) || a.localeCompare(b);
+    })
+    .map((id) => {
+      const name = idToName.get(id) || id;
+      const label = name !== id ? `${BDA.escapeHtml(name)} (${BDA.escapeHtml(id)})` : BDA.escapeHtml(id);
+      const selected = AUDITS_STATE.selectedTopicId === id ? ' selected' : '';
+      return `<option value="${BDA.escapeHtml(id)}"${selected}>${label}</option>`;
+    });
+
+  select.innerHTML = `<option value="">All topics</option>` + options.join('');
+  clearBtn.style.display = AUDITS_STATE.selectedTopicId ? 'inline-flex' : 'none';
+
+  // Quick focus pills: most contested, biggest mover, highest drift
+  const normalized = AUDITS_STATE.topics.map((topic) => ({
+    ...topic,
+    _topicId: String(topic.topic_id || ''),
+    _relevance: toFiniteNumber(topic.relevance, 0),
+    _leadMargin: computeLeadMargin(topic.scores),
+    _drift: toFiniteNumber(topic.drift_score, 0),
+  }));
+
+  const withMargin = normalized.filter((t) => Number.isFinite(t._leadMargin));
+  const mostContested = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      toFiniteNumber(a._leadMargin, 1) - toFiniteNumber(b._leadMargin, 1)
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  const biggestMover = (withMargin.length > 0 ? withMargin : normalized)
+    .slice()
+    .sort((a, b) => (
+      (b._relevance * toFiniteNumber(b._leadMargin, 1))
+      - (a._relevance * toFiniteNumber(a._leadMargin, 1))
+      || b._relevance - a._relevance
+      || a._topicId.localeCompare(b._topicId)
+    ))[0];
+
+  const highestDrift = normalized.slice().sort((a, b) => b._drift - a._drift || a._topicId.localeCompare(b._topicId))[0];
+
+  const pills = [];
+  if (mostContested) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(mostContested._topicId)}">Most contested: ${BDA.escapeHtml(mostContested.name || mostContested._topicId)}</button>`);
+  }
+  if (biggestMover) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(biggestMover._topicId)}">Biggest mover: ${BDA.escapeHtml(biggestMover.name || biggestMover._topicId)}</button>`);
+  }
+  if (highestDrift) {
+    pills.push(`<button type="button" class="pill topic-focus-pill" data-topic-id="${BDA.escapeHtml(highestDrift._topicId)}">Highest drift: ${BDA.escapeHtml(highestDrift.name || highestDrift._topicId)}</button>`);
+  }
+  pillsRow.innerHTML = pills.join('');
+}
+
+function setSelectedTopic(topicId, options = {}) {
+  const { updateUrl = true } = options;
+  AUDITS_STATE.selectedTopicId = topicId || null;
+  renderTopicFocusBar();
+  renderSelectedTopicSummary();
+  renderTopicFocusContext();
+  renderTopicGeometrySection();
+  renderSymmetrySection();
+  if (updateUrl) syncTopicFilterUrl();
+}
+
+function syncTopicFilterUrl() {
+  const url = new URL(window.location.href);
+  if (AUDITS_STATE.selectedTopicId) url.searchParams.set('topic', AUDITS_STATE.selectedTopicId);
+  else url.searchParams.delete('topic');
+  window.history.replaceState({}, '', url);
+}
+
+function bindAuditTopicControls() {
+  const select = document.getElementById('topic-focus-select');
+  const clearBtn = document.getElementById('topic-focus-clear');
+  const pillsRow = document.getElementById('topic-focus-pills');
+
+  if (select) {
+    select.addEventListener('change', (e) => {
+      setSelectedTopic(e.target.value || null);
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      setSelectedTopic(null);
+    });
+  }
+
+  if (pillsRow) {
+    pillsRow.addEventListener('click', (e) => {
+      const pill = e.target.closest('.topic-focus-pill');
+      if (!pill) return;
+      setSelectedTopic(pill.dataset.topicId || null);
+    });
+  }
+}
+
+function rerenderAuditPanels() {
+  renderTopicFocusBar();
+  renderSelectedTopicSummary();
+  renderTopicFocusContext();
+  renderTopicGeometrySection();
+  renderSymmetrySection();
+  renderGlobalAuditSections();
+}
+
+function renderStability(stability) {
+  const layers = [
+    ['FACT', stability.fact_overlap || {}],
+    ['ARGUMENT', stability.argument_overlap || {}]
+  ];
+
+  document.getElementById('stability-tbody').innerHTML = layers.map(([label, metrics]) => `
+    <tr>
+      <td>${label}</td>
+      <td class="mono">${BDA.formatNumber(metrics.jaccard, 3)}</td>
+      <td class="mono">${BDA.formatNumber(metrics.precision, 3)}</td>
+      <td class="mono">${BDA.formatNumber(metrics.recall, 3)}</td>
+      <td class="mono">${metrics.intersection_size ?? 0} / ${metrics.set1_size ?? 0} / ${metrics.set2_size ?? 0}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('stability-runs').textContent = stability.num_runs ?? '-';
+  document.getElementById('stability-score').textContent = BDA.formatNumber(stability.stability_score, 3);
+
+  const mismatches = stability.mismatches || [];
+  document.getElementById('mismatch-report').textContent = mismatches.length
+    ? mismatches.map((item) => `- ${item.type}: ${item.fact_text} [severity=${item.severity}, p=${BDA.formatNumber(item.p_true, 2)}]`).join('\n')
+    : 'No extraction mismatches were recorded for this snapshot.';
+}
+
+function renderDisagreement(disagreement) {
+  document.getElementById('disagreement-tbody').innerHTML = `
+    <tr><td>Reasoning spread</td><td class="mono">${BDA.formatNumber(disagreement.reasoning_iqr_median, 2)}</td><td>Median IQR across judge reasoning scores.</td></tr>
+    <tr><td>Coverage spread</td><td class="mono">${BDA.formatNumber(disagreement.coverage_iqr_median, 2)}</td><td>Median IQR across judge coverage scores.</td></tr>
+    <tr><td>Overall score spread</td><td class="mono">${BDA.formatNumber(disagreement.overall_iqr, 2)}</td><td>Spread of final side scores.</td></tr>
+  `;
+}
+
+function renderRelevanceSensitivity(data) {
+  document.getElementById('rel-d-mean').textContent = BDA.formatNumber(data.d_mean, 4);
+  document.getElementById('rel-d-std').textContent = BDA.formatNumber(data.d_std, 4);
+  document.getElementById('rel-d-range').textContent = `${BDA.formatNumber(data.d_min, 4)} to ${BDA.formatNumber(data.d_max, 4)}`;
+  document.getElementById('rel-stability-ratio').textContent = BDA.formatNumber(data.stability_ratio, 2);
+  document.getElementById('rel-interpretation').textContent = data.interpretation || '-';
+
+  const verdictDistribution = Object.entries(data.verdict_distribution || {});
+  const row = document.getElementById('rel-verdict-distribution');
+  row.innerHTML = verdictDistribution.length
+    ? verdictDistribution.map(([label, count]) => `<span class="pill">${BDA.escapeHtml(label)}: <span class="mono">${count}</span></span>`).join('')
+    : '<small style="color:var(--muted)">No verdict distribution available.</small>';
+}
+
+function renderV12AuditMatrix(audits) {
+  const dominance = audits.topic_dominance || {};
+  const merge = audits.merge_sensitivity || {};
+  const participation = audits.participation_concentration || {};
+  const concentration = participation.concentration_buckets || {};
+  const integrity = audits.integrity_indicators || {};
+  const template = integrity.template_similarity_prevalence || {};
+  const cap = audits.centrality_cap_effect || {};
+  const coverage = audits.coverage_adequacy_trace || {};
+  const frame = audits.frame_sensitivity || {};
+
+  document.getElementById('audit-schema-version').textContent = audits.audit_schema_version || '-';
+  document.getElementById('audit-top3-pre').textContent = BDA.formatNumber(dominance.top_3_canonical_mass_share || 0, 4);
+  document.getElementById('audit-top3-sel').textContent = BDA.formatNumber(dominance.top_3_selected_mass_share || 0, 4);
+  document.getElementById('audit-merge-stability').textContent = BDA.formatNumber(merge.mapping_stability || 0, 4);
+  document.getElementById('audit-participation-entropy').textContent = BDA.formatNumber(participation.participation_entropy || 0, 4);
+  document.getElementById('audit-top10-share').textContent = BDA.formatNumber(concentration.top_10pct_share || 0, 4);
+  document.getElementById('audit-template-sim').textContent = BDA.formatNumber(template.template_similarity_rate || 0, 4);
+  document.getElementById('audit-items-capped').textContent = cap.items_affected_by_cap ?? 0;
+  document.getElementById('audit-cap-value').textContent = BDA.formatNumber(cap.cap_value || 0, 4);
+  document.getElementById('audit-pool-capped').textContent = BDA.formatNumber(cap.fraction_of_pool_capped || 0, 4);
+  document.getElementById('audit-coverage-mode').textContent = audits.formula_registry?.feature_flags?.COVERAGE_MODE || 'leverage_legacy';
+  document.getElementById('audit-frame-delta').textContent = BDA.formatNumber(frame.max_delta_d || 0, 4);
+  document.getElementById('audit-v12-raw').textContent = JSON.stringify({
+    topic_dominance: audits.topic_dominance,
+    topic_concentration: audits.topic_concentration,
+    merge_sensitivity: audits.merge_sensitivity,
+    integrity_indicators: audits.integrity_indicators,
+    participation_concentration: audits.participation_concentration,
+    budget_adequacy: audits.budget_adequacy,
+    centrality_cap_effect: audits.centrality_cap_effect,
+    rarity_utilization: audits.rarity_utilization,
+    coverage_adequacy_trace: audits.coverage_adequacy_trace,
+    frame_sensitivity: audits.frame_sensitivity,
+  }, null, 2);
+}
+
+async function loadAuditDependencies() {
+  const debate = await BDA.loadDebate();
+  if (!debate.has_debate) {
+    const debates = await BDA.loadDebates();
+    showAnalysisEmpty(renderDebateChoices(debates));
+    document.querySelectorAll('#analysis-empty [data-debate-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        BDA.setActiveDebateId(button.getAttribute('data-debate-id'));
+        window.location.reload();
+      });
+    });
+    return false;
+  }
+
+  const snapshot = await BDA.loadSnapshot();
+  if (!snapshot || !snapshot.has_snapshot) {
+    showAnalysisEmpty('This debate does not have auditable snapshot data yet. Generate a snapshot from <a href="new_debate.html">New Debate / Post Point</a> first.');
+    return false;
+  }
+
+  BDA.updateStateStrip(snapshot);
+  return true;
+}
+
+async function initAnalysisPage() {
+  bindTabEvents();
+  setAnalysisTab(getRequestedTab(), { updateUrl: false });
+
+  const ready = await loadAuditDependencies();
+  if (!ready) return;
+
+  // Load topics first so the focus bar can populate
+  try {
+    const topicsData = await BDA.api('/api/debate/topics');
+    AUDITS_STATE.topics = topicsData.topics || [];
+  } catch (error) {
+    console.warn('Unable to load topics for audit focus bar:', error);
+    AUDITS_STATE.topics = [];
+  }
+
+  // Restore topic focus from URL
+  const urlTopicId = getRequestedTopicId();
+  if (urlTopicId) AUDITS_STATE.selectedTopicId = urlTopicId;
+
+  let evidenceOk = false;
+  let auditsOk = false;
+
+  try {
+    const evidence = await BDA.api('/api/debate/evidence-targets');
+    renderEvidence(evidence);
+    evidenceOk = true;
+  } catch (error) {
+    const callout = document.getElementById('evidence-panel-error');
+    callout.innerHTML = `Unable to load live evidence targets right now: ${BDA.escapeHtml(error.message)}`;
+    callout.style.display = 'block';
+  }
+
+  try {
+    const audits = await BDA.api('/api/debate/audits');
+    AUDITS_STATE.audits = audits;
+    rerenderAuditPanels();
+    auditsOk = true;
+  } catch (error) {
+    const callout = document.getElementById('audits-panel-error');
+    callout.innerHTML = `Unable to load live audits right now: ${BDA.escapeHtml(error.message)}`;
+    callout.style.display = 'block';
+  }
+
+  bindAuditTopicControls();
+
+  if (!evidenceOk && !auditsOk) {
+    showAnalysisEmpty('Unable to load live evidence or audits right now. Please try again.');
+    return;
+  }
+
+  showAnalysisContent();
+  BDA.setupTableScroll();
+  BDA.setupTooltips();
+}
+
+document.addEventListener('DOMContentLoaded', initAnalysisPage);
+</script>
+</body>
+</html>

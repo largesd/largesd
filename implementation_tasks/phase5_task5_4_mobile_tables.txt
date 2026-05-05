@@ -1,0 +1,59 @@
+================================================================================
+  TASK 5.4: Improve mobile tables
+  Phase: 5 — Frontend Refinement (Week 3)
+  Priority: 🟡 High / 🟢 Medium | Effort: 0.5–1 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • .table has min-width: 680px
+  • Horizontal scroll on mobile
+
+TARGET STATE
+────────────
+  • Card-based layout for tables on screens < 768px
+  • Maintain tabular layout on desktop
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Add responsive table CSS:
+       @media (max-width: 767px) {
+         .table-responsive {
+           display: block;
+         }
+         .table-responsive thead {
+           display: none;
+         }
+         .table-responsive tr {
+           display: block;
+           margin-bottom: var(--space-md);
+           border: 1px solid var(--color-border);
+           border-radius: var(--radius-md);
+           padding: var(--space-sm);
+         }
+         .table-responsive td {
+           display: flex;
+           justify-content: space-between;
+           padding: var(--space-xs) 0;
+           border-bottom: 1px solid var(--color-border-subtle);
+         }
+         .table-responsive td::before {
+           content: attr(data-label);
+           font-weight: 600;
+           margin-right: var(--space-sm);
+         }
+         .table-responsive td:last-child {
+           border-bottom: none;
+         }
+       }
+
+  2. Update HTML tables to include data-label attributes:
+       <td data-label="Debate Topic">...</td>
+
+  3. Test on actual mobile device or browser dev tools
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] Tables readable without horizontal scroll on 375px width
+  [ ] Desktop table layout unchanged
+  [ ] All table cells have data-label for card view

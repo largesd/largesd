@@ -1,0 +1,3081 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    html.route-auth-pending main {
+      visibility: hidden;
+    }
+
+    .admin-page {
+      --admin-space-block: clamp(var(--space-lg), 2.2vw, var(--space-2xl));
+      --admin-space-section: clamp(var(--space-xl), 3vw, var(--space-3xl));
+    }
+
+    .admin-access-denied {
+      display: none;
+      max-width: 72ch;
+      margin: clamp(var(--space-xl), 3vw, var(--space-3xl)) auto;
+    }
+
+    .admin-page.admin-locked .admin-access-denied {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-page.admin-locked .admin-hero,
+    .admin-page.admin-locked .admin-shell {
+      display: none;
+    }
+
+    .admin-access-denied-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+
+    .admin-hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(var(--space-lg), 2.4vw, var(--space-2xl));
+      border-color: color-mix(in oklch, var(--accent), white 74%);
+      background:
+        linear-gradient(
+          160deg,
+          color-mix(in oklch, var(--surface-accent), white 58%) 0%,
+          var(--surface-raised) 42%,
+          var(--surface-raised) 100%
+        );
+    }
+
+    .admin-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--accent), white 86%) 0%, transparent 56%);
+    }
+
+    .admin-hero-content,
+    .admin-shell {
+      position: relative;
+      z-index: 1;
+    }
+
+    .admin-hero-grid {
+      display: grid;
+      gap: var(--admin-space-block);
+      margin-top: var(--admin-space-block);
+    }
+
+    @media (min-width: 900px) {
+      .admin-hero-grid {
+        grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+      }
+    }
+
+    .admin-hero-panel {
+      display: grid;
+      gap: var(--space-sm);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .admin-hero-panel + .admin-hero-panel {
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+      padding-top: var(--space-md);
+    }
+
+    @media (min-width: 900px) {
+      .admin-hero-panel + .admin-hero-panel {
+        border-top: 0;
+        border-left: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 40%);
+        padding-top: 0;
+        padding-left: var(--space-lg);
+      }
+    }
+
+    .admin-sidebar-card,
+    .config-section {
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-muted) 18%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .admin-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .admin-status-tile {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--surface-muted);
+    }
+
+    .admin-status-tile span {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.045em;
+      font-weight: 600;
+    }
+
+    .admin-status-tile strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.04rem;
+      line-height: 1.2;
+      color: var(--ink-strong);
+    }
+
+    .admin-shell {
+      display: grid;
+      gap: var(--admin-space-block);
+      margin-top: clamp(var(--space-xl), 3vw, var(--space-3xl));
+      align-items: start;
+    }
+
+    @media (min-width: 980px) {
+      .admin-shell {
+        grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      }
+    }
+
+    .admin-sidebar {
+      display: grid;
+      gap: var(--space-lg);
+      align-self: start;
+    }
+
+    @media (min-width: 980px) {
+      .admin-sidebar {
+        position: sticky;
+        top: 96px;
+      }
+    }
+
+    .admin-main {
+      display: grid;
+      gap: var(--admin-space-section);
+      min-width: 0;
+    }
+
+    .admin-sidebar-card {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-sidebar-card h3 {
+      margin: 0;
+    }
+
+    .admin-quicklinks,
+    .admin-flow,
+    .admin-sidebar-list {
+      max-height: none;
+      overflow: visible;
+    }
+
+    .admin-quicklinks {
+      display: grid;
+      gap: var(--space-sm);
+    }
+
+    .admin-quicklink {
+      display: block;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: var(--surface-muted);
+      color: var(--ink-strong);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+
+    .admin-quicklink:hover,
+    .admin-quicklink:focus-visible {
+      border-color: color-mix(in oklch, var(--accent), white 58%);
+      background: color-mix(in oklch, var(--surface-accent), white 48%);
+      color: var(--ink-strong);
+      text-decoration: none;
+      transform: translateX(2px);
+    }
+
+    .admin-quicklink strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 0.84rem;
+      color: var(--ink-strong);
+      font-weight: 650;
+    }
+
+    .admin-quicklink span {
+      display: block;
+      font-size: 0.76rem;
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    .admin-step {
+      scroll-margin-top: 104px;
+      display: grid;
+      gap: var(--space-md);
+      padding-top: var(--space-lg);
+      border: 0;
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-base) 28%);
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .admin-main > .admin-step:first-child {
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    .admin-step-head {
+      display: flex;
+      gap: var(--space-sm) var(--space-lg);
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-bottom: var(--space-sm);
+    }
+
+    .admin-step-head p {
+      max-width: 60ch;
+      margin: 0;
+    }
+
+    .step-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.69rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .step-label::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 82%);
+      flex-shrink: 0;
+    }
+
+    .template-picker {
+      display: grid;
+      gap: var(--space-sm);
+      align-items: end;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      padding: var(--space-md);
+    }
+
+    @media (min-width: 760px) {
+      .template-picker {
+        grid-template-columns: minmax(0, 1.45fr) minmax(170px, 0.85fr) auto;
+      }
+    }
+
+    .template-picker .form-group {
+      margin-bottom: 0;
+    }
+
+    .template-active-indicator {
+      padding-bottom: 0;
+      align-self: center;
+    }
+
+    .template-note {
+      margin-top: var(--space-md);
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      color: var(--ink-default);
+      font-size: 0.84rem;
+    }
+
+    .guardrail-grid {
+      display: grid;
+      gap: var(--admin-space-block);
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 760px) {
+      .guardrail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 1180px) {
+      .guardrail-grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+      }
+
+      .guardrail-grid .config-section:nth-child(1) {
+        grid-column: span 5;
+      }
+
+      .guardrail-grid .config-section:nth-child(2) {
+        grid-column: span 7;
+      }
+
+      .guardrail-grid .config-section:nth-child(n + 3) {
+        grid-column: span 4;
+      }
+    }
+
+    .config-section {
+      display: grid;
+      gap: var(--space-md);
+      align-content: start;
+    }
+
+    .config-section h3 {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      margin-bottom: 0;
+    }
+
+    .config-section h3::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 82%);
+      flex-shrink: 0;
+    }
+
+    .config-intro {
+      margin: 0;
+      font-size: 0.84rem;
+      color: var(--ink-default);
+      max-width: 54ch;
+    }
+
+    .config-section h4 {
+      margin: var(--space-sm) 0 0;
+      font-size: 0.74rem;
+      color: var(--ink-soft);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .checkbox-group {
+      display: grid;
+      gap: var(--space-xs);
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      text-transform: none;
+      letter-spacing: normal;
+      font-size: 0.84rem;
+      color: var(--ink-strong);
+      cursor: pointer;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      transition: background-color 140ms ease;
+    }
+
+    .checkbox-group label:hover,
+    .checkbox-group label:focus-within {
+      background: color-mix(in oklch, var(--surface-accent), white 46%);
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      margin-top: 2px;
+      width: auto;
+      flex-shrink: 0;
+    }
+
+    .range-with-labels {
+      margin-top: var(--space-xs);
+    }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--ink-soft);
+      margin-top: var(--space-2xs);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--line);
+      border-radius: 999px;
+      border: 0;
+      padding: 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--surface-raised);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--surface-raised);
+    }
+
+    input[type="range"]:focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--accent), white 22%);
+      outline-offset: 2px;
+    }
+
+    .action-bar {
+      background: color-mix(in oklch, var(--surface-accent), white 45%);
+      border-color: color-mix(in oklch, var(--accent), white 62%);
+    }
+
+    .apply-actions {
+      display: grid;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .apply-actions .button {
+      justify-content: center;
+      width: 100%;
+    }
+
+    .apply-actions .button.success-action {
+      border-color: color-mix(in oklch, var(--good), white 66%);
+      background: color-mix(in oklch, var(--good), white 88%);
+      color: color-mix(in oklch, var(--good), black 24%);
+    }
+
+    .apply-actions .button.success-action:hover {
+      border-color: color-mix(in oklch, var(--good), white 52%);
+      background: color-mix(in oklch, var(--good), white 82%);
+      color: color-mix(in oklch, var(--good), black 30%);
+    }
+
+    .admin-copy-tight {
+      font-size: 0.84rem;
+      max-width: 68ch;
+    }
+
+    .admin-callout-top {
+      margin-top: var(--space-md);
+    }
+
+    .admin-callout-inline {
+      margin: var(--space-sm) 0;
+      padding: var(--space-sm) var(--space-md);
+    }
+
+    .admin-safe-default {
+      margin: 0;
+      color: var(--ink-default);
+      font-size: 0.8rem;
+    }
+
+    .admin-safe-default strong {
+      color: var(--ink-strong);
+    }
+
+    .admin-form-stack-tight {
+      margin-top: var(--space-sm);
+      margin-bottom: 0;
+    }
+
+    .admin-grid-tight {
+      gap: var(--space-sm);
+    }
+
+    .admin-form-group-tight {
+      margin-bottom: 0;
+    }
+
+    .preview-grid {
+      display: grid;
+      gap: var(--admin-space-block);
+      margin-top: var(--space-sm);
+    }
+
+    @media (min-width: 760px) {
+      .preview-grid {
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      }
+    }
+
+    .preview-box {
+      background: var(--surface-muted);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      border: 1px solid var(--line);
+    }
+
+    .preview-box h4 {
+      margin: 0 0 10px;
+      font-size: 0.88rem;
+      line-height: 1.3;
+      font-family: var(--sans);
+      font-weight: 650;
+      color: var(--ink-strong);
+      max-width: 100%;
+    }
+
+    .preview-box h4.preview-allowed {
+      color: color-mix(in oklch, var(--good), black 20%);
+    }
+
+    .preview-box h4.preview-blocked {
+      color: color-mix(in oklch, var(--bad), black 18%);
+    }
+
+    .preview-box ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 0.84rem;
+    }
+
+    .preview-box li {
+      margin-bottom: 6px;
+    }
+
+    .allowed-list li::marker {
+      color: color-mix(in oklch, var(--good), black 14%);
+    }
+
+    .blocked-list li::marker {
+      color: color-mix(in oklch, var(--bad), black 14%);
+    }
+
+    .admin-data-stack {
+      display: grid;
+      gap: var(--admin-space-section);
+    }
+
+    .admin-metric-grid {
+      margin-top: 0;
+    }
+
+    .metric-chip strong.metric-good {
+      color: color-mix(in oklch, var(--good), black 18%);
+    }
+
+    .metric-chip strong.metric-bad {
+      color: color-mix(in oklch, var(--bad), black 14%);
+    }
+
+    .admin-subsection-title {
+      margin-top: var(--space-lg);
+    }
+
+    .admin-footnote {
+      display: block;
+      margin-top: var(--space-md);
+    }
+
+    .admin-status-tile span,
+    .config-section h4,
+    .table th {
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
+    .admin-hero-grid--compact {
+      align-items: start;
+    }
+
+    .admin-workspace-bar {
+      margin-top: clamp(var(--space-xl), 3vw, var(--space-3xl));
+    }
+
+    .admin-workspace-tabs {
+      display: grid;
+      gap: var(--space-sm);
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+
+    .admin-workspace-tab {
+      display: grid;
+      gap: 6px;
+      grid-template-rows: auto auto 1fr;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in oklch, var(--surface-raised), var(--surface-muted) 10%);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+
+    .admin-workspace-tab:hover,
+    .admin-workspace-tab:focus-visible {
+      border-color: color-mix(in oklch, var(--accent), white 56%);
+      background: color-mix(in oklch, var(--surface-accent), white 56%);
+      transform: translateY(-1px);
+    }
+
+    .admin-workspace-tab[aria-selected="true"] {
+      border-color: color-mix(in oklch, var(--accent), white 42%);
+      background: color-mix(in oklch, var(--surface-accent), white 42%);
+      box-shadow: var(--shadow);
+    }
+
+    .admin-workspace-tab-title {
+      display: block;
+      color: var(--ink-strong);
+      font-family: var(--serif);
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .admin-workspace-tab-copy {
+      display: block;
+      color: var(--ink-default);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .admin-workspace-tab-meta {
+      display: inline-flex;
+      align-items: center;
+      align-self: end;
+      justify-self: start;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface-muted);
+      border: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      max-width: 100%;
+    }
+
+    .admin-workspaces {
+      margin-top: var(--space-lg);
+    }
+
+    .admin-workspace[hidden] {
+      display: none !important;
+    }
+
+    .admin-workspace-panel {
+      display: grid;
+      gap: var(--space-lg);
+      margin-top: 0;
+      padding: clamp(var(--space-lg), 2vw, var(--space-2xl));
+    }
+
+    .admin-workspace-panel .admin-step-head {
+      margin-bottom: 0;
+    }
+
+    .admin-shell--policy {
+      margin-top: 0;
+    }
+
+    .admin-policy-sidebar {
+      display: grid;
+      gap: var(--space-lg);
+      align-self: start;
+    }
+
+    @media (min-width: 980px) {
+      .admin-shell--policy {
+        grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+      }
+
+      .admin-policy-sidebar {
+        position: sticky;
+        top: 96px;
+      }
+    }
+
+    .admin-summary-list {
+      display: grid;
+      gap: 0;
+      margin: 0;
+    }
+
+    .admin-summary-list > div {
+      display: grid;
+      gap: 4px;
+      padding: 10px 0;
+      border-top: 1px solid color-mix(in oklch, var(--line), var(--surface-raised) 36%);
+    }
+
+    .admin-summary-list > div:first-child {
+      padding-top: 0;
+      border-top: 0;
+    }
+
+    .admin-summary-list dt {
+      color: var(--ink-soft);
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+    }
+
+    .admin-summary-list dd {
+      margin: 0;
+      color: var(--ink-strong);
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .admin-sidebar-card .admin-change-list {
+      padding-left: 18px;
+    }
+
+    .admin-sidebar-card .admin-change-list li + li {
+      margin-top: 8px;
+    }
+
+    .admin-policy-callout {
+      margin-top: 0;
+    }
+
+    .admin-step-status {
+      align-self: flex-start;
+    }
+
+    .preview-grid {
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 920px) {
+      .preview-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .preview-box--wide {
+      grid-column: 1 / -1;
+    }
+
+    .admin-preview-summary {
+      margin: 0;
+      color: var(--ink-default);
+      font-size: 0.95rem;
+      line-height: 1.55;
+      max-width: 62ch;
+    }
+
+    .admin-preview-summary strong {
+      color: var(--ink-strong);
+    }
+
+    .admin-step-subgrid {
+      display: grid;
+      gap: var(--space-lg);
+    }
+
+    .admin-filter-bar {
+      margin-bottom: var(--space-md);
+    }
+
+    .template-picker.admin-filter-bar .template-active-indicator {
+      align-self: end;
+      margin-bottom: 8px;
+    }
+
+    .notice.is-loading {
+      background: color-mix(in oklch, var(--surface-accent), white 34%);
+      border-color: color-mix(in oklch, var(--accent), white 60%);
+      color: var(--ink-default);
+    }
+
+    .admin-inline-note {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 820px) {
+      .nav {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        padding: var(--space-sm) var(--space-md);
+      }
+
+      .brand {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .brand-title {
+        font-size: 1.1rem;
+      }
+
+      .brand-subtitle {
+        font-size: 0.72rem;
+      }
+
+      .navlinks {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-start;
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .navlinks {
+        flex-wrap: wrap;
+        overflow: visible;
+        padding-bottom: 0;
+      }
+
+      .admin-page {
+        padding-left: var(--space-md);
+        padding-right: var(--space-md);
+      }
+
+      .admin-status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .admin-workspace-tabs {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .admin-quicklink,
+      .checkbox-group label,
+      .apply-actions .button {
+        transition: none;
+      }
+
+      .admin-quicklink:hover,
+      .admin-quicklink:focus-visible {
+        transform: none;
+      }
+    }
+
+    /* Human review workspace */
+    .flag-tag {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: color-mix(in oklch, var(--warn), white 78%);
+      color: color-mix(in oklch, var(--warn), black 30%);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: inline-block;
+      margin-right: 4px;
+      margin-bottom: 2px;
+    }
+    .flag-tag.critical {
+      background: color-mix(in oklch, var(--bad), white 86%);
+      color: color-mix(in oklch, var(--bad), black 22%);
+    }
+    .non-authoritative-panel {
+      border: 1px dashed var(--line);
+      background: var(--surface-muted);
+      opacity: 0.92;
+    }
+    .suppressed-count {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .status-supported { color: color-mix(in oklch, var(--good), black 18%); font-weight: 600; }
+    .status-refuted { color: color-mix(in oklch, var(--bad), black 14%); font-weight: 600; }
+    .status-insufficient { color: color-mix(in oklch, var(--warn), black 10%); font-weight: 600; }
+  </style>
+  <script>
+    (function gateAdminRouteBeforePaint() {
+      const root = document.documentElement;
+      root.classList.add('route-auth-pending');
+      root.setAttribute('aria-busy', 'true');
+      try {
+        const token = localStorage.getItem('access_token');
+        const userJson = localStorage.getItem('user');
+        const user = userJson ? JSON.parse(userJson) : null;
+        if (!token || !user || !user.is_admin) {
+          const next = `${window.location.pathname || '/admin.html'}${window.location.search || ''}${window.location.hash || ''}`;
+          const params = new URLSearchParams();
+          params.set('reason', 'admin-login-required');
+          params.set('next', next);
+          window.location.replace(`login.html?${params.toString()}`);
+        }
+      } catch (error) {
+        window.location.replace('login.html?reason=admin-login-required');
+      }
+    })();
+  </script>
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="verdict.html">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<main id="main-content" class="admin-page">
+<section class="card admin-access-denied" id="admin-access-denied" aria-live="polite">
+  <div class="section-head">
+    <div>
+      <h1>Admin Access Restricted</h1>
+      <p class="lede" id="admin-access-denied-copy">You are signed in, but this account does not have permission to use admin tools.</p>
+    </div>
+    <span class="pill bad">Access Denied</span>
+  </div>
+  <p class="lede" id="admin-access-denied-detail">Use a different account with admin privileges, or ask an existing admin to grant access.</p>
+  <div class="admin-access-denied-actions">
+    <a class="button secondary" href="index.html">Back to Home</a>
+    <a class="button" href="login.html?reason=admin-forbidden&next=%2Fadmin.html">Sign In With Another Account</a>
+  </div>
+</section>
+
+<section class="card admin-hero">
+  <div class="admin-hero-content">
+    <div class="section-head">
+      <div>
+        <h2>Admin Control Center</h2>
+        <p class="lede">Shape the next moderation version, review incoming work, and sanity-check live outcomes without losing your place. Policy editing, review queues, and operational checks now live in separate workspaces so you can stay in one admin task at a time.</p>
+      </div>
+      <span class="pill warn">Admin Access</span>
+    </div>
+
+    <div class="admin-status-grid">
+      <div class="admin-status-tile">
+        <span>Current Template</span>
+        <strong id="hero-current-template">Loading current template...</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Active Version</span>
+        <strong class="mono" id="hero-active-version">—</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Version History</span>
+        <strong id="hero-history-depth">Waiting for live data...</strong>
+      </div>
+      <div class="admin-status-tile">
+        <span>Data Connection</span>
+        <strong id="hero-data-state">Connecting to admin APIs...</strong>
+      </div>
+    </div>
+
+    <div class="admin-hero-grid admin-hero-grid--compact">
+      <div class="admin-hero-panel">
+        <h3>Primary Admin Rhythm</h3>
+        <p class="lede admin-copy-tight">The policy workspace is for shaping the next moderation version. The other workspaces are for reviewing requests and checking whether the live outcomes support the policy you are about to publish.</p>
+        <div class="callout soft admin-callout-top">
+          Existing snapshots remain immutable. Any policy version you apply here affects future snapshots only, and every published change remains visible in the audit trail.
+        </div>
+      </div>
+      <div class="admin-hero-panel">
+        <h3>Recommended Flow</h3>
+        <ol class="admin-flow">
+          <li>Use <strong>Policy Workspace</strong> to start from the active template, adjust guardrails, then review the participant-facing summary.</li>
+          <li>Use <strong>Proposal Queue</strong> only when you are triaging submitted debates.</li>
+          <li>Use <strong>Snapshot Audit</strong> after you draft policy changes, not before, to confirm the live distribution supports them.</li>
+          <li>Use <strong>Frame Governance</strong> as a separate governance lane, not as part of routine moderation tuning.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="admin-workspace-bar" aria-label="Admin workspaces">
+  <div class="admin-workspace-tabs" role="tablist" aria-label="Admin workspaces">
+    <button class="admin-workspace-tab" id="workspace-tab-policy" type="button" role="tab" aria-selected="true" aria-controls="workspace-policy" data-workspace-target="policy">
+      <span class="admin-workspace-tab-title">Policy Workspace</span>
+      <span class="admin-workspace-tab-copy">Choose a baseline, tune guardrails, and publish the next moderation version.</span>
+      <span class="admin-workspace-tab-meta" id="workspace-tab-policy-meta">Editing next snapshot policy</span>
+    </button>
+    <button class="admin-workspace-tab" id="workspace-tab-review" type="button" role="tab" aria-selected="false" aria-controls="workspace-review" data-workspace-target="review" tabindex="-1">
+      <span class="admin-workspace-tab-title">Proposal Queue</span>
+      <span class="admin-workspace-tab-copy">Review user-submitted debate proposals without mixing that work into policy editing.</span>
+      <span class="admin-workspace-tab-meta" id="workspace-tab-review-meta">Pending proposals</span>
+    </button>
+    <button class="admin-workspace-tab" id="workspace-tab-audit" type="button" role="tab" aria-selected="false" aria-controls="workspace-audit" data-workspace-target="audit" tabindex="-1">
+      <span class="admin-workspace-tab-title">Snapshot Audit</span>
+      <span class="admin-workspace-tab-copy">Compare the live moderation distribution against the posture you are about to publish.</span>
+      <span class="admin-workspace-tab-meta" id="workspace-tab-audit-meta">Reality check workspace</span>
+    </button>
+    <button class="admin-workspace-tab" id="workspace-tab-frames" type="button" role="tab" aria-selected="false" aria-controls="workspace-frames" data-workspace-target="frames" tabindex="-1">
+      <span class="admin-workspace-tab-title">Frame Governance</span>
+      <span class="admin-workspace-tab-copy">Keep frame petitions in a distinct governance lane instead of burying them below moderation controls.</span>
+      <span class="admin-workspace-tab-meta" id="workspace-tab-frames-meta">Separate governance queue</span>
+    </button>
+    <button class="admin-workspace-tab" id="workspace-tab-hr" type="button" role="tab" aria-selected="false" aria-controls="workspace-hr" data-workspace-target="hr" tabindex="-1">
+      <span class="admin-workspace-tab-title">Human Review / Fact-Check Audit</span>
+      <span class="admin-workspace-tab-copy">Review flagged empirical premises, inspect artifact replay records, and audit coverage traces.</span>
+      <span class="admin-workspace-tab-meta" id="workspace-tab-hr-meta">Queue + audit workspace</span>
+    </button>
+  </div>
+</section>
+
+<div class="admin-workspaces">
+  <section class="admin-workspace" id="workspace-policy" role="tabpanel" aria-labelledby="workspace-tab-policy">
+    <div class="admin-shell admin-shell--policy">
+      <aside class="admin-policy-sidebar">
+        <section class="admin-sidebar-card">
+          <h3>Editing Summary</h3>
+          <dl class="admin-summary-list">
+            <div>
+              <dt>Selected template</dt>
+              <dd id="summary-selected-template">Choose a template to begin.</dd>
+            </div>
+            <div>
+              <dt>Draft version</dt>
+              <dd class="mono" id="summary-version">1.0.0</dd>
+            </div>
+            <div>
+              <dt>Publish readiness</dt>
+              <dd id="summary-readiness">Waiting for live data...</dd>
+            </div>
+            <div>
+              <dt>Change scope</dt>
+              <dd id="summary-scope">Future snapshots only, existing snapshots stay immutable.</dd>
+            </div>
+          </dl>
+          <div class="callout soft admin-callout-inline admin-policy-callout">
+            <small class="admin-safe-default" id="summary-policy-note">
+              Start from the active template, adjust only the guardrails that need to move, and check the participant-facing language before you version a draft.
+            </small>
+          </div>
+        </section>
+
+        <section class="admin-sidebar-card action-bar">
+          <h3>Publish Next Version</h3>
+          <p class="lede admin-copy-tight">Draft first if you are still calibrating tradeoffs. Apply only after the participant-facing summary reads clearly and the change list still looks intentional.</p>
+          <div class="apply-actions">
+            <button class="button secondary" id="save-draft-btn" onclick="saveDraft()">Save Draft</button>
+            <button class="button success-action" id="apply-template-btn" onclick="applyTemplate()">Apply and Version</button>
+          </div>
+          <p class="notice" id="admin-action-feedback" role="status" aria-live="polite" hidden></p>
+        </section>
+
+        <section class="admin-sidebar-card">
+          <h3>Jump Within Policy</h3>
+          <div class="admin-quicklinks">
+            <a class="admin-quicklink" href="#template-selection">
+              <strong>Step 1: Base Template</strong>
+              <span>Choose the baseline and version path.</span>
+            </a>
+            <a class="admin-quicklink" href="#guardrails">
+              <strong>Step 2: Guardrails</strong>
+              <span>Tune moderation behavior category by category.</span>
+            </a>
+            <a class="admin-quicklink" href="#preview">
+              <strong>Step 3: Participant Preview</strong>
+              <span>Read the policy the way a participant would.</span>
+            </a>
+            <a class="admin-quicklink" href="#history">
+              <strong>Version History</strong>
+              <span>See what changed and who published it.</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="admin-sidebar-card">
+          <h3>What Changes Now</h3>
+          <ul class="admin-sidebar-list admin-change-list" id="preview-change-list">
+            <li>Loading the active policy so this list can compare draft changes against it.</li>
+          </ul>
+        </section>
+      </aside>
+
+      <div class="admin-main">
+        <section class="admin-step" id="template-selection">
+          <div class="admin-step-head">
+            <div>
+              <div class="step-label">Step 1</div>
+              <h3>Choose the Starting Point</h3>
+              <p class="lede">Begin from the active baseline whenever possible. The goal is not to reinvent moderation from scratch, it is to make the next published version legible, explainable, and easy to audit.</p>
+            </div>
+            <span class="pill good admin-step-status" id="template-current-state">Loading current state...</span>
+          </div>
+
+          <div class="template-picker">
+            <div class="form-group admin-form-group-tight">
+              <label for="template-base">Base Template</label>
+              <select id="template-base" onchange="loadTemplatePreview()">
+                <option value="">Select a template...</option>
+                <option value="standard_civility" selected>Standard Civility + PII Guard</option>
+                <option value="strict">Strict Academic</option>
+                <option value="minimal">Minimal (Spam/PII Only)</option>
+                <option value="custom">Custom Configuration</option>
+              </select>
+            </div>
+            <div class="form-group admin-form-group-tight">
+              <label for="template-version">Version</label>
+              <input type="text" id="template-version" value="1.0.0" placeholder="e.g., 1.0.0" />
+            </div>
+            <div class="template-active-indicator">
+              <span class="pill good" id="template-state-pill">Loading...</span>
+            </div>
+          </div>
+          <div class="template-note" id="template-note">
+            Template changes apply to the next snapshot only. Existing snapshots remain immutable, and each version stays visible in the audit trail.
+          </div>
+        </section>
+
+        <section class="admin-step" id="guardrails">
+          <div class="admin-step-head">
+            <div>
+              <div class="step-label">Step 2</div>
+              <h3>Tune Guardrails</h3>
+              <p class="lede">Make small, intentional changes. These settings define the moderation posture a participant experiences, so every change should make that posture easier to predict, not more surprising.</p>
+            </div>
+          </div>
+
+          <div class="guardrail-grid">
+            <section class="config-section">
+              <h3>On-Topic Requirements</h3>
+              <p class="lede config-intro">Define how tightly posts must stay aligned with the debate resolution and scope.</p>
+              <div class="form-group">
+                <label for="topic-keywords">Required Keywords or Phrases</label>
+                <textarea id="topic-keywords" rows="2" placeholder="e.g., AI, artificial intelligence, safety, regulation"></textarea>
+                <small>Posts must contain at least one required phrase to count as clearly on-topic.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="topic-threshold">Relevance Threshold</label>
+                <select id="topic-threshold">
+                  <option value="strict">Strict: must directly address the resolution</option>
+                  <option value="moderate" selected>Moderate: related to the debate scope</option>
+                  <option value="permissive">Permissive: tangential discussion allowed</option>
+                </select>
+              </div>
+
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="enforce-scope" checked />
+                  Enforce scope boundaries from debate definition
+                </label>
+              </div>
+            </section>
+
+            <section class="config-section">
+              <h3>Toxicity, Harassment, and Hate</h3>
+              <p class="lede config-intro">Control how sharply the system distinguishes vigorous disagreement from harmful language.</p>
+              <div class="form-group">
+                <label for="toxicity-level">Sensitivity Level</label>
+                <div class="range-with-labels">
+                  <input type="range" id="toxicity-level" min="1" max="5" value="3" />
+                  <div class="range-labels">
+                    <span>Permissive</span>
+                    <span>Balanced</span>
+                    <span>Strict</span>
+                  </div>
+                </div>
+                <small id="toxicity-summary">Current: Balanced, blocks clear harassment and allows vigorous debate.</small>
+              </div>
+
+              <h4>Categories to Block</h4>
+              <div class="checkbox-group">
+                <label><input type="checkbox" id="toxicity-block-personal-attacks" checked /> Personal attacks and ad hominem</label>
+                <label><input type="checkbox" id="toxicity-block-hate-speech" checked /> Hate speech and discrimination</label>
+                <label><input type="checkbox" id="toxicity-block-threats" checked /> Threats or intimidation</label>
+                <label><input type="checkbox" id="toxicity-block-sexual-harassment" checked /> Sexual harassment</label>
+                <label><input type="checkbox" id="toxicity-block-mild-profanity" /> Profanity (mild allowed)</label>
+              </div>
+            </section>
+
+            <section class="config-section">
+              <h3>PII Restrictions</h3>
+              <p class="lede config-intro">Set the threshold for personal information detection and what happens when it appears.</p>
+              <h4>Detect and Intervene</h4>
+              <div class="checkbox-group">
+                <label><input type="checkbox" id="pii-detect-email" checked /> Email addresses</label>
+                <label><input type="checkbox" id="pii-detect-phone" checked /> Phone numbers</label>
+                <label><input type="checkbox" id="pii-detect-address" checked /> Physical addresses</label>
+                <label><input type="checkbox" id="pii-detect-full-names" /> Full names (pattern-based)</label>
+                <label><input type="checkbox" id="pii-detect-social-handles" /> Social media handles</label>
+              </div>
+
+              <div class="form-group admin-form-stack-tight">
+                <label for="pii-action">PII Detection Action</label>
+                <select id="pii-action">
+                  <option value="block" selected>Block entire post</option>
+                  <option value="redact">Redact PII and allow</option>
+                  <option value="flag">Flag for manual review</option>
+                </select>
+              </div>
+            </section>
+
+            <section class="config-section">
+              <h3>Spam and Length Constraints</h3>
+              <p class="lede config-intro">Set minimum substance, maximum length, and anti-flooding controls.</p>
+              <div class="grid cols2 admin-grid-tight">
+                <div class="form-group admin-form-group-tight">
+                  <label for="min-length">Minimum Length (chars)</label>
+                  <input type="number" id="min-length" value="50" min="0" />
+                </div>
+                <div class="form-group admin-form-group-tight">
+                  <label for="max-length">Maximum Length (chars)</label>
+                  <input type="number" id="max-length" value="5000" min="100" />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="flood-threshold">Flooding Threshold (posts/hour)</label>
+                <input type="number" id="flood-threshold" value="10" min="1" max="100" />
+              </div>
+
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="duplicate-detection" checked />
+                  Enable duplicate content detection
+                </label>
+                <label>
+                  <input type="checkbox" id="rate-limiting" checked />
+                  Enable rate limiting per source
+                </label>
+              </div>
+            </section>
+
+            <section class="config-section">
+              <h3>Prompt Injection Protection</h3>
+              <p class="lede config-intro">Decide how aggressively the system should block attempts to manipulate the adjudicator itself.</p>
+              <div class="checkbox-group">
+                <label>
+                  <input type="checkbox" id="injection-protection" checked />
+                  Enable prompt injection detection
+                </label>
+                <label>
+                  <input type="checkbox" id="injection-block-markdown" checked />
+                  Block markdown or code-block hiding attempts
+                </label>
+              </div>
+
+              <div class="form-group admin-form-stack-tight">
+                <label for="injection-patterns">Custom Patterns</label>
+                <textarea id="injection-patterns" rows="3" placeholder="ignore previous instructions&#10;system prompt&#10;jailbreak" style="resize: none;"></textarea>
+                <small>One pattern per line. Use only for real attack phrases you want the system to watch for.</small>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-step" id="preview">
+          <div class="admin-step-head">
+            <div>
+              <div class="step-label">Step 3</div>
+              <h3>Review the Participant-Facing Policy</h3>
+              <p class="lede">Read the policy the way a participant will read it. The goal is not only correct enforcement, it is predictable enforcement that still sounds measured and fair.</p>
+            </div>
+            <span class="pill warn admin-step-status" id="preview-confidence-pill">Draft preview</span>
+          </div>
+
+          <div class="preview-grid">
+            <div class="preview-box preview-box--wide">
+              <h4>What Participants Should Understand</h4>
+              <p class="admin-preview-summary" id="preview-summary-copy">Choose a template and adjust the guardrails to generate a live participant-facing summary.</p>
+            </div>
+            <div class="preview-box">
+              <h4 class="preview-allowed">Allowed Content</h4>
+              <ul class="compact-list allowed-list" id="preview-allowed-list">
+                <li>Loading policy preview...</li>
+              </ul>
+            </div>
+            <div class="preview-box">
+              <h4 class="preview-blocked">Blocked or Escalated Content</h4>
+              <ul class="compact-list blocked-list" id="preview-blocked-list">
+                <li>Loading policy preview...</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-step" id="history">
+          <div class="admin-step-head">
+            <div>
+              <div class="step-label">Audit Trail</div>
+              <h3>Template Version History</h3>
+              <p class="lede">Keep version history in the policy workspace so you can compare what you are editing against what was already published, without switching mental modes.</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Version</th>
+                  <th>Timestamp</th>
+                  <th>Admin</th>
+                  <th>Changes</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="template-history-tbody">
+                <tr>
+                  <td colspan="5" style="text-align:center;color:var(--muted)">Loading moderation template history...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <section class="card admin-workspace-panel admin-workspace" id="workspace-review" role="tabpanel" aria-labelledby="workspace-tab-review" hidden>
+    <div id="proposal-review"></div>
+    <div class="admin-step-head">
+      <div>
+        <div class="step-label">Review Queue</div>
+        <h3>Debate Proposal Review</h3>
+        <p class="lede">Review submitted debate proposals in their own workspace. This keeps accept or reject decisions separate from moderation policy drafting.</p>
+      </div>
+    </div>
+
+    <div class="template-picker admin-filter-bar">
+      <div class="form-group admin-form-group-tight">
+        <label for="proposal-filter">Filter by Status</label>
+        <select id="proposal-filter" onchange="loadProposals()">
+          <option value="">All</option>
+          <option value="pending" selected>Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="template-active-indicator">
+        <span class="pill" id="proposal-count-pill">0 proposals</span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Motion</th>
+            <th>Submitted</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="proposal-review-tbody">
+          <tr>
+            <td colspan="4" style="text-align:center;color:var(--muted)">Loading proposals...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="proposal-decision-panel" class="callout soft" style="display:none;">
+      <h4 id="proposal-decision-title">Reject Proposal</h4>
+      <div class="form-group">
+        <label for="proposal-decision-reason">Reason *</label>
+        <textarea id="proposal-decision-reason" rows="2" placeholder="Explain why this proposal is being rejected..."></textarea>
+      </div>
+      <p class="admin-inline-note">Reject only when the proposal cannot be reframed into an acceptable debate setup. Keep the reason concrete enough that the submitter can learn from it.</p>
+      <div class="row" style="gap: var(--space-sm);">
+        <button class="button secondary" onclick="cancelProposalDecision()">Cancel</button>
+        <button class="button" id="proposal-decision-confirm-btn" onclick="confirmProposalDecision()">Confirm Reject</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card admin-workspace-panel admin-workspace" id="workspace-audit" role="tabpanel" aria-labelledby="workspace-tab-audit" hidden>
+    <div id="snapshot-audit"></div>
+    <div class="admin-step-head">
+      <div>
+        <div class="step-label">Reality Check</div>
+        <h3>Snapshot Audit: Moderation Outcomes</h3>
+        <p class="lede">Use this workspace after you draft policy changes. It helps you compare the live moderation distribution against the posture you are about to publish so you do not tighten or loosen rules blindly.</p>
+      </div>
+    </div>
+
+    <div class="metric-grid admin-metric-grid">
+      <div class="metric-chip">
+        <span>Allowed Posts</span>
+        <strong class="metric-good" id="metric-allowed-posts">0</strong>
+      </div>
+      <div class="metric-chip">
+        <span>Blocked Posts</span>
+        <strong class="metric-bad" id="metric-blocked-posts">0</strong>
+      </div>
+      <div class="metric-chip">
+        <span>Block Rate</span>
+        <strong id="metric-block-rate">0.0%</strong>
+      </div>
+      <div class="metric-chip">
+        <span>Top Reason</span>
+        <strong id="metric-top-reason">—</strong>
+      </div>
+      <div class="metric-chip">
+        <span>Borderline Rate</span>
+        <strong id="metric-borderline-rate">0.0000</strong>
+      </div>
+      <div class="metric-chip">
+        <span>Suppression Policy</span>
+        <strong id="metric-suppression-policy">k=5</strong>
+      </div>
+    </div>
+
+    <h4 class="admin-subsection-title">Block Reasons Histogram</h4>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Reason Code</th>
+            <th>Count</th>
+            <th>Percentage</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody id="block-reasons-tbody">
+          <tr>
+            <td colspan="4" style="text-align:center;color:var(--muted)">No moderation snapshot data available yet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout soft" style="margin-top:16px;">
+      <strong>Small-count suppression:</strong>
+      <span id="suppression-policy-detail">No suppressed buckets in the current snapshot.</span>
+    </div>
+
+    <small class="admin-footnote">Only <span class="pill good">Allowed</span> posts influence topics, facts, arguments, scoring, and verdict. Block reasons stay visible in audit logs so moderation remains explainable.</small>
+  </section>
+
+  <section class="card admin-workspace-panel admin-workspace" id="workspace-frames" role="tabpanel" aria-labelledby="workspace-tab-frames" hidden>
+    <div id="frame-petition-queue"></div>
+    <div class="admin-step-head">
+      <div>
+        <div class="step-label">Frame Governance</div>
+        <h3>Candidate Frame Queue</h3>
+        <p class="lede">Frame petitions are governance work, not moderation drafting. Keep them separate so policy editing stays focused on content guardrails and publishing discipline.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Petition</th>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th>Decision</th>
+          </tr>
+        </thead>
+        <tbody id="frame-petitions-tbody">
+          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading frame petitions...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card admin-workspace-panel admin-workspace" id="workspace-hr" role="tabpanel" aria-labelledby="workspace-tab-hr" hidden>
+    <div class="admin-step-head">
+      <div>
+        <div class="step-label">Human Review</div>
+        <h3>Flagged Premise Queue</h3>
+        <p class="lede">Triage empirical premises flagged by the deterministic synthesis engine. Inspect artifact replay, authoritative hashes, and coverage adequacy traces.</p>
+      </div>
+    </div>
+
+    <div class="callout soft" id="hr-empty" style="display:none;"></div>
+
+    <div id="hr-content">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm);margin-bottom:var(--space-md);">
+        <span class="pill">Total flagged: <span class="mono" id="hr-total-flagged">-</span></span>
+        <span class="pill">Pending review: <span class="mono" id="hr-pending">-</span></span>
+        <span class="pill">Reviewed no change: <span class="mono" id="hr-nochange">-</span></span>
+        <span class="pill">Reviewed correction: <span class="mono" id="hr-correction">-</span></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Flag(s)</th>
+              <th>Premise ID</th>
+              <th>Topic</th>
+              <th>Side</th>
+              <th>Status</th>
+              <th>p</th>
+              <th>Best Tier</th>
+              <th>Insufficiency Reason</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="hr-queue-tbody">
+            <tr><td colspan="9" style="text-align:center;color:var(--muted)">Loading flagged premises...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Artifact Replay</div>
+          <h3>Fact-Check Audit</h3>
+          <p class="lede">Deep-dive into a single premise. Inspect the claim expression tree, evidence items, synthesis logic, and replay manifest.</p>
+        </div>
+      </div>
+
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm);margin-top:var(--space-md);margin-bottom:var(--space-md);">
+        <select id="hr-audit-select" class="topics-search" style="max-width:480px;">
+          <option value="">Select a premise to audit...</option>
+        </select>
+      </div>
+
+      <div id="hr-audit-panel" style="display:none;">
+        <div class="row" style="flex-wrap:wrap;gap:var(--space-sm);margin-bottom:var(--space-md);">
+          <span class="pill">Premise: <span class="mono" id="hr-audit-premise">-</span></span>
+          <span class="pill">Snapshot: <span class="mono" id="hr-audit-snapshot">-</span></span>
+          <span class="pill">Status: <span class="mono" id="hr-audit-status">-</span></span>
+          <span class="pill">p: <span class="mono" id="hr-audit-p">-</span></span>
+          <span class="pill">Auth hash: <span class="mono" id="hr-audit-auth-hash" style="font-size:0.72rem">-</span></span>
+        </div>
+
+        <details class="trace">
+          <summary>Claim expression tree</summary>
+          <div class="codebox" id="hr-audit-tree">No tree loaded.</div>
+        </details>
+
+        <details class="trace" style="margin-top:12px;">
+          <summary>Evidence items</summary>
+          <div class="table-wrap" style="margin-top:12px;">
+            <table class="table">
+              <thead>
+                <tr><th>ID</th><th>Source</th><th>Tier</th><th>Direction</th><th>Confidence</th><th>Method</th></tr>
+              </thead>
+              <tbody id="hr-audit-evidence-tbody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="trace" style="margin-top:12px;">
+          <summary>Synthesis logic</summary>
+          <div class="codebox" id="hr-audit-synthesis">No synthesis loaded.</div>
+        </details>
+
+        <details class="trace" style="margin-top:12px;">
+          <summary>Replay manifest</summary>
+          <div class="codebox" id="hr-audit-manifest">No manifest loaded.</div>
+        </details>
+
+        <div class="callout soft non-authoritative-panel" style="margin-top:16px;">
+          <h4 style="margin-top:0;font-size:0.82rem;color:var(--ink-soft)">Non-authoritative display summary</h4>
+          <p id="hr-audit-display" style="margin-bottom:0;font-size:0.88rem;color:var(--ink-default)">No display summary available.</p>
+          <small style="color:var(--muted)">This prose is generated after the authoritative result and cannot change status or p.</small>
+        </div>
+      </div>
+
+      <hr />
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Aggregate</div>
+          <h3>Flag Dashboard</h3>
+          <p class="lede">Public-safe aggregate counts by human-review flag with small-count suppression.</p>
+        </div>
+      </div>
+
+      <div class="admin-status-grid" style="margin-bottom:var(--space-md);">
+        <div class="admin-status-tile">
+          <span>Total Flagged</span>
+          <strong id="hr-dash-total">-</strong>
+        </div>
+        <div class="admin-status-tile">
+          <span>Reviewed</span>
+          <strong id="hr-dash-reviewed">-</strong>
+        </div>
+        <div class="admin-status-tile">
+          <span>Corrections</span>
+          <strong id="hr-dash-corrections">-</strong>
+        </div>
+        <div class="admin-status-tile">
+          <span>No Change</span>
+          <strong id="hr-dash-nochange">-</strong>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Flag</th><th>Count</th><th>% of flagged</th><th>Suppressed?</th></tr>
+          </thead>
+          <tbody id="hr-dash-tbody">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading flag dashboard...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="admin-inline-note" style="margin-top:8px;">Counts below 5 are suppressed to protect review integrity.</p>
+
+      <hr />
+      <div class="admin-step-head">
+        <div>
+          <div class="step-label">Coverage</div>
+          <h3>Coverage Adequacy Trace</h3>
+          <p class="lede">Distribution of rebuttal types across coverage adequacy labels. Diagnostic only — does not impact scoring.</p>
+        </div>
+      </div>
+
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm);margin-top:var(--space-md);margin-bottom:var(--space-md);">
+        <span class="pill">Total targets: <span class="mono" id="hr-cov-targets">-</span></span>
+        <span class="pill">Coverage rate: <span class="mono" id="hr-cov-rate">-</span></span>
+        <span class="pill">EMPIRICAL: <span class="mono" id="hr-cov-emp">-</span></span>
+        <span class="pill">NORMATIVE: <span class="mono" id="hr-cov-norm">-</span></span>
+        <span class="pill">INFERENCE: <span class="mono" id="hr-cov-inf">-</span></span>
+        <span class="pill">SCOPE/DEF: <span class="mono" id="hr-cov-scope">-</span></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Topic</th><th>Targets</th><th>Coverage Rate</th><th>EMPIRICAL</th><th>NORMATIVE</th><th>INFERENCE</th><th>SCOPE/DEF</th></tr>
+          </thead>
+          <tbody id="hr-cov-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted)">Loading coverage trace...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="BDA.toggleHelp(); return false;">Glossary</button></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<!-- Back to top button -->
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div id="shared-help-panel" data-panel="help-panel-admin"></div>
+
+
+  <script>
+  const AdminState = {
+    currentTemplate: null,
+    history: [],
+    availableBases: [],
+    currentWorkspace: 'policy',
+    hasLiveData: false,
+  };
+
+  const WORKSPACE_ORDER = ['policy', 'review', 'audit', 'frames', 'hr'];
+  const WORKSPACE_HASH_MAP = {
+    'workspace-policy': 'policy',
+    'workspace-review': 'review',
+    'workspace-audit': 'audit',
+    'workspace-frames': 'frames',
+    'workspace-hr': 'hr',
+    'template-selection': 'policy',
+    'guardrails': 'policy',
+    'preview': 'policy',
+    'history': 'policy',
+    'proposal-review': 'review',
+    'snapshot-audit': 'audit',
+    'frame-petition-queue': 'frames',
+    'human-review-queue': 'hr',
+  };
+
+  const POLICY_INPUT_IDS = [
+    'template-base',
+    'template-version',
+    'topic-keywords',
+    'topic-threshold',
+    'enforce-scope',
+    'toxicity-level',
+    'toxicity-block-personal-attacks',
+    'toxicity-block-hate-speech',
+    'toxicity-block-threats',
+    'toxicity-block-sexual-harassment',
+    'toxicity-block-mild-profanity',
+    'pii-detect-email',
+    'pii-detect-phone',
+    'pii-detect-address',
+    'pii-detect-full-names',
+    'pii-detect-social-handles',
+    'pii-action',
+    'min-length',
+    'max-length',
+    'flood-threshold',
+    'duplicate-detection',
+    'rate-limiting',
+    'injection-protection',
+    'injection-block-markdown',
+    'injection-patterns',
+  ];
+
+  function setText(id, value) {
+    const node = document.getElementById(id);
+    if (node) node.textContent = value;
+  }
+
+  function sanitizeUiMessage(message, fallback = 'Something went wrong while loading admin data.') {
+    const raw = String(message || '').trim();
+    if (!raw) return fallback;
+    if (/<!doctype html>|<html|<body|<head/i.test(raw)) {
+      return 'Live admin data could not load from this server. Open the application backend to review current templates, queues, and audit data.';
+    }
+    return raw.replace(/\s+/g, ' ');
+  }
+
+  function setHeroConnectionState(text, { hasLiveData = AdminState.hasLiveData } = {}) {
+    const node = document.getElementById('hero-data-state');
+    if (!node) return;
+    node.textContent = text;
+    node.className = hasLiveData ? 'metric-good' : '';
+  }
+
+  function updateHeroSummary(activeTemplate = AdminState.currentTemplate) {
+    const templateName = activeTemplate?.template_name || activeTemplate?.base_template_id || 'No live template loaded';
+    setText('hero-current-template', templateName);
+    setText('hero-active-version', activeTemplate?.version ? `v${activeTemplate.version}` : '—');
+    const historyCount = AdminState.history.length;
+    setText('hero-history-depth', historyCount ? `${historyCount} version${historyCount === 1 ? '' : 's'} tracked` : 'No history loaded yet');
+    setHeroConnectionState(
+      AdminState.hasLiveData ? 'Live admin data connected' : 'Preview mode only'
+    );
+  }
+
+  function setWorkspaceMeta(id, text) {
+    setText(id, text);
+  }
+
+  function resolveWorkspaceFromHash(hashValue) {
+    const normalized = String(hashValue || '').replace(/^#/, '');
+    return WORKSPACE_HASH_MAP[normalized] || 'policy';
+  }
+
+  function setActiveWorkspace(workspaceName, options = {}) {
+    const nextWorkspace = WORKSPACE_ORDER.includes(workspaceName) ? workspaceName : 'policy';
+    AdminState.currentWorkspace = nextWorkspace;
+
+    document.querySelectorAll('.admin-workspace-tab').forEach((tab) => {
+      const isActive = tab.dataset.workspaceTarget === nextWorkspace;
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      tab.tabIndex = isActive ? 0 : -1;
+    });
+
+    document.querySelectorAll('.admin-workspace').forEach((panel) => {
+      panel.hidden = panel.id !== `workspace-${nextWorkspace}`;
+    });
+
+    if (options.updateHash) {
+      window.history.replaceState(null, '', `#workspace-${nextWorkspace}`);
+    }
+
+    if (options.scrollIntoView) {
+      const panel = document.getElementById(`workspace-${nextWorkspace}`);
+      if (panel) panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }
+
+  function bindWorkspaceTabs() {
+    const tabs = Array.from(document.querySelectorAll('.admin-workspace-tab'));
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => {
+        setActiveWorkspace(tab.dataset.workspaceTarget || 'policy', { updateHash: true, scrollIntoView: true });
+      });
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        let nextIndex = index;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+        if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === 'Home') nextIndex = 0;
+        if (event.key === 'End') nextIndex = tabs.length - 1;
+        tabs[nextIndex].focus();
+        setActiveWorkspace(tabs[nextIndex].dataset.workspaceTarget || 'policy', { updateHash: true });
+      });
+    });
+
+    window.addEventListener('hashchange', () => {
+      const normalizedHash = String(window.location.hash || '').replace(/^#/, '');
+      setActiveWorkspace(resolveWorkspaceFromHash(window.location.hash));
+      const target = normalizedHash ? document.getElementById(normalizedHash) : null;
+      if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  }
+
+  function bindPolicyInputs() {
+    POLICY_INPUT_IDS.forEach((id) => {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.addEventListener('input', loadTemplatePreview);
+      node.addEventListener('change', loadTemplatePreview);
+    });
+  }
+
+  function releaseRouteAuthGate() {
+    const root = document.documentElement;
+    root.classList.remove('route-auth-pending');
+    root.removeAttribute('aria-busy');
+  }
+
+  function showAdminAccessDenied(error) {
+    const page = document.querySelector('.admin-page');
+    const panel = document.getElementById('admin-access-denied');
+    const copy = document.getElementById('admin-access-denied-copy');
+    const detail = document.getElementById('admin-access-denied-detail');
+    if (!page || !panel || !copy || !detail) return;
+
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '');
+    const isForbidden = status === 403 || code === 'ADMIN_FORBIDDEN';
+
+    if (isForbidden) {
+      copy.textContent = 'You are signed in, but this account does not have permission to use admin tools.';
+      detail.textContent = 'Use a different account with admin privileges, or ask an existing admin to grant access.';
+    } else {
+      copy.textContent = 'Admin tools require a valid signed-in session.';
+      detail.textContent = 'Please sign in again and then retry opening the admin page.';
+    }
+
+    page.classList.add('admin-locked');
+  }
+
+  function setActionFeedback(message, kind = 'success') {
+    const feedback = document.getElementById('admin-action-feedback');
+    if (!feedback) return;
+    feedback.hidden = false;
+    feedback.textContent = sanitizeUiMessage(
+      message,
+      kind === 'loading'
+        ? 'Loading admin state...'
+        : 'Admin feedback is unavailable right now.'
+    );
+    feedback.className = 'notice';
+    if (kind === 'loading') feedback.classList.add('is-loading');
+    if (kind === 'success') feedback.classList.add('alert-success');
+    if (kind === 'error') feedback.classList.add('alert-error');
+  }
+
+  function setActionButtonsDisabled(disabled) {
+    const saveBtn = document.getElementById('save-draft-btn');
+    const applyBtn = document.getElementById('apply-template-btn');
+    if (saveBtn) saveBtn.disabled = disabled;
+    if (applyBtn) applyBtn.disabled = disabled;
+  }
+
+  function setInputValue(id, value) {
+    const node = document.getElementById(id);
+    if (node) node.value = value;
+  }
+
+  function setInputChecked(id, checked) {
+    const node = document.getElementById(id);
+    if (node) node.checked = !!checked;
+  }
+
+  function normalizeListInput(value) {
+    if (Array.isArray(value)) {
+      return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(/[\n,;]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  }
+
+  function listEquals(a, b) {
+    const left = normalizeListInput(a);
+    const right = normalizeListInput(b);
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+  }
+
+  function formatListPreview(items, limit = 3) {
+    const normalized = normalizeListInput(items);
+    if (!normalized.length) return 'No required keywords added yet.';
+    const preview = normalized.slice(0, limit).join(', ');
+    return normalized.length > limit ? `${preview}, +${normalized.length - limit} more` : preview;
+  }
+
+  function renderList(id, items, emptyLabel) {
+    const node = document.getElementById(id);
+    if (!node) return;
+    const safeItems = Array.isArray(items) && items.length ? items : [emptyLabel];
+    node.innerHTML = safeItems.map((item) => `<li>${BDA.escapeHtml(item)}</li>`).join('');
+  }
+
+  function getToxicitySummary(level) {
+    const normalized = Number(level || 3);
+    if (normalized <= 1) return 'Permissive, allows sharper rhetoric unless it becomes clearly abusive.';
+    if (normalized === 2) return 'Open, but still catches direct harassment and obvious intimidation.';
+    if (normalized === 3) return 'Balanced, blocks clear harassment and allows vigorous debate.';
+    if (normalized === 4) return 'Tight, escalates borderline aggression faster and expects more civility.';
+    return 'Strict, prioritizes calm discourse and blocks even softer forms of hostile language.';
+  }
+
+  function collectTemplatePayloadForPreview() {
+    try {
+      return collectTemplatePayload();
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function buildAllowedPreview(payload) {
+    const items = [];
+    const topic = payload.topic_requirements || {};
+    const toxicity = payload.toxicity_settings || {};
+    const pii = payload.pii_settings || {};
+    const spam = payload.spam_rate_limit_settings || {};
+    const prompt = payload.prompt_injection_settings || {};
+    const keywords = normalizeListInput(topic.required_keywords);
+
+    items.push(
+      topic.relevance_threshold === 'strict'
+        ? 'Posts that directly address the resolution and stay close to the stated scope.'
+        : topic.relevance_threshold === 'permissive'
+          ? 'Posts that stay related to the debate, even when they explore adjacent context.'
+          : 'Posts that stay meaningfully related to the debate scope.'
+    );
+    if (keywords.length) {
+      items.push(`Posts that mention at least one required phrase: ${formatListPreview(keywords)}.`);
+    }
+    if (topic.enforce_scope) {
+      items.push('Arguments that stay within the debate definition and scope boundaries.');
+    }
+    items.push(
+      toxicity.block_mild_profanity
+        ? 'Firm disagreement that avoids profanity, harassment, and identity-based attacks.'
+        : 'Vigorous disagreement is allowed when it stays respectful and does not become abusive.'
+    );
+    items.push(`Substantive posts between ${spam.min_length || 0} and ${spam.max_length || 0} characters.`);
+    if (pii.action === 'redact') {
+      items.push('Posts with removable personal details can proceed after those details are redacted.');
+    } else if (pii.action === 'flag') {
+      items.push('Posts that trigger PII detection can move into manual review instead of immediate blocking.');
+    }
+    if (prompt.enabled) {
+      items.push(
+        prompt.block_markdown_hiding
+          ? 'Normal evidence formatting remains allowed, but content cannot hide attempts to steer the adjudicator.'
+          : 'Participants can use normal formatting, provided they do not try to manipulate system instructions.'
+      );
+    }
+    return items.slice(0, 6);
+  }
+
+  function buildBlockedPreview(payload) {
+    const items = [];
+    const topic = payload.topic_requirements || {};
+    const toxicity = payload.toxicity_settings || {};
+    const pii = payload.pii_settings || {};
+    const spam = payload.spam_rate_limit_settings || {};
+    const prompt = payload.prompt_injection_settings || {};
+    const piiTypes = [];
+
+    if (toxicity.block_personal_attacks) items.push('Personal attacks and ad hominem language.');
+    if (toxicity.block_hate_speech) items.push('Hate speech, discriminatory language, and targeted dehumanization.');
+    if (toxicity.block_threats) items.push('Threats, intimidation, or coercive language.');
+    if (toxicity.block_sexual_harassment) items.push('Sexual harassment or sexualized abuse.');
+    if (toxicity.block_mild_profanity) items.push('Profanity that would otherwise be tolerated under a looser setting.');
+
+    if (pii.detect_email) piiTypes.push('email addresses');
+    if (pii.detect_phone) piiTypes.push('phone numbers');
+    if (pii.detect_address) piiTypes.push('physical addresses');
+    if (pii.detect_full_names) piiTypes.push('full names');
+    if (pii.detect_social_handles) piiTypes.push('social handles');
+    if (piiTypes.length) {
+      const actionText = pii.action === 'redact'
+        ? 'will be redacted before the post is allowed'
+        : pii.action === 'flag'
+          ? 'will trigger manual review'
+          : 'will cause the full post to be blocked';
+      items.push(`Detected ${piiTypes.join(', ')} ${actionText}.`);
+    }
+
+    if (topic.enforce_scope || topic.relevance_threshold !== 'permissive') {
+      items.push(
+        topic.relevance_threshold === 'strict'
+          ? 'Posts that drift away from the resolution or fail to address it directly.'
+          : 'Posts that fall outside the defined debate scope or read as off-topic.'
+      );
+    }
+    if (spam.duplicate_detection || spam.rate_limiting) {
+      items.push('Duplicate, flooding, or rate-limited submissions that look like spam rather than debate.');
+    }
+    if (prompt.enabled) {
+      items.push('Attempts to manipulate system instructions, prompt state, or hidden adjudication behavior.');
+    }
+    return items.slice(0, 7);
+  }
+
+  function buildDraftChangeList(payload, activeTemplate) {
+    if (!payload) {
+      return ['Select a base template to generate a draft change summary.'];
+    }
+
+    if (!activeTemplate) {
+      return ['Live template data is unavailable, so this draft is being previewed without a server-side baseline.'];
+    }
+
+    const changes = [];
+    const activeTopic = activeTemplate.topic_requirements || {};
+    const activeToxicity = activeTemplate.toxicity_settings || {};
+    const activePii = activeTemplate.pii_settings || {};
+    const activeSpam = activeTemplate.spam_rate_limit_settings || {};
+    const activePrompt = activeTemplate.prompt_injection_settings || {};
+
+    if (payload.base_template_id !== activeTemplate.base_template_id) {
+      changes.push(`Base template changes from ${activeTemplate.template_name || activeTemplate.base_template_id} to ${payload.template_name}.`);
+    }
+    if (payload.version !== String(activeTemplate.version || '')) {
+      changes.push(`Version label changes from ${activeTemplate.version || '—'} to ${payload.version}.`);
+    }
+    if (payload.topic_requirements.relevance_threshold !== (activeTopic.relevance_threshold || 'moderate')) {
+      changes.push(`Topic relevance moves to ${payload.topic_requirements.relevance_threshold} review.`);
+    }
+    if (!listEquals(payload.topic_requirements.required_keywords, activeTopic.required_keywords)) {
+      changes.push(`Required keywords update to ${formatListPreview(payload.topic_requirements.required_keywords)}.`);
+    }
+    if (!!payload.topic_requirements.enforce_scope !== !!activeTopic.enforce_scope) {
+      changes.push(payload.topic_requirements.enforce_scope
+        ? 'Scope boundaries become stricter and will be enforced from the debate definition.'
+        : 'Scope boundaries become looser and off-topic handling will rely more on relevance scoring.');
+    }
+    if (Number(payload.toxicity_settings.sensitivity_level || 3) !== Number(activeToxicity.sensitivity_level || 3)) {
+      changes.push(`Toxicity sensitivity shifts to level ${payload.toxicity_settings.sensitivity_level}.`);
+    }
+    if (payload.pii_settings.action !== (activePii.action || 'block')) {
+      changes.push(`PII handling changes to ${payload.pii_settings.action}.`);
+    }
+    if (Number(payload.spam_rate_limit_settings.flood_threshold_per_hour || 0) !== Number(activeSpam.flood_threshold_per_hour || 0)) {
+      changes.push(`Flooding threshold changes to ${payload.spam_rate_limit_settings.flood_threshold_per_hour} posts per hour.`);
+    }
+    if (payload.prompt_injection_settings.enabled !== !!activePrompt.enabled) {
+      changes.push(payload.prompt_injection_settings.enabled
+        ? 'Prompt injection detection becomes active for the next snapshot.'
+        : 'Prompt injection detection is turned off for the next snapshot.');
+    }
+    if (!listEquals(payload.prompt_injection_settings.custom_patterns, activePrompt.custom_patterns)) {
+      const patternCount = normalizeListInput(payload.prompt_injection_settings.custom_patterns).length;
+      changes.push(patternCount
+        ? `${patternCount} custom prompt-pattern check${patternCount === 1 ? '' : 's'} will be applied.`
+        : 'Custom prompt-pattern checks are cleared from this draft.');
+    }
+
+    return changes.length ? changes.slice(0, 6) : ['No draft changes detected against the active template.'];
+  }
+
+  function renderDraftSummary(payload, { isActiveTemplate, selectedLabel }) {
+    const readiness = !payload
+      ? 'Selection required before draft review.'
+      : isActiveTemplate
+        ? 'Matches the active policy, no unpublished changes.'
+        : 'Draft differs from the active policy and is ready for review.';
+
+    setText('summary-selected-template', selectedLabel || 'Choose a template to begin.');
+    setText('summary-version', payload?.version || '—');
+    setText(
+      'summary-readiness',
+      readiness
+    );
+    setText(
+      'summary-scope',
+      isActiveTemplate
+        ? 'No new version pending. Applying again would republish the current policy state.'
+        : 'If published, this draft affects future snapshots only and remains visible in the audit trail.'
+    );
+    setText(
+      'summary-policy-note',
+      isActiveTemplate
+        ? 'You are currently looking at the active policy. Change a guardrail only when you have a concrete reason to move it.'
+        : 'This draft now differs from the active policy. Make sure the participant-facing summary still reads as intentional, fair, and easy to predict.'
+    );
+  }
+
+  function collectTemplatePayload() {
+    const baseSelect = document.getElementById('template-base');
+    const versionInput = document.getElementById('template-version');
+    const selectedOption = baseSelect?.options?.[baseSelect.selectedIndex];
+    const baseTemplateId = (baseSelect?.value || '').trim();
+
+    if (!baseTemplateId) {
+      throw new Error('Select a base template before saving or applying.');
+    }
+
+    const version = (versionInput?.value || '').trim() || '1.0.0';
+    const customPatterns = normalizeListInput(document.getElementById('injection-patterns')?.value || '');
+    const requiredKeywords = normalizeListInput(document.getElementById('topic-keywords')?.value || '');
+
+    return {
+      base_template_id: baseTemplateId,
+      template_name: selectedOption?.textContent?.trim() || baseTemplateId,
+      version,
+      notes: 'Updated from admin UI',
+      topic_requirements: {
+        required_keywords: requiredKeywords,
+        relevance_threshold: document.getElementById('topic-threshold')?.value || 'moderate',
+        enforce_scope: !!document.getElementById('enforce-scope')?.checked,
+      },
+      toxicity_settings: {
+        sensitivity_level: Number(document.getElementById('toxicity-level')?.value || 3),
+        block_personal_attacks: !!document.getElementById('toxicity-block-personal-attacks')?.checked,
+        block_hate_speech: !!document.getElementById('toxicity-block-hate-speech')?.checked,
+        block_threats: !!document.getElementById('toxicity-block-threats')?.checked,
+        block_sexual_harassment: !!document.getElementById('toxicity-block-sexual-harassment')?.checked,
+        block_mild_profanity: !!document.getElementById('toxicity-block-mild-profanity')?.checked,
+      },
+      pii_settings: {
+        detect_email: !!document.getElementById('pii-detect-email')?.checked,
+        detect_phone: !!document.getElementById('pii-detect-phone')?.checked,
+        detect_address: !!document.getElementById('pii-detect-address')?.checked,
+        detect_full_names: !!document.getElementById('pii-detect-full-names')?.checked,
+        detect_social_handles: !!document.getElementById('pii-detect-social-handles')?.checked,
+        action: document.getElementById('pii-action')?.value || 'block',
+      },
+      spam_rate_limit_settings: {
+        min_length: Number(document.getElementById('min-length')?.value || 50),
+        max_length: Number(document.getElementById('max-length')?.value || 5000),
+        flood_threshold_per_hour: Number(document.getElementById('flood-threshold')?.value || 10),
+        duplicate_detection: !!document.getElementById('duplicate-detection')?.checked,
+        rate_limiting: !!document.getElementById('rate-limiting')?.checked,
+      },
+      prompt_injection_settings: {
+        enabled: !!document.getElementById('injection-protection')?.checked,
+        block_markdown_hiding: !!document.getElementById('injection-block-markdown')?.checked,
+        custom_patterns: customPatterns,
+      },
+    };
+  }
+
+  function populateBaseTemplateOptions(availableBases, activeBaseTemplateId) {
+    const baseSelect = document.getElementById('template-base');
+    if (!baseSelect) return;
+
+    const selectedBefore = baseSelect.value || activeBaseTemplateId || 'standard_civility';
+    const options = (availableBases || []).slice();
+
+    const hasCustom = options.some((item) => item.template_id === 'custom');
+    if (!hasCustom) {
+      options.push({
+        template_id: 'custom',
+        name: 'Custom Configuration',
+        description: 'Saved custom configuration',
+      });
+    }
+
+    baseSelect.innerHTML = '';
+    options.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.template_id;
+      option.textContent = item.name;
+      baseSelect.appendChild(option);
+    });
+
+    if ([...baseSelect.options].some((opt) => opt.value === selectedBefore)) {
+      baseSelect.value = selectedBefore;
+    } else if ([...baseSelect.options].some((opt) => opt.value === activeBaseTemplateId)) {
+      baseSelect.value = activeBaseTemplateId;
+    } else if (baseSelect.options.length > 0) {
+      baseSelect.selectedIndex = 0;
+    }
+  }
+
+  function applyTemplateToForm(template) {
+    if (!template) return;
+
+    AdminState.currentTemplate = template;
+    const topic = template.topic_requirements || {};
+    const toxicity = template.toxicity_settings || {};
+    const pii = template.pii_settings || {};
+    const spam = template.spam_rate_limit_settings || {};
+    const prompt = template.prompt_injection_settings || {};
+
+    setInputValue('template-version', template.version || '1.0.0');
+    setInputValue('topic-keywords', normalizeListInput(topic.required_keywords).join(', '));
+    setInputValue('topic-threshold', topic.relevance_threshold || 'moderate');
+    setInputChecked('enforce-scope', topic.enforce_scope);
+
+    setInputValue('toxicity-level', String(toxicity.sensitivity_level ?? 3));
+    setInputChecked('toxicity-block-personal-attacks', toxicity.block_personal_attacks);
+    setInputChecked('toxicity-block-hate-speech', toxicity.block_hate_speech);
+    setInputChecked('toxicity-block-threats', toxicity.block_threats);
+    setInputChecked('toxicity-block-sexual-harassment', toxicity.block_sexual_harassment);
+    setInputChecked('toxicity-block-mild-profanity', toxicity.block_mild_profanity);
+
+    setInputChecked('pii-detect-email', pii.detect_email);
+    setInputChecked('pii-detect-phone', pii.detect_phone);
+    setInputChecked('pii-detect-address', pii.detect_address);
+    setInputChecked('pii-detect-full-names', pii.detect_full_names);
+    setInputChecked('pii-detect-social-handles', pii.detect_social_handles);
+    setInputValue('pii-action', pii.action || 'block');
+
+    setInputValue('min-length', String(spam.min_length ?? 50));
+    setInputValue('max-length', String(spam.max_length ?? 5000));
+    setInputValue('flood-threshold', String(spam.flood_threshold_per_hour ?? 10));
+    setInputChecked('duplicate-detection', spam.duplicate_detection);
+    setInputChecked('rate-limiting', spam.rate_limiting);
+
+    setInputChecked('injection-protection', prompt.enabled);
+    setInputChecked('injection-block-markdown', prompt.block_markdown_hiding);
+    setInputValue('injection-patterns', normalizeListInput(prompt.custom_patterns).join('\n'));
+
+    const baseSelect = document.getElementById('template-base');
+    if (baseSelect && template.base_template_id && [...baseSelect.options].some((opt) => opt.value === template.base_template_id)) {
+      baseSelect.value = template.base_template_id;
+    }
+
+    setText('toxicity-summary', getToxicitySummary(toxicity.sensitivity_level ?? 3));
+  }
+
+  function getReasonPillClass(reason) {
+    const normalized = String(reason || '').toLowerCase();
+    if (normalized.includes('toxicity') || normalized.includes('harassment')) return 'bad';
+    if (normalized.includes('pii') || normalized.includes('off_topic')) return 'warn';
+    return '';
+  }
+
+  function renderModerationOutcomes(data) {
+    const outcomes = data || {};
+    const allowed = Number(outcomes.allowed_count || 0);
+    const blocked = Number(outcomes.blocked_count || 0);
+    const topReason = outcomes.top_reason ? String(outcomes.top_reason) : '—';
+    const blockRatePercent = `${((Number(outcomes.block_rate || 0)) * 100).toFixed(1)}%`;
+
+    document.getElementById('metric-allowed-posts').textContent = String(allowed);
+    document.getElementById('metric-blocked-posts').textContent = String(blocked);
+    document.getElementById('metric-block-rate').textContent = blockRatePercent;
+    document.getElementById('metric-top-reason').textContent = topReason === '—' ? topReason : topReason.replace(/_/g, ' ');
+    document.getElementById('metric-borderline-rate').textContent = Number(outcomes.borderline_rate || 0).toFixed(4);
+    const suppression = outcomes.suppression_policy || {};
+    document.getElementById('metric-suppression-policy').textContent = `k=${suppression.k || 5}`;
+    setWorkspaceMeta(
+      'workspace-tab-audit-meta',
+      allowed || blocked ? `${blockRatePercent} block rate` : 'No snapshot data yet'
+    );
+    const affected = suppression.affected_buckets || [];
+    document.getElementById('suppression-policy-detail').textContent = affected.length
+      ? `${affected.length} bucket(s) suppressed: ${affected.map((bucket) => `${bucket.channel}:${bucket.key}`).join(', ')}`
+      : 'No suppressed buckets in the current snapshot.';
+
+    const tbody = document.getElementById('block-reasons-tbody');
+    const rows = Array.isArray(outcomes.block_reasons) ? outcomes.block_reasons : [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No moderation snapshot data available yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map((row) => {
+      const reason = String(row.reason || 'unknown');
+      const count = Number(row.count || 0);
+      const percentage = Number(row.percentage || 0).toFixed(1);
+      const description = row.description ? BDA.escapeHtml(row.description) : 'Moderation rule triggered.';
+      const pillClass = getReasonPillClass(reason);
+      return `
+        <tr>
+          <td><span class="pill ${pillClass}">${BDA.escapeHtml(reason.toUpperCase())}</span></td>
+          <td class="mono">${count}</td>
+          <td>${percentage}%</td>
+          <td>${description}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  let activeProposalId = null;
+  let activeDecisionAction = null;
+
+  async function loadFramePetitions() {
+    const tbody = document.getElementById('frame-petitions-tbody');
+    if (!tbody) return;
+    try {
+      const debate = await BDA.loadDebate();
+      if (!debate?.debate_id) {
+        setWorkspaceMeta('workspace-tab-frames-meta', 'No active debate selected');
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No active debate selected.</td></tr>';
+        return;
+      }
+      const response = await BDA.api(`/api/debate/${encodeURIComponent(debate.debate_id)}/frame-petitions`, { suppressAuthRedirect: true });
+      const petitions = response.petitions || [];
+      setWorkspaceMeta(
+        'workspace-tab-frames-meta',
+        petitions.length ? `${petitions.length} petition${petitions.length === 1 ? '' : 's'} in queue` : 'No petitions submitted'
+      );
+      if (!petitions.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No frame petitions submitted.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = petitions.map((petition) => `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(petition.petition_id || '-')}</td>
+          <td>${BDA.escapeHtml(petition.status || 'pending')}</td>
+          <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(petition.created_at))}</td>
+          <td>${BDA.escapeHtml(petition.governance_decision?.reason || '-')}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      setWorkspaceMeta('workspace-tab-frames-meta', 'Queue unavailable');
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--bad)">${BDA.escapeHtml(error.message || 'Failed to load frame petitions')}</td></tr>`;
+    }
+  }
+
+  async function loadProposals() {
+    const filter = document.getElementById('proposal-filter')?.value || '';
+    try {
+      const url = '/api/admin/debate-proposals' + (filter ? `?status=${encodeURIComponent(filter)}` : '');
+      const data = await BDA.api(url);
+      renderProposals(data.proposals || []);
+    } catch (error) {
+      setWorkspaceMeta('workspace-tab-review-meta', 'Queue unavailable');
+      const tbody = document.getElementById('proposal-review-tbody');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">Failed to load proposals.</td></tr>`;
+      }
+    }
+  }
+
+  function renderProposals(proposals) {
+    const tbody = document.getElementById('proposal-review-tbody');
+    const countPill = document.getElementById('proposal-count-pill');
+    if (countPill) countPill.textContent = `${proposals.length} proposal${proposals.length !== 1 ? 's' : ''}`;
+    setWorkspaceMeta(
+      'workspace-tab-review-meta',
+      proposals.length ? `${proposals.length} visible proposal${proposals.length === 1 ? '' : 's'}` : 'No proposals in this filter'
+    );
+    if (!tbody) return;
+
+    if (proposals.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No proposals found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = proposals.map(p => {
+      const statusClass = p.status === 'accepted' ? 'good' : p.status === 'rejected' ? 'bad' : 'warn';
+      const acceptBtn = p.status === 'pending'
+        ? `<button class="button success-action" style="padding:6px 10px;font-size:0.78rem" onclick="acceptProposal('${p.proposal_id}')">Accept</button>`
+        : '';
+      const rejectBtn = p.status === 'pending'
+        ? `<button class="button secondary" style="padding:6px 10px;font-size:0.78rem" onclick="showRejectPanel('${p.proposal_id}')">Reject</button>`
+        : '';
+      const debateLink = p.accepted_debate_id
+        ? `<a href="new_debate.html?debate_id=${encodeURIComponent(p.accepted_debate_id)}">${p.accepted_debate_id}</a>`
+        : '—';
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600">${BDA.escapeHtml(p.motion)}</div>
+            <small style="color:var(--muted)">${BDA.escapeHtml(p.moderation_criteria.substring(0, 120))}${p.moderation_criteria.length > 120 ? '...' : ''}</small>
+            ${p.accepted_debate_id ? `<small style="display:block;margin-top:4px">Debate: ${debateLink}</small>` : ''}
+          </td>
+          <td class="mono">${BDA.formatDateTime(p.created_at)}</td>
+          <td><span class="pill ${statusClass}">${p.status}</span></td>
+          <td>
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              ${acceptBtn}
+              ${rejectBtn}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function acceptProposal(proposalId) {
+    try {
+      setActionButtonsDisabled(true);
+      const response = await BDA.api(`/api/admin/debate-proposals/${encodeURIComponent(proposalId)}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      setActionFeedback(`Accepted proposal. Created debate ${response.debate_id}.`, 'success');
+      await loadProposals();
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to accept proposal.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  function showRejectPanel(proposalId) {
+    setActiveWorkspace('review');
+    activeProposalId = proposalId;
+    activeDecisionAction = 'reject';
+    const panel = document.getElementById('proposal-decision-panel');
+    const title = document.getElementById('proposal-decision-title');
+    const confirmBtn = document.getElementById('proposal-decision-confirm-btn');
+    if (panel) panel.style.display = 'grid';
+    if (title) title.textContent = 'Reject Proposal';
+    if (confirmBtn) {
+      confirmBtn.textContent = 'Confirm Reject';
+      confirmBtn.className = 'button';
+    }
+    document.getElementById('proposal-decision-reason').value = '';
+    document.getElementById('proposal-decision-reason').focus();
+  }
+
+  function cancelProposalDecision() {
+    activeProposalId = null;
+    activeDecisionAction = null;
+    const panel = document.getElementById('proposal-decision-panel');
+    if (panel) panel.style.display = 'none';
+    document.getElementById('proposal-decision-reason').value = '';
+  }
+
+  async function confirmProposalDecision() {
+    if (!activeProposalId || activeDecisionAction !== 'reject') return;
+    const reason = document.getElementById('proposal-decision-reason').value.trim();
+    if (!reason) {
+      setActionFeedback('Please provide a reason for rejection.', 'error');
+      return;
+    }
+    try {
+      setActionButtonsDisabled(true);
+      await BDA.api(`/api/admin/debate-proposals/${encodeURIComponent(activeProposalId)}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+      setActionFeedback('Proposal rejected.', 'success');
+      cancelProposalDecision();
+      await loadProposals();
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to reject proposal.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  function renderTemplateHistory(history) {
+    const tbody = document.getElementById('template-history-tbody');
+    const records = Array.isArray(history) ? history : [];
+
+    if (!records.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No template history found yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = records.map((item) => {
+      const status = String(item.status || 'draft').toLowerCase();
+      const pillClass = status === 'active' ? 'good' : status === 'applied' ? 'warn' : '';
+      const statusLabel = status === 'active' ? 'Active' : status === 'applied' ? 'Applied' : 'Draft';
+      const description = item.notes || `Base: ${item.base_template_id}`;
+      const actor = item.author_user_id || 'system';
+      const timestamp = item.applied_at || item.updated_at || item.created_at;
+      return `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(item.version || '-')}</td>
+          <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(timestamp))}</td>
+          <td>${BDA.escapeHtml(actor)}</td>
+          <td>${BDA.escapeHtml(description)}</td>
+          <td><span class="pill ${pillClass}">${statusLabel}</span></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function loadTemplatePreview() {
+    const baseSelect = document.getElementById('template-base');
+    const statePill = document.getElementById('template-state-pill');
+    const headerState = document.getElementById('template-current-state');
+    const templateNote = document.querySelector('#template-selection .template-note');
+    const previewPill = document.getElementById('preview-confidence-pill');
+    if (!baseSelect || !statePill || !headerState || !templateNote || !previewPill) return;
+
+    const selectedValue = baseSelect.value;
+    const selectedLabel = baseSelect.options[baseSelect.selectedIndex]?.text || 'No template selected';
+    const activeTemplate = AdminState.currentTemplate;
+    const payload = collectTemplatePayloadForPreview();
+    const isActiveTemplate = !!payload && !!activeTemplate &&
+      selectedValue === activeTemplate.base_template_id &&
+      (document.getElementById('template-version')?.value || '').trim() === String(activeTemplate.version || '') &&
+      payload.topic_requirements.relevance_threshold === (activeTemplate.topic_requirements?.relevance_threshold || 'moderate') &&
+      payload.topic_requirements.enforce_scope === !!activeTemplate.topic_requirements?.enforce_scope &&
+      listEquals(payload.topic_requirements.required_keywords, activeTemplate.topic_requirements?.required_keywords) &&
+      Number(payload.toxicity_settings.sensitivity_level || 3) === Number(activeTemplate.toxicity_settings?.sensitivity_level || 3) &&
+      payload.toxicity_settings.block_personal_attacks === !!activeTemplate.toxicity_settings?.block_personal_attacks &&
+      payload.toxicity_settings.block_hate_speech === !!activeTemplate.toxicity_settings?.block_hate_speech &&
+      payload.toxicity_settings.block_threats === !!activeTemplate.toxicity_settings?.block_threats &&
+      payload.toxicity_settings.block_sexual_harassment === !!activeTemplate.toxicity_settings?.block_sexual_harassment &&
+      payload.toxicity_settings.block_mild_profanity === !!activeTemplate.toxicity_settings?.block_mild_profanity &&
+      payload.pii_settings.action === (activeTemplate.pii_settings?.action || 'block') &&
+      payload.spam_rate_limit_settings.min_length === Number(activeTemplate.spam_rate_limit_settings?.min_length ?? 50) &&
+      payload.spam_rate_limit_settings.max_length === Number(activeTemplate.spam_rate_limit_settings?.max_length ?? 5000) &&
+      payload.spam_rate_limit_settings.flood_threshold_per_hour === Number(activeTemplate.spam_rate_limit_settings?.flood_threshold_per_hour ?? 10) &&
+      payload.spam_rate_limit_settings.duplicate_detection === !!activeTemplate.spam_rate_limit_settings?.duplicate_detection &&
+      payload.spam_rate_limit_settings.rate_limiting === !!activeTemplate.spam_rate_limit_settings?.rate_limiting &&
+      payload.prompt_injection_settings.enabled === !!activeTemplate.prompt_injection_settings?.enabled &&
+      payload.prompt_injection_settings.block_markdown_hiding === !!activeTemplate.prompt_injection_settings?.block_markdown_hiding &&
+      listEquals(payload.prompt_injection_settings.custom_patterns, activeTemplate.prompt_injection_settings?.custom_patterns);
+
+    if (payload) {
+      setText('toxicity-summary', getToxicitySummary(payload.toxicity_settings.sensitivity_level));
+    }
+
+    if (!selectedValue) {
+      statePill.className = 'pill warn';
+      statePill.textContent = 'Selection required';
+      headerState.className = 'pill warn';
+      headerState.textContent = 'Select a template';
+      previewPill.className = 'pill warn admin-step-status';
+      previewPill.textContent = 'Selection required';
+      templateNote.textContent = 'Select a template to preview how moderation policy changes would be described.';
+      renderDraftSummary(null, { isActiveTemplate: false, selectedLabel });
+      renderList('preview-allowed-list', [], 'Add a template and guardrail settings to populate this policy summary.');
+      renderList('preview-blocked-list', [], 'Blocked behavior will appear here once a draft is selected.');
+      renderList('preview-change-list', ['Choose a template to compare this draft against the active policy.'], 'Choose a template to compare this draft against the active policy.');
+      setText('preview-summary-copy', 'Choose a template and adjust the guardrails to generate a live participant-facing summary.');
+      return;
+    }
+
+    statePill.className = isActiveTemplate ? 'pill good' : 'pill warn';
+    statePill.textContent = isActiveTemplate ? 'Active' : 'Draft Change';
+    headerState.className = isActiveTemplate ? 'pill good' : 'pill warn';
+    headerState.textContent = isActiveTemplate ? 'Matches the active policy' : 'Draft change pending review';
+    previewPill.className = isActiveTemplate ? 'pill good admin-step-status' : 'pill warn admin-step-status';
+    previewPill.textContent = isActiveTemplate ? 'No unpublished changes' : 'Participant preview updated';
+
+    if (isActiveTemplate) {
+      templateNote.textContent = 'Template changes apply to the next snapshot only. Existing snapshots remain immutable, and each version stays visible in the audit trail.';
+    } else {
+      templateNote.textContent = `Previewing "${selectedLabel}". If applied, this moderation posture will affect only future snapshots and will remain visible in the audit trail.`;
+    }
+
+    renderDraftSummary(payload, { isActiveTemplate, selectedLabel });
+    renderList('preview-allowed-list', buildAllowedPreview(payload), 'No allowed-content summary is available yet.');
+    renderList('preview-blocked-list', buildBlockedPreview(payload), 'No blocked-content summary is available yet.');
+    renderList('preview-change-list', buildDraftChangeList(payload, activeTemplate), 'No draft changes detected.');
+    setText(
+      'preview-summary-copy',
+      isActiveTemplate
+        ? `Participants will continue to see ${selectedLabel} as the active moderation posture. The current draft matches the live policy state.`
+        : `Participants would see ${selectedLabel} as the next moderation posture. This draft keeps the current policy scope but changes the enforcement details listed alongside it.`
+    );
+  }
+
+  // ==========================================================================
+  // Human Review / Fact-Check Audit workspace
+  // ==========================================================================
+
+  const HR_FLAG_ORDER = [
+    'CONTRADICTORY_TIER1_EVIDENCE',
+    'HIGH_IMPACT_INSUFFICIENT',
+    'HIGH_IMPACT_LLM_DIRECTION',
+    'ENTITY_AMBIGUITY',
+    'SCOPE_MISMATCH',
+    'TEMPORAL_SCOPE_AMBIGUITY',
+    'SCIENTIFIC_SCOPE_OVERCLAIM',
+    'POLICY_GAP',
+    'LLM_VALIDATION_FAILURE',
+    'CONNECTOR_FAILURE',
+    'SOURCE_CONFLICT',
+    'CAUSAL_COMPLEXITY',
+  ];
+
+  function formatTier(tier) {
+    if (tier === 1 || tier === '1') return 'T1';
+    if (tier === 2 || tier === '2') return 'T2';
+    if (tier === 3 || tier === '3') return 'T3';
+    return '—';
+  }
+
+  function statusClass(status) {
+    if (status === 'SUPPORTED') return 'status-supported';
+    if (status === 'REFUTED') return 'status-refuted';
+    if (status === 'INSUFFICIENT') return 'status-insufficient';
+    return '';
+  }
+
+  function renderFlagTags(flags) {
+    if (!Array.isArray(flags) || flags.length === 0) return '<span style="color:var(--muted)">—</span>';
+    const critical = new Set(['CONTRADICTORY_TIER1_EVIDENCE', 'HIGH_IMPACT_INSUFFICIENT', 'HIGH_IMPACT_LLM_DIRECTION']);
+    return flags.map(f => {
+      const cls = critical.has(f) ? 'flag-tag critical' : 'flag-tag';
+      return `<span class="${cls}">${BDA.escapeHtml(f)}</span>`;
+    }).join('');
+  }
+
+  async function loadHumanReviewWorkspace() {
+    try {
+      await Promise.all([
+        loadReviewQueue(),
+        loadCoverageTrace(),
+      ]);
+    } catch (error) {
+      console.warn('Human review workspace load error:', error);
+      setWorkspaceMeta('workspace-tab-hr-meta', 'Queue unavailable');
+    }
+  }
+
+  async function loadReviewQueue() {
+    // TODO: replace with real endpoint when backend is ready
+    // const data = await BDA.api('/api/human-review/flagged-premises', { suppressAuthRedirect: true });
+    // For now, derive from existing topic API
+    const debate = await BDA.loadDebate();
+    if (!debate.has_debate) {
+      setWorkspaceMeta('workspace-tab-hr-meta', 'No active debate');
+      return;
+    }
+
+    let premises = [];
+    try {
+      const topicsData = await BDA.api('/api/debate/topics');
+      const topics = topicsData.topics || [];
+      for (const t of topics) {
+        try {
+          const topic = await BDA.api(`/api/debate/topics/${encodeURIComponent(t.topic_id)}`);
+          const facts = topic.facts || [];
+          for (const f of facts) {
+            const flags = f.v15_human_review_flags || [];
+            const status = f.v15_status || (f.p_true === 1.0 ? 'SUPPORTED' : f.p_true === 0.0 ? 'REFUTED' : 'INSUFFICIENT');
+            const p = f.v15_p !== undefined ? f.v15_p : f.p_true;
+            if (flags.length || status === 'INSUFFICIENT') {
+              premises.push({
+                premise_id: f.canon_fact_id,
+                topic_id: t.topic_id,
+                topic_name: t.name,
+                side: f.side,
+                status,
+                p,
+                best_tier: f.v15_best_evidence_tier,
+                insufficiency_reason: f.v15_insufficiency_reason || '',
+                flags,
+                text: f.canon_fact_text,
+                operationalization: f.operationalization || '',
+                evidence_tier_counts: f.evidence_tier_counts || {},
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load topic for HR:', t.topic_id, e);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load review queue:', error);
+    }
+
+    // Populate stats
+    const pending = premises.filter(p => p.flags.length > 0).length;
+    document.getElementById('hr-total-flagged').textContent = premises.length;
+    document.getElementById('hr-pending').textContent = pending;
+    document.getElementById('hr-nochange').textContent = '0';
+    document.getElementById('hr-correction').textContent = '0';
+    setWorkspaceMeta('workspace-tab-hr-meta', `${premises.length} flagged premise${premises.length === 1 ? '' : 's'}`);
+
+    // Render queue table
+    const tbody = document.getElementById('hr-queue-tbody');
+    if (premises.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">No premises are currently flagged for human review.</td></tr>';
+    } else {
+      tbody.innerHTML = premises.slice(0, 100).map(p => `
+        <tr>
+          <td>${renderFlagTags(p.flags)}</td>
+          <td class="mono">${BDA.escapeHtml(p.premise_id)}</td>
+          <td>${BDA.escapeHtml(p.topic_name || p.topic_id)}</td>
+          <td>${BDA.escapeHtml(p.side)}</td>
+          <td class="${statusClass(p.status)}">${BDA.escapeHtml(p.status)}</td>
+          <td class="mono">${BDA.formatNumber(Number(p.p), 1)}</td>
+          <td class="mono">${formatTier(p.best_tier)}</td>
+          <td>${BDA.escapeHtml(p.insufficiency_reason) || '<span style="color:var(--muted)">—</span>'}</td>
+          <td><button class="pill" type="button" onclick="openFactCheckAudit('${BDA.escapeHtml(p.premise_id)}')">Audit</button></td>
+        </tr>
+      `).join('');
+    }
+
+    // Populate audit selector
+    const select = document.getElementById('hr-audit-select');
+    if (select) {
+      const options = premises.map(p => `<option value="${BDA.escapeHtml(p.premise_id)}">${BDA.escapeHtml(p.premise_id)} — ${BDA.escapeHtml(p.text?.slice(0, 60) || '')}</option>`).join('');
+      select.innerHTML = '<option value="">Select a premise to audit...</option>' + options;
+      select.addEventListener('change', (e) => {
+        if (e.target.value) openFactCheckAudit(e.target.value);
+      });
+    }
+
+    // Render flag dashboard
+    renderFlagDashboard(premises);
+  }
+
+  function renderFlagDashboard(premises) {
+    const counts = {};
+    premises.forEach(p => {
+      (p.flags || []).forEach(f => {
+        counts[f] = (counts[f] || 0) + 1;
+      });
+    });
+
+    const total = premises.length;
+    const reviewed = 0;
+    const corrections = 0;
+    const nochange = 0;
+
+    document.getElementById('hr-dash-total').textContent = total;
+    document.getElementById('hr-dash-reviewed').textContent = reviewed;
+    document.getElementById('hr-dash-corrections').textContent = corrections;
+    document.getElementById('hr-dash-nochange').textContent = nochange;
+
+    const tbody = document.getElementById('hr-dash-tbody');
+    const orderedFlags = HR_FLAG_ORDER.filter(f => counts[f] !== undefined).concat(
+      Object.keys(counts).filter(f => !HR_FLAG_ORDER.includes(f))
+    );
+
+    if (orderedFlags.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No flags recorded.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = orderedFlags.map(flag => {
+      const count = counts[flag];
+      const suppressed = count < 5;
+      const displayCount = suppressed ? '<span class="suppressed-count">&lt;5</span>' : String(count);
+      const pct = suppressed ? '—' : `${((count / total) * 100).toFixed(1)}%`;
+      return `
+        <tr>
+          <td>${BDA.escapeHtml(flag)}</td>
+          <td class="mono">${displayCount}</td>
+          <td class="mono">${pct}</td>
+          <td>${suppressed ? 'Yes' : 'No'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function openFactCheckAudit(premiseId) {
+    const panel = document.getElementById('hr-audit-panel');
+    const select = document.getElementById('hr-audit-select');
+    if (select) select.value = premiseId;
+    panel.style.display = 'block';
+
+    // Find premise in loaded topics data or fetch fresh
+    let premise = null;
+    try {
+      const debate = await BDA.loadDebate();
+      if (debate.has_debate) {
+        const topicsData = await BDA.api('/api/debate/topics');
+        for (const t of (topicsData.topics || [])) {
+          const topic = await BDA.api(`/api/debate/topics/${encodeURIComponent(t.topic_id)}`);
+          const found = (topic.facts || []).find(f => f.canon_fact_id === premiseId);
+          if (found) {
+            premise = { ...found, topic_id: t.topic_id, topic_name: t.name };
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load premise for audit:', e);
+    }
+
+    if (!premise) {
+      document.getElementById('hr-audit-premise').textContent = premiseId;
+      document.getElementById('hr-audit-status').textContent = 'Not found';
+      return;
+    }
+
+    const status = premise.v15_status || (premise.p_true === 1.0 ? 'SUPPORTED' : premise.p_true === 0.0 ? 'REFUTED' : 'INSUFFICIENT');
+    const p = premise.v15_p !== undefined ? premise.v15_p : premise.p_true;
+
+    document.getElementById('hr-audit-premise').textContent = premise.canon_fact_id;
+    document.getElementById('hr-audit-snapshot').textContent = '-';
+    document.getElementById('hr-audit-status').textContent = status;
+    document.getElementById('hr-audit-p').textContent = BDA.formatNumber(Number(p), 1);
+    document.getElementById('hr-audit-auth-hash').textContent = premise.authoritative_result_hash ? (premise.authoritative_result_hash.slice(0, 16) + '…') : '—';
+
+    // Claim expression tree (placeholder until backend returns real tree)
+    document.getElementById('hr-audit-tree').textContent = JSON.stringify({
+      node_type: 'ATOMIC',
+      subclaim_id: premise.canon_fact_id,
+      text: premise.canon_fact_text,
+      status,
+      p,
+      best_evidence_tier: premise.v15_best_evidence_tier,
+      insufficiency_reason: premise.v15_insufficiency_reason,
+      human_review_flags: premise.v15_human_review_flags,
+    }, null, 2);
+
+    // Evidence items
+    const evTbody = document.getElementById('hr-audit-evidence-tbody');
+    const tiers = premise.evidence_tier_counts || {};
+    if (Object.keys(tiers).length === 0) {
+      evTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No evidence items recorded.</td></tr>';
+    } else {
+      evTbody.innerHTML = Object.entries(tiers).map(([source, count]) => `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(source)}</td>
+          <td>${BDA.escapeHtml(source)}</td>
+          <td class="mono">${formatTier(source.includes('1') ? 1 : source.includes('2') ? 2 : 3)}</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+      `).join('');
+    }
+
+    // Synthesis logic
+    document.getElementById('hr-audit-synthesis').textContent = JSON.stringify({
+      status_rule_applied: status === 'SUPPORTED' ? 'Tier 1/2 decisive evidence' : status === 'REFUTED' ? 'Tier 1/2 decisive refutation' : premise.v15_insufficiency_reason || 'INSUFFICIENT default',
+      policy_rule_id: 'EMPIRICAL_ATOMIC',
+      decisive_evidence: [],
+      insufficiency_trigger: premise.v15_insufficiency_reason || null,
+      authority_ranking_applied: false,
+      claim_expression_node_type: 'ATOMIC',
+    }, null, 2);
+
+    // Replay manifest placeholder
+    document.getElementById('hr-audit-manifest').textContent = JSON.stringify({
+      manifest_id: 'manifest_' + premise.canon_fact_id,
+      parameter_pack: {
+        decomposition_version: 'v1.5.1',
+        evidence_policy_version: 'v1.5.1',
+        synthesis_rule_engine_version: 'v1.5.1',
+      },
+      input_hashes: { [premise.canon_fact_id]: 'sha256:...' },
+      authoritative_output_hashes: { [premise.canon_fact_id]: 'sha256:...' },
+      merkle_root: 'sha256:...',
+    }, null, 2);
+
+    // Display summary
+    const displayEl = document.getElementById('hr-audit-display');
+    displayEl.textContent = premise.operationalization
+      ? `Operationalization: ${premise.operationalization}`
+      : 'No display summary available for this premise.';
+  }
+
+  async function loadCoverageTrace() {
+    try {
+      const debate = await BDA.loadDebate();
+      if (!debate.has_debate) return;
+      const audits = await BDA.api('/api/debate/audits');
+      const trace = audits.coverage_adequacy_trace || {};
+      const overall = trace.overall || {};
+      const perTopic = trace.per_topic || {};
+
+      document.getElementById('hr-cov-targets').textContent = overall.total_targets ?? '-';
+      document.getElementById('hr-cov-rate').textContent = BDA.formatNumber(overall.coverage_rate, 3);
+      document.getElementById('hr-cov-emp').textContent = overall.empirical_rebuttals ?? '-';
+      document.getElementById('hr-cov-norm').textContent = overall.normative_rebuttals ?? '-';
+      document.getElementById('hr-cov-inf').textContent = overall.inference_rebuttals ?? '-';
+      document.getElementById('hr-cov-scope').textContent = overall.scope_definition_shifts ?? '-';
+
+      const tbody = document.getElementById('hr-cov-tbody');
+      const entries = Object.entries(perTopic);
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No coverage trace data available.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map(([topicId, t]) => `
+        <tr>
+          <td class="mono">${BDA.escapeHtml(topicId)}</td>
+          <td class="mono">${t.targets ?? '-'}</td>
+          <td class="mono">${BDA.formatNumber(t.coverage_rate, 3)}</td>
+          <td class="mono">${t.empirical_rebuttals ?? '-'}</td>
+          <td class="mono">${t.normative_rebuttals ?? '-'}</td>
+          <td class="mono">${t.inference_rebuttals ?? '-'}</td>
+          <td class="mono">${t.scope_definition_shifts ?? '-'}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.warn('Failed to load coverage trace:', error);
+      document.getElementById('hr-cov-tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Coverage trace unavailable.</td></tr>';
+    }
+  }
+
+  async function injectHelpPanel() {
+    const placeholder = document.getElementById('shared-help-panel');
+    if (!placeholder) return;
+    try {
+      const response = await fetch('components/help-panel-admin.html');
+      if (response.ok) {
+        placeholder.outerHTML = await response.text();
+        if (window.BDA?.setupHelpPanel) {
+          window.BDA.setupHelpPanel();
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load admin help panel:', error);
+    }
+  }
+
+  async function refreshAdminState() {
+    const [currentResponse, historyResponse] = await Promise.all([
+      BDA.api('/api/admin/moderation-template/current', { suppressAuthRedirect: true }),
+      BDA.api('/api/admin/moderation-template/history?limit=50', { suppressAuthRedirect: true }),
+    ]);
+
+    AdminState.hasLiveData = true;
+    AdminState.availableBases = currentResponse.available_bases || [];
+    AdminState.history = historyResponse.history || [];
+
+    const activeTemplate = currentResponse.template || null;
+    populateBaseTemplateOptions(AdminState.availableBases, activeTemplate?.base_template_id);
+    if (activeTemplate) {
+      applyTemplateToForm(activeTemplate);
+    }
+    renderTemplateHistory(AdminState.history);
+    renderModerationOutcomes(currentResponse.moderation_outcomes || {});
+    updateHeroSummary(activeTemplate);
+    setWorkspaceMeta('workspace-tab-policy-meta', activeTemplate?.version ? `Active version ${activeTemplate.version}` : 'Editing next snapshot policy');
+    loadFramePetitions();
+    loadTemplatePreview();
+  }
+
+  async function saveDraft() {
+    try {
+      const payload = collectTemplatePayload();
+      setActionButtonsDisabled(true);
+      setActionFeedback('Saving draft configuration...', 'loading');
+      const response = await BDA.api('/api/admin/moderation-template/draft', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      await refreshAdminState();
+      setActionFeedback(
+        `Draft saved: ${response.template?.template_name || payload.template_name} v${response.template?.version || payload.version}.`,
+        'success'
+      );
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to save draft configuration.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  async function applyTemplate() {
+    try {
+      const payload = collectTemplatePayload();
+      setActionButtonsDisabled(true);
+      setActionFeedback('Applying template and updating active version...', 'loading');
+      const response = await BDA.api('/api/admin/moderation-template/apply', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      await refreshAdminState();
+      setActionFeedback(
+        `Applied ${response.template?.template_name || payload.template_name} v${response.template?.version || payload.version}. It will take effect on the next snapshot.`,
+        'success'
+      );
+    } catch (error) {
+      setActionFeedback(error.message || 'Failed to apply template.', 'error');
+    } finally {
+      setActionButtonsDisabled(false);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!Auth.isLoggedIn()) {
+      Auth.redirectToLogin('admin-login-required');
+      return;
+    }
+
+    bindWorkspaceTabs();
+    bindPolicyInputs();
+    setActiveWorkspace(resolveWorkspaceFromHash(window.location.hash));
+    updateHeroSummary();
+    loadTemplatePreview();
+    if (window.location.hash) {
+      const initialTarget = document.getElementById(String(window.location.hash).replace(/^#/, ''));
+      if (initialTarget) initialTarget.scrollIntoView({ block: 'start' });
+    }
+    await injectHelpPanel();
+    try {
+      setActionFeedback('Loading moderation template state...', 'loading');
+      await refreshAdminState();
+      setActionFeedback('Moderation template state loaded.', 'success');
+    } catch (error) {
+      const code = String(error?.code || '');
+      const status = Number(error?.status || 0);
+      if (status === 403 || code === 'ADMIN_FORBIDDEN') {
+        showAdminAccessDenied(error);
+        releaseRouteAuthGate();
+        return;
+      }
+      if (status === 401 || code === 'AUTH_REQUIRED' || code === 'AUTH_INVALID') {
+        if (typeof Auth.clearSession === 'function') {
+          Auth.clearSession();
+        }
+        Auth.redirectToLogin('admin-login-required');
+        return;
+      }
+      AdminState.hasLiveData = false;
+      updateHeroSummary();
+      setWorkspaceMeta('workspace-tab-policy-meta', 'Previewing without live admin data');
+      setWorkspaceMeta('workspace-tab-review-meta', 'Queue unavailable');
+      setWorkspaceMeta('workspace-tab-audit-meta', 'Audit unavailable');
+      setWorkspaceMeta('workspace-tab-frames-meta', 'Queue unavailable');
+      setWorkspaceMeta('workspace-tab-hr-meta', 'Queue unavailable');
+      setActionFeedback(error.message || 'Failed to load moderation template state.', 'error');
+      loadTemplatePreview();
+      releaseRouteAuthGate();
+      return;
+    }
+    try {
+      await loadProposals();
+    } catch (error) {
+      setWorkspaceMeta('workspace-tab-review-meta', 'Queue unavailable');
+      console.warn('Failed to load proposals:', error);
+    }
+    try {
+      await loadHumanReviewWorkspace();
+    } catch (error) {
+      setWorkspaceMeta('workspace-tab-hr-meta', 'Queue unavailable');
+      console.warn('Failed to load human review workspace:', error);
+    }
+    releaseRouteAuthGate();
+  });
+</script>
+</body>
+</html>

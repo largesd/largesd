@@ -22,12 +22,20 @@ ENV/
 instance/
 .webassets-cache
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
 # Runtime data and local state
-data/*.json
 data/*.db
 *.db
 artifacts/
-workflow_state/
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/workflow_state/
 playwright-report/
 test-results/
 *.log
@@ -46,3 +54,14 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+
+.env
+.env.*
+!.env.example
+
+venv/
+__pycache__/
+*.pyc
+data/*.db
+artifacts/

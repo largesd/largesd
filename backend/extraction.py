@@ -16,7 +16,7 @@ from llm_client import LLMClient
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skills.fact_checking import FactCheckingSkill, RequestContext
+from skills.fact_checking import RequestContext, V15FactCheckingSkill
 
 
 @dataclass
@@ -47,6 +47,13 @@ class ExtractedFact:
     normative_provenance: str = ""
     operationalization: str = ""
     evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
+    fact_check_diagnostics: Dict[str, object] = field(default_factory=dict)
+    # LSD_FactCheck_v1_5_1 first-class ternary fields
+    v15_status: Optional[str] = None  # SUPPORTED, REFUTED, INSUFFICIENT
+    v15_p: float = 0.5
+    v15_insufficiency_reason: Optional[str] = None
+    v15_human_review_flags: List[str] = field(default_factory=list)
+    v15_best_evidence_tier: Optional[int] = None
 
 
 @dataclass
@@ -102,6 +109,13 @@ class CanonicalFact:
     normative_provenance: str = ""
     operationalization: str = ""
     evidence_tier_counts: Dict[str, int] = field(default_factory=dict)
+    fact_check_diagnostics: Dict[str, object] = field(default_factory=dict)
+    # LSD_FactCheck_v1_5_1 first-class ternary fields
+    v15_status: Optional[str] = None
+    v15_p: float = 0.5
+    v15_insufficiency_reason: Optional[str] = None
+    v15_human_review_flags: List[str] = field(default_factory=list)
+    v15_best_evidence_tier: Optional[int] = None
 
 
 @dataclass
@@ -122,7 +136,7 @@ class ExtractionEngine:
     """
     
     def __init__(self, llm_client: Optional[LLMClient] = None, 
-                 fact_check_skill: Optional[FactCheckingSkill] = None):
+                 fact_check_skill: Optional[V15FactCheckingSkill] = None):
         self.llm_client = llm_client or LLMClient()
         self.fact_checker = fact_check_skill
         self._pending_fact_checks: Dict[str, ExtractedFact] = {}  # job_id -> fact
@@ -227,6 +241,15 @@ class ExtractionEngine:
                         fact.fact_check_status = "completed"
                         fact.operationalization = result.operationalization or fact.operationalization
                         fact.evidence_tier_counts = getattr(result, "evidence_tier_counts", {})
+                        # Merge diagnostics; v1.5 bridge skill enriches with v15_* fields
+                        diagnostics = getattr(result, "diagnostics", {}) or {}
+                        fact.fact_check_diagnostics = diagnostics
+                        # Populate first-class v1.5 ternary fields
+                        fact.v15_status = diagnostics.get("v15_status")
+                        fact.v15_p = diagnostics.get("v15_p", result.factuality_score)
+                        fact.v15_insufficiency_reason = diagnostics.get("v15_insufficiency_reason")
+                        fact.v15_human_review_flags = diagnostics.get("v15_human_review_flags", [])
+                        fact.v15_best_evidence_tier = diagnostics.get("v15_best_evidence_tier")
                         
                 except Exception as e:
                     # Fact check failed, use default
@@ -279,6 +302,14 @@ class ExtractionEngine:
                         fact.fact_check_status = "completed"
                         fact.operationalization = result.operationalization or fact.operationalization
                         fact.evidence_tier_counts = getattr(result, "evidence_tier_counts", {})
+                        diagnostics = getattr(result, "diagnostics", {}) or {}
+                        fact.fact_check_diagnostics = diagnostics
+                        # Populate first-class v1.5 ternary fields
+                        fact.v15_status = diagnostics.get("v15_status")
+                        fact.v15_p = diagnostics.get("v15_p", result.factuality_score)
+                        fact.v15_insufficiency_reason = diagnostics.get("v15_insufficiency_reason")
+                        fact.v15_human_review_flags = diagnostics.get("v15_human_review_flags", [])
+                        fact.v15_best_evidence_tier = diagnostics.get("v15_best_evidence_tier")
                 except Exception:
                     pass  # Still pending or failed
             
@@ -392,6 +423,23 @@ class ExtractionEngine:
                 for tier, count in getattr(mf, "evidence_tier_counts", {}).items():
                     tier_counts[tier] = tier_counts.get(tier, 0) + int(count)
             
+            # Aggregate v1.5 ternary fields across cluster members
+            v15_statuses = [mf.v15_status for mf in member_facts if mf.v15_status]
+            if v15_statuses and all(s == v15_statuses[0] for s in v15_statuses):
+                cluster_v15_status = v15_statuses[0]
+            else:
+                cluster_v15_status = "INSUFFICIENT"
+            cluster_v15_p = round(
+                sum(mf.v15_p for mf in member_facts) / len(member_facts), 2
+            )
+            v15_reasons = [mf.v15_insufficiency_reason for mf in member_facts if mf.v15_insufficiency_reason]
+            cluster_v15_reason = v15_reasons[0] if v15_reasons else ("mixed_cluster_evidence" if len(set(v15_statuses)) > 1 else None)
+            cluster_v15_flags = list(set(
+                flag for mf in member_facts for flag in mf.v15_human_review_flags
+            ))
+            v15_tiers = [mf.v15_best_evidence_tier for mf in member_facts if mf.v15_best_evidence_tier is not None]
+            cluster_v15_tier = min(v15_tiers) if v15_tiers else None
+
             cf = CanonicalFact(
                 canon_fact_id=f"cf_{facts[0].topic_id}_{i}",
                 topic_id=facts[0].topic_id,
@@ -404,6 +452,12 @@ class ExtractionEngine:
                 normative_provenance="; ".join(mf.normative_provenance for mf in member_facts if mf.normative_provenance),
                 operationalization=member_facts[0].operationalization,
                 evidence_tier_counts=tier_counts,
+                fact_check_diagnostics=member_facts[0].fact_check_diagnostics if member_facts else {},
+                v15_status=cluster_v15_status,
+                v15_p=cluster_v15_p,
+                v15_insufficiency_reason=cluster_v15_reason,
+                v15_human_review_flags=cluster_v15_flags,
+                v15_best_evidence_tier=cluster_v15_tier,
             )
             canonical_facts.append(cf)
         
@@ -428,6 +482,12 @@ class ExtractionEngine:
                     normative_provenance=f.normative_provenance,
                     operationalization=f.operationalization,
                     evidence_tier_counts=getattr(f, "evidence_tier_counts", {}),
+                    fact_check_diagnostics=getattr(f, "fact_check_diagnostics", {}),
+                    v15_status=f.v15_status,
+                    v15_p=f.v15_p,
+                    v15_insufficiency_reason=f.v15_insufficiency_reason,
+                    v15_human_review_flags=list(f.v15_human_review_flags),
+                    v15_best_evidence_tier=f.v15_best_evidence_tier,
                 )
                 canonical_facts.append(cf)
         
@@ -601,6 +661,15 @@ class ExtractionEngine:
         
         mismatches = []
         
+        def _severity(f: CanonicalFact) -> str:
+            # v1.5: SUPPORTED/REFUTED are fully decisive → high severity if missed
+            if f.v15_status in ("SUPPORTED", "REFUTED"):
+                return "high"
+            # Legacy fallback: decisive p values are high severity
+            if abs(f.p_true - 0.5) > 0.2:
+                return "high"
+            return "medium"
+        
         # Facts in run 1 but not run 2
         for f in facts1:
             if f.canon_fact_text not in texts2:
@@ -608,7 +677,8 @@ class ExtractionEngine:
                     "type": "missing_in_run2",
                     "fact_text": f.canon_fact_text,
                     "p_true": f.p_true,
-                    "severity": "high" if abs(f.p_true - 0.5) > 0.2 else "medium"
+                    "v15_status": f.v15_status,
+                    "severity": _severity(f)
                 })
         
         # Facts in run 2 but not run 1
@@ -618,7 +688,8 @@ class ExtractionEngine:
                     "type": "missing_in_run1",
                     "fact_text": f.canon_fact_text,
                     "p_true": f.p_true,
-                    "severity": "high" if abs(f.p_true - 0.2) > 0.2 else "medium"
+                    "v15_status": f.v15_status,
+                    "severity": _severity(f)
                 })
         
         return mismatches[:10]  # Limit to top 10

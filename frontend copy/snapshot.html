@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Snapshot — Blind Debate Adjudicator</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="static/js/auth.js"></script>
+  <script src="static/js/common.js"></script>
+  <script src="static/js/data_bridge.js"></script>
+  <style>
+    .diff-list { margin: 0; padding-left: 18px; }
+    .diff-list li { margin-bottom: 8px; }
+    .choice-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html" class="active" aria-current="page">Snapshot</a>
+      <a href="verdict.html">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu" role="menu" aria-label="Additional pages">
+          <a href="topics.html" role="menuitem">Topics</a>
+          <a href="audits.html" role="menuitem">Audits</a>
+          <a href="evidence.html" role="menuitem">Evidence</a>
+          <a href="admin.html" role="menuitem">Admin</a>
+          <a href="about.html" role="menuitem">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap">
+    <div class="state-item"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="header-verdict">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
+  </div>
+  <div class="state-wrap" style="display:none;">
+    <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main id="main-content">
+
+<section class="card">
+  <div class="section-head">
+    <div>
+      <h1>Snapshot</h1>
+      <p class="lede">A live, audit-ready view of the current run.</p>
+    </div>
+    <a class="button secondary" href="topics.html">Open topic map</a>
+  </div>
+
+  <div class="callout soft" id="snapshot-empty" style="display:none;"></div>
+
+  <div id="snapshot-content" style="display:none;">
+      <div class="row">
+        <span class="pill">ID: <span class="mono" id="snapshot-id">-</span></span>
+        <span class="pill">Timestamp: <span class="mono" id="snapshot-timestamp">-</span></span>
+        <span class="pill"><span class="tooltip" data-tooltip="What caused this snapshot to be created">Trigger</span>: <span class="mono" id="snapshot-trigger">-</span></span>
+        <span class="pill warn" id="snapshot-status-pill">Status: <span class="mono" id="snapshot-status">valid</span></span>
+      </div>
+
+    <hr />
+    <h3>Moderation template</h3>
+    <div class="callout soft">
+      <div class="row">
+        <span class="pill">Template: <span class="mono" id="template-name">-</span></span>
+        <span class="pill">Version: <span class="mono" id="template-version">-</span></span>
+        <span class="pill">Borderline rate: <span class="mono" id="borderline-rate">-</span></span>
+        <span class="pill">Suppression: <span class="mono" id="suppression-k">k=5</span></span>
+        <span class="pill">Suppressed buckets: <span class="mono" id="suppressed-bucket-count">0</span></span>
+      </div>
+      <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
+    </div>
+
+    <hr />
+    <h3>Active frame</h3>
+    <div class="callout soft">
+      <div class="row">
+        <span class="pill">Frame id: <span class="mono" id="frame-id">-</span></span>
+        <span class="pill">Frame version: <span class="mono" id="frame-version">-</span></span>
+      </div>
+      <p style="margin:10px 0 0 0" id="frame-statement">Loading active frame...</p>
+    </div>
+
+    <hr />
+    <h3>Moderation outcomes</h3>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Outcome</th><th>Count</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill good">Allowed</span></td><td class="mono" id="allowed-count">-</td><td>Included in this snapshot</td></tr>
+          <tr><td><span class="pill bad">Blocked</span></td><td class="mono" id="blocked-count">-</td><td>Excluded from all downstream steps</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h4>Blocked reasons histogram</h4>
+      <div class="row" id="block-reasons-row">
+        <small style="color:var(--muted)">No blocked-post data yet.</small>
+      </div>
+    </div>
+
+    <hr />
+    <h3>Snapshot history</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Snapshots are immutable. The table below shows how the current debate has evolved over time.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Snapshot</th><th>Timestamp</th><th>Trigger</th><th>Verdict</th><th>Confidence</th><th>D</th></tr></thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading snapshot history...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <h3>Latest diff summary</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">When at least two snapshots exist, this compares the newest run to the previous one.</p>
+    <div id="diff-empty" class="callout soft" style="display:none;"></div>
+    <div id="diff-content" style="display:none;">
+      <div class="row">
+        <span class="pill">From: <span class="mono" id="diff-old-id">-</span></span>
+        <span class="pill">To: <span class="mono" id="diff-new-id">-</span></span>
+        <span class="pill">Confidence Δ: <span class="mono" id="diff-confidence-delta">-</span></span>
+        <span class="pill">D Δ: <span class="mono" id="diff-margin-delta">-</span></span>
+      </div>
+      <div class="callout soft" style="margin-top:16px;">
+        <ul class="diff-list" id="diff-summary-list"></ul>
+      </div>
+      <details class="trace">
+        <summary>Show diff surfaces for latest snapshot</summary>
+        <div class="codebox" id="diff-surfaces">Loading...</div>
+      </details>
+    </div>
+
+    <hr />
+    <h3>Snapshot Integrity</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Tamper-evident digests and replay metadata for independent verification.</p>
+    <div class="callout soft">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+        <span class="pill">Input Hash: <span class="mono" id="integrity-input-hash" style="font-size:0.72rem">-</span></span>
+        <span class="pill">Output Hash: <span class="mono" id="integrity-output-hash" style="font-size:0.72rem">-</span></span>
+      </div>
+      <div style="margin-top:var(--space-sm)">
+        <small><strong>Recipe versions:</strong></small>
+        <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px" id="integrity-recipe-versions"></div>
+      </div>
+      <details class="trace" style="margin-top:var(--space-sm)">
+        <summary>Show replay manifest</summary>
+        <div class="codebox" id="integrity-replay-manifest">Loading...</div>
+      </details>
+    </div>
+
+    <hr />
+    <h3>Governance Context</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Frame mode, review schedule, and active policy for this snapshot.</p>
+    <div class="callout soft">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+        <span class="pill">Frame mode: <span class="mono" id="governance-frame-mode">-</span></span>
+        <span class="pill">Review cadence: <span class="mono" id="governance-cadence">-</span></span>
+        <span class="pill">Moderation template: <span class="mono" id="governance-template">-</span></span>
+      </div>
+    </div>
+
+    <hr />
+    <div class="row">
+      <a class="pill" href="topics.html">Go to Topics →</a>
+      <a class="pill" href="audits.html">Go to Audits →</a>
+      <a class="pill" href="verdict.html">Go to Verdict →</a>
+      <a class="pill" href="dossier.html">Open Dossier →</a>
+      <a class="pill" href="governance.html">Open Governance →</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<div class="help-overlay"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
+  <div class="help-panel-header">
+    <h3 id="help-panel-title">Glossary & Help</h3>
+    <button class="close-help" aria-label="Close help">×</button>
+  </div>
+  <div class="help-panel-body">
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+
+    <div class="glossary-term">Snapshot</div>
+    <div class="glossary-def">An immutable capture of the debate state at a point in time. Includes the current verdict, moderation outcomes, topics, and scores.</div>
+
+    <div class="glossary-term">Trigger</div>
+    <div class="glossary-def">What caused the snapshot to be created: activity-based, scheduled, or manual.</div>
+
+    <div class="glossary-term">Confidence Δ</div>
+    <div class="glossary-def">How much the confidence changed between the latest snapshot and the immediately previous one.</div>
+
+    <div class="glossary-term">Diff Surface</div>
+    <div class="glossary-def">The concrete items that changed between two snapshots: posts, topics, facts, arguments, and scores.</div>
+
+    <hr />
+    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+  </div>
+</div>
+
+<script>
+function toggleHelp() {
+  BDA.toggleHelp();
+}
+
+function showSnapshotEmpty(messageHtml) {
+  const empty = document.getElementById('snapshot-empty');
+  document.getElementById('snapshot-content').style.display = 'none';
+  empty.innerHTML = messageHtml;
+  empty.style.display = 'block';
+}
+
+function showSnapshotContent() {
+  document.getElementById('snapshot-empty').style.display = 'none';
+  document.getElementById('snapshot-content').style.display = 'block';
+}
+
+function renderDebateChoices(debates) {
+  if (!debates.length) {
+    return '<strong>No debate selected.</strong> Create a debate from <a href="new_debate.html">New Debate / Post Point</a> to generate a live snapshot.';
+  }
+
+  const buttons = debates.map((debate) => `
+    <button class="pill" data-debate-id="${BDA.escapeHtml(debate.debate_id)}">${BDA.escapeHtml(debate.resolution)}</button>
+  `).join('');
+
+  return `
+    <strong>No active debate selected.</strong> Choose a public debate to inspect its live snapshot.
+    <div class="choice-list">${buttons}</div>
+  `;
+}
+
+function renderSnapshot(snapshot) {
+  document.getElementById('snapshot-id').textContent = snapshot.snapshot_id || '-';
+  document.getElementById('snapshot-timestamp').textContent = BDA.formatDateTime(snapshot.timestamp);
+  document.getElementById('snapshot-trigger').textContent = snapshot.trigger_type || '-';
+  document.getElementById('snapshot-status').textContent = snapshot.status || 'valid';
+  document.getElementById('snapshot-status-pill').style.display = snapshot.status === 'incident' ? 'inline-flex' : 'inline-flex';
+  document.getElementById('template-name').textContent = snapshot.template_name || '-';
+  document.getElementById('template-version').textContent = snapshot.template_version || '-';
+  document.getElementById('borderline-rate').textContent = BDA.formatNumber(snapshot.borderline_rate || 0, 4);
+  const suppression = snapshot.suppression_policy || {};
+  document.getElementById('suppression-k').textContent = `k=${suppression.k || 5}`;
+  document.getElementById('suppressed-bucket-count').textContent = suppression.affected_bucket_count ?? (suppression.affected_buckets || []).length ?? 0;
+  document.getElementById('allowed-count').textContent = snapshot.allowed_count ?? '-';
+  document.getElementById('blocked-count').textContent = snapshot.blocked_count ?? '-';
+
+  const reasonsRow = document.getElementById('block-reasons-row');
+  const reasons = Object.entries(snapshot.block_reasons || {}).sort((a, b) => b[1] - a[1]);
+  if (!reasons.length) {
+    reasonsRow.innerHTML = '<small style="color:var(--muted)">No blocked-post data in this snapshot.</small>';
+  } else {
+    reasonsRow.innerHTML = reasons.map(([reason, count]) =>
+      `<span class="pill">${BDA.escapeHtml(reason)}: <span class="mono">${count}</span></span>`
+    ).join('');
+  }
+
+  // Integrity fields
+  const inputHash = snapshot.input_hash_root || '-';
+  const outputHash = snapshot.output_hash_root || '-';
+  document.getElementById('integrity-input-hash').textContent = inputHash.length > 16 ? inputHash.slice(0, 16) + '…' : inputHash;
+  document.getElementById('integrity-input-hash').title = inputHash;
+  document.getElementById('integrity-output-hash').textContent = outputHash.length > 16 ? outputHash.slice(0, 16) + '…' : outputHash;
+  document.getElementById('integrity-output-hash').title = outputHash;
+
+  const recipeVersions = snapshot.recipe_versions || {};
+  const recipeContainer = document.getElementById('integrity-recipe-versions');
+  recipeContainer.innerHTML = Object.entries(recipeVersions).map(([k, v]) =>
+    `<span class="pill" style="font-size:0.72rem">${BDA.escapeHtml(k)}: ${BDA.escapeHtml(String(v))}</span>`
+  ).join('');
+
+  const replayManifest = snapshot.replay_manifest || {};
+  document.getElementById('integrity-replay-manifest').textContent = JSON.stringify(replayManifest, null, 2);
+
+  // Governance context
+  document.getElementById('governance-frame-mode').textContent = snapshot.frame_mode || '-';
+  document.getElementById('governance-cadence').textContent = snapshot.review_cadence_months ? `${snapshot.review_cadence_months} month(s)` : '-';
+  const policy = snapshot.policy_context || {};
+  document.getElementById('governance-template').textContent = policy.moderation_template_name ? `${policy.moderation_template_name} (${policy.moderation_template_version || '?'})` : '-';
+}
+
+function renderFrameInfo(payload) {
+  const frame = payload?.active_frame || {};
+  document.getElementById('frame-id').textContent = frame.frame_id || '-';
+  document.getElementById('frame-version').textContent = String(frame.version ?? '-');
+  document.getElementById('frame-statement').textContent = frame.statement || 'No active frame statement available.';
+}
+
+function renderHistory(history) {
+  const tbody = document.getElementById('history-tbody');
+  if (!history.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No snapshot history yet.</td></tr>';
+    return;
+  }
+
+  const rows = history.slice().reverse().map((item) => `
+    <tr>
+      <td class="mono">${BDA.escapeHtml(item.snapshot_id || '-')}</td>
+      <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(item.timestamp))}</td>
+      <td>${BDA.escapeHtml(item.trigger_type || '-')}</td>
+      <td>${BDA.escapeHtml(item.verdict || 'NO VERDICT')}</td>
+      <td class="mono">${BDA.formatNumber(item.confidence, 2)}</td>
+      <td class="mono">${BDA.formatNumber(item.margin_d, 4)}</td>
+    </tr>
+  `);
+
+  tbody.innerHTML = rows.join('');
+}
+
+function renderDiff(diff) {
+  if (!diff || diff.error) {
+    document.getElementById('diff-content').style.display = 'none';
+    document.getElementById('diff-empty').textContent = 'A diff becomes available after at least two snapshots have been generated.';
+    document.getElementById('diff-empty').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('diff-empty').style.display = 'none';
+  document.getElementById('diff-content').style.display = 'block';
+  document.getElementById('diff-old-id').textContent = diff.snapshot_id_old || '-';
+  document.getElementById('diff-new-id').textContent = diff.snapshot_id_new || '-';
+  document.getElementById('diff-confidence-delta').textContent = BDA.formatNumber(diff.confidence_change?.delta, 3);
+  document.getElementById('diff-margin-delta').textContent = BDA.formatNumber(diff.margin_d_change?.delta, 4);
+
+  const summaryList = [
+    `${diff.summary?.posts_added || 0} new post(s) included`,
+    `${diff.summary?.topics_changed || 0} topic change(s) detected`,
+    `${diff.summary?.facts_added || 0} fact(s) added, ${diff.summary?.facts_modified || 0} modified, ${diff.summary?.facts_removed || 0} removed`,
+    `${diff.summary?.arguments_added || 0} argument(s) added, ${diff.summary?.arguments_removed || 0} removed`,
+    diff.verdict_change?.changed
+      ? `Verdict changed from ${diff.verdict_change.old} to ${diff.verdict_change.new}`
+      : `Verdict stayed ${diff.verdict_change?.new || 'NO VERDICT'}`
+  ];
+  document.getElementById('diff-summary-list').innerHTML = summaryList.map((item) => `<li>${BDA.escapeHtml(item)}</li>`).join('');
+
+  const surfaces = [];
+  if (diff.posts?.length) {
+    surfaces.push(`posts:\n${diff.posts.slice(0, 5).map((post) => `- ${post.change_type} ${post.post_id} (${post.side}${post.topic_id ? `, ${post.topic_id}` : ''})`).join('\n')}`);
+  }
+  if (diff.topics?.length) {
+    surfaces.push(`topics:\n${diff.topics.slice(0, 5).map((topic) => `- ${topic.change_type} ${topic.topic_id} ${topic.topic_name}`).join('\n')}`);
+  }
+  if (diff.facts?.length) {
+    surfaces.push(`facts:\n${diff.facts.slice(0, 5).map((fact) => `- ${fact.change_type} ${fact.fact_id} (${fact.side})`).join('\n')}`);
+  }
+  if (diff.arguments?.length) {
+    surfaces.push(`arguments:\n${diff.arguments.slice(0, 5).map((arg) => `- ${arg.change_type} ${arg.arg_id} (${arg.side})`).join('\n')}`);
+  }
+  if (diff.scores?.length) {
+    surfaces.push(`scores:\n${diff.scores.slice(0, 6).map((score) => `- ${score.topic_id || 'overall'} ${score.side || ''} ${score.metric}: ${score.old_value} -> ${score.new_value}`).join('\n')}`);
+  }
+
+  document.getElementById('diff-surfaces').textContent = surfaces.length
+    ? surfaces.join('\n\n')
+    : 'No diff surface changes were recorded between the latest two snapshots.';
+}
+
+async function initSnapshotPage() {
+  const debate = await BDA.loadDebate();
+  if (!debate.has_debate) {
+    const debates = await BDA.loadDebates();
+    showSnapshotEmpty(renderDebateChoices(debates));
+
+    document.querySelectorAll('#snapshot-empty [data-debate-id]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const debateId = button.getAttribute('data-debate-id');
+        BDA.setActiveDebateId(debateId);
+        window.location.reload();
+      });
+    });
+    return;
+  }
+
+  const snapshot = await BDA.loadSnapshot();
+  if (!snapshot || !snapshot.has_snapshot) {
+    showSnapshotEmpty('This debate does not have a snapshot yet. Add posts in <a href="new_debate.html">New Debate / Post Point</a>, then generate a snapshot.');
+    return;
+  }
+
+  BDA.updateStateStrip(snapshot);
+  renderSnapshot(snapshot);
+  showSnapshotContent();
+
+  try {
+    const historyData = await BDA.api('/api/debate/snapshot-history');
+    renderHistory(historyData.snapshots || []);
+  } catch (error) {
+    renderHistory([]);
+  }
+
+  try {
+    const diffData = await BDA.api('/api/debate/snapshot-diff');
+    renderDiff(diffData);
+  } catch (error) {
+    renderDiff({ error: error.message });
+  }
+
+  try {
+    const frameData = await BDA.api('/api/governance/frames');
+    renderFrameInfo(frameData);
+  } catch (error) {
+    renderFrameInfo({});
+  }
+
+  BDA.setupTableScroll();
+  BDA.setupTooltips();
+}
+
+document.addEventListener('DOMContentLoaded', initSnapshotPage);
+</script>
+</body>
+</html>

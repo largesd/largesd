@@ -26,7 +26,7 @@ Counter-Arguments:
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -292,7 +292,7 @@ class EmailSubmissionParser:
             A formatted plain-text email body.
         """
         submission_id = str(uuid.uuid4())
-        submitted_at = datetime.utcnow().isoformat() + "Z"
+        submitted_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         lines = [
             "BDA Submission v1",
             f"Debate-ID: {debate_id}",

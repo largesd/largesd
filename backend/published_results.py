@@ -8,7 +8,7 @@ This bundle is what gets published to GitHub as consolidated_results.json.
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from database import DebateDatabase
@@ -32,8 +32,9 @@ class PublishedResultsBuilder:
     Build a consolidated results bundle from the database for a given debate.
     """
 
-    def __init__(self, db_path: str = "data/debate_system.db"):
+    def __init__(self, db_path: str = "data/debate_system.db", engine: Optional[Any] = None):
         self.db = DebateDatabase(db_path)
+        self.engine = engine
 
     def build_bundle(
         self,
@@ -74,7 +75,7 @@ class PublishedResultsBuilder:
         modulation_data = self._build_modulation(snapshot)
 
         bundle = {
-            "published_at": published_at or datetime.utcnow().isoformat() + "Z",
+            "published_at": published_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "commit_message": commit_message or f"Published results for {debate_id}",
             "debate": {
                 "debate_id": debate["debate_id"],
@@ -261,6 +262,12 @@ class PublishedResultsBuilder:
                         "normative_provenance": f.get("normative_provenance", ""),
                         "evidence_tier_counts": _coerce_json(f.get("evidence_tier_counts_json"), {}),
                         "member_count": len(_coerce_json(f.get("member_fact_ids"), [])),
+                        # LSD_FactCheck_v1_5_1 ternary fields
+                        "v15_status": f.get("v15_status"),
+                        "v15_p": f.get("v15_p", f.get("p_true", 0.5)),
+                        "v15_insufficiency_reason": f.get("v15_insufficiency_reason"),
+                        "v15_human_review_flags": _coerce_json(f.get("v15_human_review_flags_json"), []),
+                        "v15_best_evidence_tier": f.get("v15_best_evidence_tier"),
                     }
                     for f in facts
                 ],
@@ -466,30 +473,48 @@ class PublishedResultsBuilder:
         }
 
     def _build_snapshot_diff(self, debate_id: str) -> Optional[Dict[str, Any]]:
-        # We do not instantiate the full debate engine here to keep this module
-        # lightweight. The diff can be computed on demand by consumers or by
-        # the email processor after it runs the engine. We include a placeholder.
         snapshots = self.db.get_snapshots_by_debate(debate_id)
         if len(snapshots) < 2:
             return None
-        # Return lightweight metadata; full diff requires engine instantiation
+
+        latest = snapshots[0]["snapshot_id"]
+        previous = snapshots[1]["snapshot_id"]
+
+        if self.engine:
+            try:
+                return self.engine.diff_snapshots(previous, latest)
+            except Exception as e:
+                return {
+                    "latest_snapshot_id": latest,
+                    "previous_snapshot_id": previous,
+                    "note": f"Engine diff failed: {e}",
+                }
+
         return {
-            "latest_snapshot_id": snapshots[0]["snapshot_id"],
-            "previous_snapshot_id": snapshots[1]["snapshot_id"],
-            "note": "Full diff available via debate engine",
+            "latest_snapshot_id": latest,
+            "previous_snapshot_id": previous,
+            "note": "Snapshot diff requires DebateEngineV2 instance",
         }
 
     def _build_evidence_targets(
         self, debate_id: str, snapshot: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        # Evidence targets require the full engine; we return a placeholder.
-        # The email processor can enrich this after running the engine.
+        snapshot_id = snapshot["snapshot_id"] if snapshot else None
+
+        if self.engine and snapshot_id:
+            try:
+                return self.engine.get_evidence_targets(debate_id, snapshot_id)
+            except Exception as e:
+                return {
+                    "debate_id": debate_id,
+                    "snapshot_id": snapshot_id,
+                    "note": f"Evidence target analysis failed: {e}",
+                }
+
         return {
             "debate_id": debate_id,
-            "snapshot_id": snapshot["snapshot_id"] if snapshot else None,
-            "gaps": [],
-            "targets": [],
-            "note": "Evidence targets require DebateEngineV2 instantiation",
+            "snapshot_id": snapshot_id,
+            "note": "Evidence targets require DebateEngineV2 instance",
         }
 
     def _build_modulation(self, snapshot: Optional[Dict[str, Any]]) -> Dict[str, Any]:

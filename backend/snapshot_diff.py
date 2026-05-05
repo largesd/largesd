@@ -25,6 +25,11 @@ class FactChange:
     side: str
     p_true_old: Optional[float] = None
     p_true_new: Optional[float] = None
+    # LSD_FactCheck_v1_5_1 ternary fields
+    v15_status_old: Optional[str] = None
+    v15_status_new: Optional[str] = None
+    v15_insufficiency_reason_old: Optional[str] = None
+    v15_insufficiency_reason_new: Optional[str] = None
     provenance_change: Optional[str] = None
 
 
@@ -143,7 +148,11 @@ class SnapshotDiff:
                     "fact_text": f.fact_text[:100] + "..." if len(f.fact_text) > 100 else f.fact_text,
                     "side": f.side,
                     "p_true_old": f.p_true_old,
-                    "p_true_new": f.p_true_new
+                    "p_true_new": f.p_true_new,
+                    "v15_status_old": f.v15_status_old,
+                    "v15_status_new": f.v15_status_new,
+                    "v15_insufficiency_reason_old": f.v15_insufficiency_reason_old,
+                    "v15_insufficiency_reason_new": f.v15_insufficiency_reason_new,
                 }
                 for f in self.facts
             ],
@@ -421,14 +430,14 @@ class SnapshotDiffEngine:
         new_time = snap_new.get('timestamp', '1970-01-01')
         
         cursor.execute("""
-            SELECT canon_fact_id, canon_fact_text, side, p_true, created_at
+            SELECT canon_fact_id, canon_fact_text, side, p_true, v15_status, v15_insufficiency_reason, created_at
             FROM canonical_facts 
             WHERE debate_id = ? AND created_at <= ?
         """, (debate_id, old_time))
         old_facts = {row['canon_fact_id']: dict(row) for row in cursor.fetchall()}
         
         cursor.execute("""
-            SELECT canon_fact_id, canon_fact_text, side, p_true, created_at
+            SELECT canon_fact_id, canon_fact_text, side, p_true, v15_status, v15_insufficiency_reason, created_at
             FROM canonical_facts 
             WHERE debate_id = ? AND created_at <= ?
         """, (debate_id, new_time))
@@ -444,18 +453,27 @@ class SnapshotDiffEngine:
                     fact_id=fact_id,
                     fact_text=fact.get('canon_fact_text', ''),
                     side=fact.get('side', ''),
-                    p_true_new=fact.get('p_true', 0.5)
+                    p_true_new=fact.get('p_true', 0.5),
+                    v15_status_new=fact.get('v15_status'),
+                    v15_insufficiency_reason_new=fact.get('v15_insufficiency_reason'),
                 ))
             else:
                 old_fact = old_facts[fact_id]
-                if old_fact.get('p_true') != fact.get('p_true'):
+                p_changed = old_fact.get('p_true') != fact.get('p_true')
+                status_changed = old_fact.get('v15_status') != fact.get('v15_status')
+                reason_changed = old_fact.get('v15_insufficiency_reason') != fact.get('v15_insufficiency_reason')
+                if p_changed or status_changed or reason_changed:
                     changes.append(FactChange(
                         change_type="modified",
                         fact_id=fact_id,
                         fact_text=fact.get('canon_fact_text', ''),
                         side=fact.get('side', ''),
                         p_true_old=old_fact.get('p_true'),
-                        p_true_new=fact.get('p_true')
+                        p_true_new=fact.get('p_true'),
+                        v15_status_old=old_fact.get('v15_status'),
+                        v15_status_new=fact.get('v15_status'),
+                        v15_insufficiency_reason_old=old_fact.get('v15_insufficiency_reason'),
+                        v15_insufficiency_reason_new=fact.get('v15_insufficiency_reason'),
                     ))
         
         for fact_id, fact in old_facts.items():
@@ -465,7 +483,9 @@ class SnapshotDiffEngine:
                     fact_id=fact_id,
                     fact_text=fact.get('canon_fact_text', ''),
                     side=fact.get('side', ''),
-                    p_true_old=fact.get('p_true')
+                    p_true_old=fact.get('p_true'),
+                    v15_status_old=fact.get('v15_status'),
+                    v15_insufficiency_reason_old=fact.get('v15_insufficiency_reason'),
                 ))
         
         return changes
@@ -559,7 +579,11 @@ class SnapshotDiffEngine:
             for metric in metrics:
                 old_val = old_vals.get(metric, 0.0)
                 new_val = new_vals.get(metric, 0.0)
-                
+
+                # Handle None values (v1.5: no empirical premises → factuality=None)
+                old_val = 0.0 if old_val is None else float(old_val)
+                new_val = 0.0 if new_val is None else float(new_val)
+
                 if abs(old_val - new_val) > 0.001:  # Significant change
                     changes.append(ScoreChange(
                         topic_id=topic_id,

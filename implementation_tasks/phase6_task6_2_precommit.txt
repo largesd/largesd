@@ -1,0 +1,56 @@
+================================================================================
+  TASK 6.2: Add pre-commit hooks
+  Phase: 6 — DevOps & Quality of Life (Week 4)
+  Priority: 🟢 Medium | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • black + ruff configured but not enforced on commit
+
+TARGET STATE
+────────────
+  • .pre-commit-config.yaml with hooks:
+      - black (formatting)
+      - ruff (linting)
+      - ruff-format (alternative to black)
+      - trailing-whitespace
+      - end-of-file-fixer
+      - check-yaml
+      - check-added-large-files
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. pip install pre-commit
+
+  2. Create .pre-commit-config.yaml:
+
+       repos:
+         - repo: https://github.com/astral-sh/ruff-pre-commit
+           rev: v0.3.0
+           hooks:
+             - id: ruff
+               args: [--fix]
+             - id: ruff-format
+         - repo: https://github.com/pre-commit/pre-commit-hooks
+           rev: v4.5.0
+           hooks:
+             - id: trailing-whitespace
+             - id: end-of-file-fixer
+             - id: check-yaml
+             - id: check-added-large-files
+               args: ['--maxkb=1000']
+
+  3. pre-commit install
+
+  4. Run on all files: pre-commit run --all-files
+
+  5. Fix any existing issues
+
+  6. Document in README.md: pip install pre-commit && pre-commit install
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] pre-commit hooks run on every commit
+  [ ] No unformatted code can be committed
+  [ ] CI runs same linting rules as pre-commit

@@ -150,11 +150,19 @@ class EvidenceTargetAnalyzer:
         facts = self._load_canonical_facts(debate_id)
         arguments = self._load_canonical_arguments(debate_id)
         
-        # Calculate decisiveness for each fact (MSD §10.3)
+        # Calculate decisiveness for each fact using LSD_FactCheck_v1_5_1 ternary semantics
+        # SUPPORTED (p=1.0) and REFUTED (p=0.0) are fully decisive;
+        # INSUFFICIENT (p=0.5) is indecisive.
         fact_decisiveness = {}
         for fact in facts:
-            p = fact.get('p_true', 0.5)
-            d = abs(p - 0.5)  # Decisiveness per MSD §10.3
+            status = fact.get('v15_status')
+            if not status:
+                d = fact.get("fact_check_diagnostics", {})
+                status = d.get("v15_status") if isinstance(d, dict) else None
+            if status in ("SUPPORTED", "REFUTED"):
+                d = 1.0
+            else:
+                d = 0.0
             fact_decisiveness[fact.get('canon_fact_id', '')] = d
         
         # Calculate argument leverage (MSD §10.3)
@@ -186,13 +194,16 @@ class EvidenceTargetAnalyzer:
         # Find high-leverage targets
         all_targets = []
         
-        # 1. Uncertain facts (p near 0.5) with high potential impact
+        # 1. Uncertain (INSUFFICIENT) facts with high potential impact
         for fact in facts:
             p = fact.get('p_true', 0.5)
-            d = abs(p - 0.5)
+            status = fact.get('v15_status')
+            if not status:
+                d = fact.get("fact_check_diagnostics", {})
+                status = d.get("v15_status") if isinstance(d, dict) else None
+            is_insufficient = status == "INSUFFICIENT" or status is None
             
-            # Facts near 0.5 have high uncertainty
-            if d < 0.3:  # Uncertain facts
+            if is_insufficient:
                 # Find arguments that depend on this fact
                 dependent_args = [
                     arg for arg in arguments
@@ -203,15 +214,16 @@ class EvidenceTargetAnalyzer:
                     # Calculate potential impact if this fact were confirmed/refuted
                     potential_impact = len(dependent_args) * 0.1  # Simplified
                     
+                    reason = fact.get('v15_insufficiency_reason') or "undetermined"
                     target = EvidenceTarget(
                         target_id=fact.get('canon_fact_id', ''),
                         target_type="fact",
                         title=f"Fact: {fact.get('canon_fact_text', '')[:80]}...",
                         description=fact.get('canon_fact_text', ''),
                         side=fact.get('side', ''),
-                        current_state=f"Uncertain (p={p:.2f})",
+                        current_state=f"INSUFFICIENT (reason: {reason})",
                         current_p=p,
-                        leverage_score=d,  # Low decisiveness = high potential
+                        leverage_score=1.0,  # INSUFFICIENT = high potential if resolved
                         impact_on_margin=potential_impact,
                         evidence_needed=self._suggest_evidence_for_fact(fact),
                         evidence_type=self._classify_evidence_type(fact),
@@ -432,20 +444,25 @@ class EvidenceTargetAnalyzer:
                                   dependent_args: List[Dict]) -> str:
         """Generate the 'If FACT X is confirmed/refuted...' trigger"""
         fact_id = fact.get('canon_fact_id', '')
-        p = fact.get('p_true', 0.5)
-        
-        if p < 0.5:
-            direction = "confirmed (p > 0.7)"
-            effect = "strengthen"
-        else:
-            direction = "refuted (p < 0.3)"
-            effect = "weaken"
+        status = fact.get('v15_status')
+        if not status:
+            d = fact.get("fact_check_diagnostics", {})
+            status = d.get("v15_status") if isinstance(d, dict) else None
         
         arg_count = len(dependent_args)
         
-        return (f"If FACT {fact_id[:20]}... is {direction}, "
-                f"it would {effect} {arg_count} dependent argument(s), "
-                f"potentially shifting the topic quality score.")
+        if status == "REFUTED":
+            return (f"If FACT {fact_id[:20]}... is confirmed (SUPPORTED) with strong evidence, "
+                    f"it would strengthen {arg_count} dependent argument(s), "
+                    f"potentially shifting the topic quality score.")
+        elif status == "SUPPORTED":
+            return (f"If FACT {fact_id[:20]}... is refuted (REFUTED) with strong evidence, "
+                    f"it would weaken {arg_count} dependent argument(s), "
+                    f"potentially shifting the topic quality score.")
+        else:
+            return (f"If FACT {fact_id[:20]}... is resolved to SUPPORTED or REFUTED with strong evidence, "
+                    f"it would affect {arg_count} dependent argument(s), "
+                    f"potentially shifting the topic quality score.")
     
     def _generate_summary(self, verdict: str, confidence: float, 
                           targets: List[EvidenceTarget]) -> str:
@@ -460,8 +477,8 @@ class EvidenceTargetAnalyzer:
                    f"The outcome is most sensitive to: {top_target.title}. ")
         
         if top_target.target_type == "fact":
-            summary += (f"If this fact were {('confirmed' if top_target.current_p < 0.5 else 'refuted')} "
-                       f"with strong evidence, the verdict could change.")
+            summary += ("If this fact were resolved with decisive evidence, "
+                       "the verdict could change.")
         elif top_target.target_type == "argument":
             summary += ("If the key supporting facts of this argument are challenged, "
                        "the balance could shift.")

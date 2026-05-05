@@ -8,7 +8,7 @@ body:
     id: lsd_section
     attributes:
       label: LSD Section
-      description: Reference the source section from LSD req.txt.
+      description: Reference the source section from docs/requirements/LSD_req.txt.
       placeholder: "Example: 17 - Overall aggregation + decision dossier outputs"
     validations:
       required: true

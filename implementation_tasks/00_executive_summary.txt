@@ -1,0 +1,65 @@
+================================================================================
+  debate_system — EXECUTIVE SUMMARY & CONTEXT
+  Generated: 2026-05-04
+  Scope: Address all Prioritized Recommendations from System & UI Review
+  Estimated Effort: 4–6 weeks (1 engineer full-time)
+================================================================================
+
+GOAL
+────
+Transform debate_system from a B+ prototype into a production-ready system
+(C+ → A- readiness) by systematically addressing all 🔴 Critical, 🟡 High, and
+🟢 Medium priority items identified in the System & UI Review.
+
+SUCCESS CRITERIA
+────────────────
+  • All 🔴 Critical issues resolved and tested
+  • Backend decomposed into testable, <400-line modules
+  • API test coverage ≥ 70% for route handlers
+  • Security posture passes basic pen-test checklist (OWASP Top 10)
+  • Frontend loads consistently, passes a11y audit, supports mobile tables
+  • CI/CD pipeline runs lint + type-check + security-scan + tests
+  • Docker Compose stack is clean (no dead services)
+
+HIGH-LEVEL TIMELINE
+───────────────────
+  Week 1    Security hardening + begin backend decomposition
+  Week 2    Finish backend decomposition + API testing push
+  Week 3    Scaling infrastructure (Redis, pooling, CSRF) + frontend cleanup
+  Week 4    DevOps polish (pre-commit, type checking, lock files)
+  Weeks 5–6 Buffer, integration testing, performance tuning, documentation
+
+RECOMMENDED EXECUTION ORDER FOR KIMI CODE SESSIONS
+──────────────────────────────────────────────────
+  1. phase1_task1_1_sanitize_html.txt
+  2. phase1_task1_2_cors.txt
+  3. phase2_task2_1_blueprints.txt
+  4. phase3_task3_1_api_tests.txt
+  5. phase3_task3_2_request_id.txt
+  6. phase2_task2_2_pipeline.txt
+  7. phase1_task1_3_security_headers.txt
+  8. phase1_task1_4_csrf.txt
+  9. phase5_task5_2_inline_handlers.txt  (do before CSP hardening)
+  10. phase5_task5_1_css_modular.txt
+  11. phase5_task5_3_loading_states.txt
+  12. phase5_task5_4_mobile_tables.txt
+  13. phase4_task4_4_remove_frontend_copy.txt
+  14. phase4_task4_1_redis_rate_limit.txt
+  15. phase4_task4_2_connection_pool.txt
+  16. phase4_task4_3_job_queue_locking.txt
+  17. phase2_task2_3_package_skills.txt
+  18. phase6_task6_1_lock_deps.txt
+  19. phase6_task6_2_precommit.txt
+  20. phase6_task6_3_mypy.txt
+  21. phase6_task6_4_clean_requirements.txt
+  22. phase6_task6_5_security_scanning.txt
+  23. phase7_task7_1_openapi.txt
+  24. phase7_task7_2_update_docs.txt
+  25. phase7_task7_3_versioning.txt
+
+NOTE TO KIMI CODE
+─────────────────
+Each numbered .txt file in this directory is an independent implementation task.
+Read the task file, implement it, run tests, and ask the user to verify before
+moving to the next. Reference appendix files for testing strategy and risk
+mitigation as needed.

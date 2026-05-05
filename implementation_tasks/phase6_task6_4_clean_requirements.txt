@@ -1,0 +1,45 @@
+================================================================================
+  TASK 6.4: Clean up requirements and remove dead infrastructure
+  Phase: 6 — DevOps & Quality of Life (Week 4)
+  Priority: 🟢 Medium | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • playwright>=1.50.0 in requirements.txt (test-only dependency)
+  • Redis in docker-compose.yml but may be unused by backend
+
+TARGET STATE
+────────────
+  • Test dependencies separated (requirements-test.txt)
+  • Redis either wired up or removed from docker-compose.yml
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Create requirements-test.txt:
+       -r requirements.txt
+       pytest>=7.0.0
+       pytest-cov>=4.0.0
+       pytest-flask>=1.2.0
+       playwright>=1.50.0
+       mypy>=1.0.0
+       pre-commit>=3.0.0
+
+  2. Remove playwright from requirements.txt
+
+  3. Decision on Redis:
+     IF wiring up for rate limiting + caching:
+       • Update docker-compose.yml health check
+       • Add redis-py to requirements.txt
+       • Use Redis for rate limiting (Task 4.1)
+     ELSE:
+       • Remove redis service from docker-compose.yml
+       • Remove REDIS_URL from .env if unused
+
+  4. Update CI to use requirements-test.txt for test jobs
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] Test-only deps in requirements-test.txt
+  [ ] No unused services in docker-compose.yml
+  [ ] Docker build uses minimal production requirements

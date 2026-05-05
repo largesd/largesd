@@ -1,0 +1,47 @@
+================================================================================
+  TASK 6.3: Add type checking with mypy
+  Phase: 6 — DevOps & Quality of Life (Week 4)
+  Priority: 🟢 Medium | Effort: 1 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • No static type analysis
+
+TARGET STATE
+────────────
+  • mypy passes with --strict for new code
+  • Gradual typing for legacy code (lower priority)
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Add mypy>=1.0.0 to dev dependencies
+
+  2. Create mypy.ini:
+
+       [mypy]
+       python_version = 3.11
+       warn_return_any = True
+       warn_unused_configs = True
+       disallow_untyped_defs = True
+       disallow_incomplete_defs = True
+       check_untyped_defs = True
+       ignore_missing_imports = True
+
+       [mypy-backend.pipeline.*]
+       disallow_untyped_defs = True
+
+       [mypy-tests.*]
+       disallow_untyped_defs = False
+
+  3. Run mypy on new modules (pipeline, routes, utils)
+
+  4. Fix type errors
+
+  5. Add mypy to CI and pre-commit (optional — can be slow)
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] mypy passes on all new/modified modules
+  [ ] Type annotations on all public functions in pipeline/
+  [ ] CI includes mypy check

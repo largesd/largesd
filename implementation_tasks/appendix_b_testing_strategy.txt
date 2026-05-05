@@ -1,0 +1,51 @@
+================================================================================
+  APPENDIX B — TESTING STRATEGY
+================================================================================
+
+UNIT TESTS
+──────────
+  Target: ≥ 80% coverage on new modules
+  Tools: pytest, pytest-cov
+  Scope:
+    • backend/sanitize.py — XSS vector tests
+    • backend/utils/validators.py — boundary tests
+    • backend/pipeline/* — stage isolation tests with mocked dependencies
+    • backend/db_pool.py — connection lifecycle tests
+
+INTEGRATION TESTS
+─────────────────
+  Target: All API endpoints, all auth flows
+  Tools: pytest-flask, app.test_client()
+  Scope:
+    • tests/integration/api/* — endpoint behavior
+    • tests/integration/test_cors.py — origin restrictions
+    • tests/integration/test_pipeline.py — full pipeline with mock fact-checker
+
+ACCEPTANCE TESTS
+────────────────
+  Target: Critical user journeys
+  Tools: Playwright
+  Scope:
+    • Login → Create debate → Generate snapshot → View verdict
+    • Appeal flow
+    • Admin audit trail review
+
+SECURITY TESTS
+──────────────
+  Target: OWASP Top 10 coverage
+  Tools: Bandit, pip-audit, manual verification
+  Scope:
+    • XSS attempts via all input fields
+    • CORS preflight from unauthorized origin
+    • CSRF token validation on all state-changing forms
+    • SQL injection fuzzing on search endpoints
+    • Rate limit enforcement
+
+PERFORMANCE TESTS
+─────────────────
+  Target: Snapshot generation < 30s, page load < 2s
+  Tools: locust, browser dev tools
+  Scope:
+    • Concurrent snapshot generation (10 simultaneous)
+    • Database connection pool under load
+    • Redis rate limiter accuracy

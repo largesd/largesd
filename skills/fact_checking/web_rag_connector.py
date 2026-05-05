@@ -42,6 +42,12 @@ class LLMClient(Protocol):
 
 class WebRAGConnector(SourceConnector):
     """
+    .. deprecated:: 1.5.0
+        Use BraveSearchConnector (v15_connectors.py) instead.
+        This connector implements the legacy v1 interface and will be removed
+        in a future release.
+    """
+    """
     Conservative web-retrieval connector.
 
     Parameters
@@ -66,6 +72,12 @@ class WebRAGConnector(SourceConnector):
         tier: EvidenceTier = EvidenceTier.TIER_2,
         max_pages: int = 3,
     ):
+        import warnings
+        warnings.warn(
+            "WebRAGConnector is deprecated since v1.5.0. Use BraveSearchConnector instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.llm = llm_client
         self.search = search_backend
         self._source_id = source_id

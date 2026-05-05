@@ -387,7 +387,7 @@ def test_async_pii_propagation():
 
     def capture_retrieve(normalized_claim: str, claim_hash: str, allowlist_version: str):
         captured_queries.append(normalized_claim)
-        return [], 0
+        return [], 0, []
 
     skill._evidence_retriever.retrieve_evidence = capture_retrieve
 
@@ -906,6 +906,104 @@ def test_audit_logging():
     skill.shutdown()
 
 
+class FailingConnector:
+    """Connector that always raises, for testing failure visibility."""
+
+    def __init__(self, source_id: str):
+        self._source_id = source_id
+
+    @property
+    def source_id(self) -> str:
+        return self._source_id
+
+    def query(self, normalized_claim: str, claim_hash: str):
+        raise RuntimeError(f"{self._source_id} is down")
+
+
+def test_connector_failure_is_visible():
+    """Connector exceptions must surface in diagnostics, not vanish silently."""
+    print("\n=== Testing Connector Failure Visibility ===")
+    import os
+    for db in (".fact_check_cache.db", ".fact_check_audit.db"):
+        if os.path.exists(db):
+            os.remove(db)
+    skill = FactCheckingSkill(
+        mode="ONLINE_ALLOWLIST",
+        allowlist_version="v1",
+        enable_async=False,
+        connectors=[
+            FailingConnector("fail_source"),
+            StaticConnector("ok_source", SourceConfidence.CONFIRMS, EvidenceTier.TIER_1),
+        ],
+    )
+    result = skill.check_fact("OpenAI was founded in 2015")
+    assert "connector_errors" in result.diagnostics, "Diagnostics should record connector failures"
+    assert any("fail_source" in err for err in result.diagnostics["connector_errors"]), (
+        "Error message should name the failing connector"
+    )
+    print("✓ Connector failures are visible in diagnostics")
+
+
+def test_empty_decisions_diagnostics():
+    """_build_diagnostics must tolerate an empty decisions list."""
+    print("\n=== Testing Empty Decisions Diagnostics ===")
+    skill = FactCheckingSkill(mode="OFFLINE", enable_async=False)
+    diagnostics = skill._build_diagnostics([], [], "OFFLINE")
+    assert diagnostics["connector_path"] == []
+    assert diagnostics["reason_code"] == "no_planner_decision"
+    assert diagnostics["claim_truncated"] is False
+    print("✓ Empty decisions produce safe diagnostic defaults")
+
+
+def test_memory_cache_returns_copy():
+    """MemoryCache.get() must return a deep copy to prevent cache corruption."""
+    print("\n=== Testing Memory Cache Returns Copy ===")
+    from skills.fact_checking.cache import MemoryCache
+    from skills.fact_checking.models import FactCheckResult, FactCheckStatus, FactCheckVerdict
+
+    cache = MemoryCache(max_size=10)
+    original = FactCheckResult(
+        claim_text="original",
+        normalized_claim_text="original",
+        claim_hash="abc",
+        fact_mode="OFFLINE",
+        allowlist_version="v1",
+        status=FactCheckStatus.UNVERIFIED_OFFLINE,
+        verdict=FactCheckVerdict.UNVERIFIED,
+        factuality_score=0.5,
+        confidence=0.0,
+        confidence_explanation="test",
+    )
+    cache.set("key", original, ttl_seconds=3600)
+
+    fetched = cache.get("key")
+    assert fetched is not None
+    fetched.claim_text = "mutated"
+
+    fetched_again = cache.get("key")
+    assert fetched_again.claim_text == "original", "Cache entry was corrupted by caller mutation"
+    print("✓ Memory cache returns independent copies")
+
+
+def test_claim_truncation_diagnostic():
+    """Oversized claims must set claim_truncated=True in diagnostics."""
+    print("\n=== Testing Claim Truncation Diagnostic ===")
+    import os
+    for db in (".fact_check_cache.db", ".fact_check_audit.db"):
+        if os.path.exists(db):
+            os.remove(db)
+    from skills.fact_checking.config import FactCheckConfig
+
+    config = FactCheckConfig(max_claim_length=10)
+    skill = FactCheckingSkill(mode="OFFLINE", enable_async=False, config=config)
+    result = skill.check_fact("This claim is way too long")
+    assert result.diagnostics.get("claim_truncated") is True, (
+        "Diagnostics should flag truncated claims"
+    )
+    assert len(result.claim_text) <= 10
+    print("✓ Claim truncation is flagged in diagnostics")
+
+
 def run_all_tests():
     """Run all tests"""
     print("=" * 60)
@@ -935,6 +1033,10 @@ def run_all_tests():
         test_lsd_requirements,
         test_temporal_claims,
         test_audit_logging,
+        test_connector_failure_is_visible,
+        test_empty_decisions_diagnostics,
+        test_memory_cache_returns_copy,
+        test_claim_truncation_diagnostic,
     ]
     
     passed = 0

@@ -1,0 +1,51 @@
+================================================================================
+  TASK 4.3: Fix job queue race conditions with row-level locking
+  Phase: 4 — Scaling Infrastructure (Week 3)
+  Priority: 🟡 High | Effort: 1 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • UPDATE ... WHERE status = 'queued' lacks row-level locking
+  • Multi-worker deployments could double-process jobs
+
+TARGET STATE
+────────────
+  • SELECT FOR UPDATE (PostgreSQL) or equivalent locking
+  • Atomic claim-and-update operation
+
+IMPLEMENTATION STEPS
+────────────────────
+  For SQLite (current):
+
+    1. Use IMMEDIATE transaction mode:
+         BEGIN IMMEDIATE;
+         SELECT * FROM job_queue WHERE status = 'queued' ORDER BY created_at LIMIT 1;
+         UPDATE job_queue SET status = 'processing', worker_id = ? WHERE id = ?;
+         COMMIT;
+
+    2. Ensure connection used for claim is held until job completes
+
+  For PostgreSQL (future migration):
+
+    1. Use SKIP LOCKED for efficient multi-worker claim:
+         UPDATE job_queue
+         SET status = 'processing', worker_id = ?, started_at = NOW()
+         WHERE id = (
+           SELECT id FROM job_queue
+           WHERE status = 'queued'
+           ORDER BY created_at
+           FOR UPDATE SKIP LOCKED
+           LIMIT 1
+         )
+         RETURNING *;
+
+  3. Add worker_id to job_queue table
+
+  4. Add timeout/reclaim logic: jobs stuck in "processing" > 5 minutes get reset
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] No duplicate job processing under multi-worker load
+  [ ] Job claim is atomic (select + update in single transaction)
+  [ ] Stuck jobs auto-reclaim after timeout

@@ -12,7 +12,7 @@ import math
 import os
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import median
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -105,9 +105,21 @@ def formula_registry() -> Dict[str, Any]:
             "version_id": FACT_CHECK_POLICY_VERSION,
             "thresholds": FACT_CHECK_THRESHOLDS,
             "perfect_checker": "SUPPORTED -> p=1.0, REFUTED -> p=0.0, INSUFFICIENT -> p=0.5",
+            "v1_5_deterministic_ternary": {
+                "p_values": "{1.0, 0.0, 0.5}",
+                "status_values": "{SUPPORTED, REFUTED, INSUFFICIENT}",
+                "insufficiency_means_undetermined": True,
+                "epsilon_floor_load_bearing": True,
+                "edge_cases": {
+                    "no_empirical_premises": "F=null, F_supported_only=null, insufficiency_rate=null",
+                    "all_insufficient": "F=0.5, F_supported_only=null, insufficiency_rate=1.0",
+                    "no_supported_refuted": "F_supported_only=null",
+                },
+            },
         },
         "feature_flags": {
             "FACT_CHECKER_MODE": fact_checker_mode(),
+            "FACT_CHECKER_VERSION": os.getenv("FACT_CHECKER_VERSION", "v1.5"),
             "SCORING_FORMULA_MODE": scoring_formula_mode(),
             "FRAME_MODE": frame_mode(),
             "COVERAGE_MODE": coverage_mode(),
@@ -446,22 +458,63 @@ def topic_diagnostics(
     }
 
 
-def merge_sensitivity(topics: Sequence[Mapping[str, Any]], base_margin_d: float) -> Dict[str, Any]:
-    """Deterministic one-replicate topic-merge sensitivity placeholder."""
-    ids = [str(topic.get("topic_id", "")) for topic in topics if topic.get("topic_id")]
-    primary = set(ids)
-    replicate = set(reversed(ids))
-    union = primary | replicate
-    jaccard = len(primary & replicate) / len(union) if union else 1.0
+def merge_sensitivity(
+    primary_topics: Sequence[Mapping[str, Any]],
+    replicate_topics: Sequence[Mapping[str, Any]],
+    topic_content_mass: Mapping[str, float],
+    baseline_d: float,
+    replicate_d: float,
+    primary_to_replicate: Mapping[str, str],
+) -> Dict[str, Any]:
+    """
+    Deterministic one-replicate topic-merge sensitivity audit.
+    Computes mass-weighted mapping stability from actual ancestry and
+    real score delta.
+    """
+    total_mass = sum(
+        topic_content_mass.get(str(t.get("topic_id", "")), 0.0)
+        for t in primary_topics
+    )
+    weighted_stable_mass = 0.0
+
+    for p in primary_topics:
+        p_id = str(p.get("topic_id", ""))
+        p_mass = topic_content_mass.get(p_id, 0.0)
+        r_id = primary_to_replicate.get(p_id)
+        if not r_id:
+            continue
+
+        # Find the replicate topic that P mapped to
+        r_topic = next(
+            (r for r in replicate_topics if str(r.get("topic_id", "")) == r_id),
+            None
+        )
+        if not r_topic:
+            continue
+
+        parent_ids = r_topic.get("parent_topic_ids", [])
+        if p_id in parent_ids:
+            # P is one of the parents of R.
+            # If R has k parents, P contributed 1/k of the merge.
+            contribution = 1.0 / max(len(parent_ids), 1)
+        else:
+            # P survived unmerged and maps 1:1 to itself
+            contribution = 1.0
+
+        weighted_stable_mass += p_mass * contribution
+
+    stability = round(weighted_stable_mass / total_mass, 4) if total_mass else 1.0
+    delta_d = round(replicate_d - baseline_d, 4)
+
     return {
         "version_id": "lsd-6.1-merge-v1.2.0",
         "replicate_seed": 99,
-        "mapping_stability": round(jaccard, 4),
+        "mapping_stability": stability,
         "score_deltas_per_frame": {
             "active": {
-                "delta_d": 0.0,
-                "baseline_d": round(float(base_margin_d), 4),
-                "replicate_d": round(float(base_margin_d), 4),
+                "delta_d": delta_d,
+                "baseline_d": round(float(baseline_d), 4),
+                "replicate_d": round(float(replicate_d), 4),
             }
         },
     }
@@ -557,13 +610,16 @@ def coverage_adequacy_trace(topic_scores: Mapping[str, Any]) -> Dict[str, Any]:
     return {"version_id": "lsd-15.1-v1.2.0", "rebuttal_type_distribution": dict(distribution)}
 
 
-def component_sensitivity(factuality: float, reasoning: float, coverage: float) -> Dict[str, Any]:
-    components = {
-        "F": float(factuality),
-        "Reason": float(reasoning),
-        "Coverage": float(coverage),
-    }
-    base = compute_q_geomean(list(components.values()))
+def component_sensitivity(factuality: Optional[float], reasoning: float, coverage: float) -> Dict[str, Any]:
+    """Drop-component sensitivity with optional factuality (None when no empirical premises)."""
+    components: Dict[str, float] = {}
+    if factuality is not None:
+        components["F"] = float(factuality)
+    components["Reason"] = float(reasoning)
+    components["Coverage"] = float(coverage)
+
+    values = list(components.values())
+    base = compute_q_geomean(values)
     drops = {}
     for name in components:
         remaining = [value for key, value in components.items() if key != name]
@@ -574,7 +630,7 @@ def component_sensitivity(factuality: float, reasoning: float, coverage: float) 
         }
     return {
         "q_geo": round(base, 4),
-        "q_arith": round(compute_q_arith(list(components.values())), 4),
+        "q_arith": round(compute_q_arith(values), 4),
         "drop_component": drops,
         "epsilon": Q_EPSILON,
     }
@@ -634,4 +690,4 @@ def unselected_tail_summary(
 
 
 def now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

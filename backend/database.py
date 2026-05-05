@@ -395,6 +395,39 @@ class DebateDatabase:
         self._ensure_column(cursor, "debate_frames", "emergency_override_reason", "TEXT")
         self._ensure_column(cursor, "debate_frames", "emergency_override_by", "TEXT")
         self._ensure_column(cursor, "debate_frames", "governance_decision_id", "TEXT")
+        # v1.5 deterministic ternary fact-checking columns
+        self._ensure_column(cursor, "canonical_facts", "v15_status", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "v15_insufficiency_reason", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "v15_human_review_flags_json", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "v15_best_evidence_tier", "INTEGER")
+        self._ensure_column(cursor, "canonical_facts", "subclaim_results_json", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "human_review_flags_json", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "insufficiency_reason", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "best_evidence_tier", "INTEGER")
+        self._ensure_column(cursor, "canonical_facts", "limiting_evidence_tier", "INTEGER")
+        self._ensure_column(cursor, "canonical_facts", "decisive_evidence_tier", "INTEGER")
+        self._ensure_column(cursor, "canonical_facts", "citations_json", "TEXT")
+        self._ensure_column(cursor, "canonical_facts", "synthesis_logic_json", "TEXT")
+        self._ensure_column(cursor, "snapshots", "fact_checker_version", "TEXT DEFAULT 'v1.5'")
+        self._ensure_column(cursor, "snapshots", "evidence_policy_version", "TEXT")
+        self._ensure_column(cursor, "snapshots", "synthesis_rule_engine_version", "TEXT")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fact_check_evidence_items (
+                evidence_id TEXT PRIMARY KEY,
+                canon_fact_id TEXT NOT NULL,
+                source_type TEXT,
+                source_tier INTEGER,
+                source_url TEXT,
+                source_title TEXT,
+                quote_or_span TEXT,
+                direction TEXT,
+                direction_confidence REAL,
+                relevance_score REAL,
+                FOREIGN KEY (canon_fact_id) REFERENCES canonical_facts(canon_fact_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_canon_fact ON fact_check_evidence_items(canon_fact_id)")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS frame_petitions (
@@ -1011,8 +1044,9 @@ class DebateDatabase:
             INSERT OR REPLACE INTO canonical_facts
             (canon_fact_id, debate_id, frame_id, topic_id, side, canon_fact_text, member_fact_ids,
              p_true, provenance_links, referenced_by_au_ids, fact_type, normative_provenance,
-             operationalization, evidence_tier_counts_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             operationalization, evidence_tier_counts_json, created_at,
+             v15_status, v15_insufficiency_reason, v15_human_review_flags_json, v15_best_evidence_tier)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fact_data['canon_fact_id'],
             fact_data['debate_id'],
@@ -1028,7 +1062,11 @@ class DebateDatabase:
             fact_data.get('normative_provenance'),
             fact_data.get('operationalization'),
             json.dumps(fact_data.get('evidence_tier_counts', {})),
-            fact_data['created_at']
+            fact_data['created_at'],
+            fact_data.get('v15_status'),
+            fact_data.get('v15_insufficiency_reason'),
+            json.dumps(fact_data.get('v15_human_review_flags', [])),
+            fact_data.get('v15_best_evidence_tier'),
         ))
         conn.commit()
         conn.close()
@@ -1134,8 +1172,9 @@ class DebateDatabase:
              overall_for, overall_against, margin_d, ci_d_lower, ci_d_upper, confidence,
              verdict, topic_scores, replay_manifest_json, input_hash_root, output_hash_root,
              recipe_versions_json, borderline_rate, suppression_policy_json, status,
-             provider_metadata_json, cost_estimate)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             provider_metadata_json, cost_estimate,
+             fact_checker_version, evidence_policy_version, synthesis_rule_engine_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             snapshot_data['snapshot_id'],
             snapshot_data['debate_id'],
@@ -1166,6 +1205,9 @@ class DebateDatabase:
             snapshot_data.get('status', 'valid'),
             json.dumps(snapshot_data.get('provider_metadata', {})),
             snapshot_data.get('cost_estimate'),
+            snapshot_data.get('fact_checker_version', 'v1.5'),
+            snapshot_data.get('evidence_policy_version'),
+            snapshot_data.get('synthesis_rule_engine_version'),
         ))
         conn.commit()
         conn.close()

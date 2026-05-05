@@ -92,36 +92,83 @@ class ScoringEngine:
     def _sorted_scores(overall_scores: Dict[str, float]) -> List[Tuple[str, float]]:
         return sorted(overall_scores.items(), key=lambda item: (-item[1], item[0]))
 
-    def compute_factuality_diagnostics(self, facts: List[Dict]) -> Dict[str, float]:
-        """Compute factuality F_{t,s} plus LSD insufficiency diagnostics."""
+    def compute_factuality_diagnostics(self, facts: List[Dict]) -> Dict[str, Any]:
+        """Compute factuality F_{t,s} plus LSD insufficiency diagnostics.
+
+        Per LSD_FactCheck_v1_5_1 §8 (Aggregation Edge Cases):
+        - No selected empirical premises → f_all=None, f_supported_only=None,
+          insufficiency_rate=None
+        - All selected empirical premises are INSUFFICIENT → f_all=0.5,
+          f_supported_only=None, insufficiency_rate=1.0
+        - No SUPPORTED/REFUTED premises → f_supported_only=None (not 0.5)
+        """
         if not facts:
             return {
-                "f_all": 0.5,
-                "f_supported_only": 0.5,
-                "insufficiency_rate": 1.0,
+                "f_all": None,
+                "f_supported_only": None,
+                "insufficiency_rate": None,
             }
 
         p_values = [f.get("p_true", 0.5) for f in facts]
         f_all = sum(p_values) / len(facts)
 
-        decisive_facts = [f for f in facts if f.get("p_true", 0.5) != 0.5]
-        insufficient_facts = [f for f in facts if f.get("p_true", 0.5) == 0.5]
+        # v1.5 ternary semantics: SUPPORTED and REFUTED are equally decisive;
+        # INSUFFICIENT is indecisive (p=0.5).
+        def _is_decisive_v15(f: Dict) -> bool:
+            # Prefer first-class v1.5 fields (LSD_FactCheck_v1_5_1 integration)
+            status = f.get("v15_status")
+            if status:
+                return status in ("SUPPORTED", "REFUTED")
+            # Fallback to diagnostics dict
+            d = f.get("fact_check_diagnostics", {})
+            if isinstance(d, dict) and d.get("v15_status"):
+                return d["v15_status"] in ("SUPPORTED", "REFUTED")
+            # Final fallback: p heuristic
+            p = f.get("p_true", 0.5)
+            return p != 0.5
+
+        decisive_facts = [f for f in facts if _is_decisive_v15(f)]
+        insufficient_facts = [f for f in facts if not _is_decisive_v15(f)]
 
         if decisive_facts:
             f_supported_only = (
                 sum(f.get("p_true", 0.5) for f in decisive_facts) / len(decisive_facts)
             )
         else:
-            f_supported_only = 0.5
+            f_supported_only = None
+
+        # Tier counts from v1.5 first-class fields or diagnostics
+        tier_counts: Dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
+        for f in facts:
+            # Prefer first-class v1.5 field
+            v15_tier = f.get("v15_best_evidence_tier")
+            if v15_tier is None:
+                d = f.get("fact_check_diagnostics", {})
+                v15_tier = d.get("v15_best_evidence_tier") if isinstance(d, dict) else None
+            if v15_tier == 1:
+                tier_counts["TIER_1"] += 1
+            elif v15_tier == 2:
+                tier_counts["TIER_2"] += 1
+            elif v15_tier == 3:
+                tier_counts["TIER_3"] += 1
+            else:
+                # Fallback: inspect legacy evidence_tier_counts
+                etc = f.get("evidence_tier_counts", {})
+                for tier_key, count in etc.items():
+                    tier_counts[tier_key] = tier_counts.get(tier_key, 0) + int(count)
 
         return {
             "f_all": f_all,
             "f_supported_only": f_supported_only,
             "insufficiency_rate": len(insufficient_facts) / len(facts),
+            "tier_counts": tier_counts,
         }
 
-    def compute_factuality(self, facts: List[Dict]) -> float:
-        """Compute factuality F_{t,s} as a legacy scalar API."""
+    def compute_factuality(self, facts: List[Dict]) -> Optional[float]:
+        """Compute factuality F_{t,s} as a legacy scalar API.
+
+        Returns None when no empirical premises exist (per v1.5 spec).
+        """
         return self.compute_factuality_diagnostics(facts)["f_all"]
 
     def compute_reasoning_strength(self, arguments: List[Dict],
@@ -187,7 +234,9 @@ class ScoringEngine:
         }
 
         def get_decisiveness(fact_id: str) -> float:
-            return abs(fact_p.get(fact_id, 0.5) - 0.5)
+            p = fact_p.get(fact_id, 0.5)
+            # v1.5: both SUPPORTED (1.0) and REFUTED (0.0) are fully decisive
+            return 1.0 if p in (0.0, 1.0) else abs(p - 0.5)
 
         arg_leverage = {}
         for arg in opposing_arguments:
@@ -309,13 +358,28 @@ class ScoringEngine:
             },
         }
 
-    def compute_quality(self, factuality: float, reasoning: float,
+    def compute_quality(self, factuality: Optional[float], reasoning: float,
                         coverage: float) -> float:
-        """Compute quality Q_{t,s}."""
-        if factuality <= 0 or reasoning <= 0 or coverage <= 0:
+        """Compute quality Q_{t,s}.
+
+        If factuality is None (no empirical premises), omit it from the
+        geometric mean and compute with reasoning + coverage only.
+        Per LSD §8: "Empirical component omitted from geometric mean"
+        when no selected empirical premises exist.
+        """
+        components = []
+        if factuality is not None:
+            components.append(max(float(factuality), Q_EPSILON))
+        components.append(max(float(reasoning), Q_EPSILON))
+        components.append(max(float(coverage), Q_EPSILON))
+
+        if not components:
             return 0.0
 
-        return (factuality * reasoning * coverage) ** (1 / 3)
+        product = 1.0
+        for value in components:
+            product *= value
+        return product ** (1.0 / len(components))
 
     def compute_topic_relevance(self, topics: List[Dict],
                                 topic_content_mass: Dict[str, int]) -> Dict[str, float]:
@@ -376,9 +440,10 @@ class ScoringEngine:
                 side_scores = {
                     "topic_id": topic_id,
                     "side": side,
-                    "factuality": round(factuality["f_all"], 2),
-                    "f_supported_only": round(factuality["f_supported_only"], 2),
-                    "insufficiency_rate": round(factuality["insufficiency_rate"], 2),
+                    "factuality": round(factuality["f_all"], 2) if factuality["f_all"] is not None else None,
+                    "f_supported_only": round(factuality["f_supported_only"], 2) if factuality["f_supported_only"] is not None else None,
+                    "insufficiency_rate": round(factuality["insufficiency_rate"], 2) if factuality["insufficiency_rate"] is not None else None,
+                    "tier_counts": factuality.get("tier_counts", {}),
                     "reasoning": round(reasoning, 2),
                     "coverage": round(coverage, 2),
                     "quality": round(quality, 2),

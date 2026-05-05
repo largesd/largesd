@@ -1,0 +1,60 @@
+================================================================================
+  TASK 1.3: Add security headers middleware
+  Phase: 1 — Critical Security Fixes (Week 1)
+  Priority: 🔴 Critical | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • No CSP, HSTS, X-Frame-Options, X-Content-Type-Options headers
+  • Risk: Clickjacking, MIME-sniffing attacks, XSS via inline scripts
+
+TARGET STATE
+────────────
+  • Flask-Talisman or manual after_request handler adds security headers
+  • CSP allows self-hosted scripts/styles, blocks inline scripts (prepare for
+    removal of inline onclick="..." handlers — see Task 5.2)
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Add dependency: flask-talisman>=1.0.0
+
+  2. In app factory or app_v3.py:
+
+       from flask_talisman import Talisman
+
+       Talisman(
+           app,
+           force_https=False,  # Set True in production behind TLS
+           strict_transport_security=True,
+           strict_transport_security_max_age=31536000,
+           content_security_policy={
+               "default-src": "'self'",
+               "script-src": ["'self'", "'unsafe-inline'"],  # Remove unsafe-inline after Task 5.2
+               "style-src": ["'self'", "'unsafe-inline'"],
+               "img-src": ["'self'", "data:", "https:"],
+               "font-src": ["'self'", "https:"],
+               "connect-src": "'self'",
+               "frame-ancestors": "'none'",
+               "base-uri": "'self'",
+               "form-action": "'self'"
+           },
+           referrer_policy="strict-origin-when-cross-origin",
+           feature_policy={
+               "geolocation": "'none'",
+               "microphone": "'none'",
+               "camera": "'none'"
+           }
+       )
+
+  3. Document header expectations in docs/security/headers.md
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] All responses include X-Frame-Options, X-Content-Type-Options, CSP, HSTS
+  [ ] CSP blocks external script injection (verify with browser dev tools)
+
+DEPENDENCY NOTE
+───────────────
+  After Task 5.2 (remove inline handlers), return here and remove
+  'unsafe-inline' from script-src and style-src in the CSP config.

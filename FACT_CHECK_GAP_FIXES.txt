@@ -1,0 +1,427 @@
+================================================================================
+FACT-CHECKING GAP CLOSURE — FIX GUIDE
+================================================================================
+Generated from code review of skills/fact_checking/ gap implementations.
+All fixes are minimal, preserve backward compatibility, and align with LSD v1.5 spec.
+
+TABLE OF CONTENTS
+-----------------
+1. HIGH PRIORITY
+   1.1 EntityLinker reloads spaCy model on every call
+   1.2 Rate-limiting token bucket is registered but never consumed
+
+2. MEDIUM PRIORITY
+   2.1 EntityLinker.link() threshold check is misleading (no-op)
+   2.2 _archive_web_evidence can crash on None quote fields
+
+3. LOW PRIORITY / POLISH
+   3.1 SimpleLLMBackend omits audit metadata fields
+   3.2 Policy is looked up twice (redundant)
+   3.3 Add parallel-path circuit-breaker test
+
+4. VERIFICATION CHECKLIST
+
+================================================================================
+1. HIGH PRIORITY
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 EntityLinker reloads spaCy model on every call
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/entity_linker.py
+ISSUE:  spacy.load("en_core_web_sm") is invoked inside _extract_mentions(),
+        which is called for every subclaim. Model loading is expensive
+        (hundreds of ms to seconds), so this dominates latency.
+
+CURRENT CODE (lines ~95-112):
+    def _extract_mentions(self, text: str) -> List[str]:
+        try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            doc = nlp(text)
+            ents = [ent.text for ent in doc.ents
+                    if ent.label_ in ("PERSON", "ORG", "GPE", "PRODUCT",
+                                      "EVENT", "WORK_OF_ART", "LAW")]
+            if ents:
+                return ents
+        except Exception:
+            pass
+        ...
+
+FIX:
+  1. Cache the spaCy nlp object (and a "not available" sentinel) as instance
+     attributes in __init__ so the model is loaded at most once per linker.
+  2. Guard with a flag so failed loads are not retried on every call.
+
+REPLACEMENT CODE:
+
+    class EntityLinker:
+        def __init__(
+            self,
+            wikidata_connector: Optional[WikidataEntityConnector] = None,
+            llm_client: Optional[Any] = None,
+            confidence_threshold: float = 0.7,
+        ):
+            self.wikidata = wikidata_connector or WikidataEntityConnector()
+            self.llm_client = llm_client
+            self.confidence_threshold = confidence_threshold
+            # --- new caching fields ---
+            self._nlp: Optional[Any] = None
+            self._nlp_failed: bool = False
+
+        def _get_spacy_nlp(self) -> Optional[Any]:
+            """Return cached spaCy nlp object, or None if unavailable."""
+            if self._nlp is not None:
+                return self._nlp
+            if self._nlp_failed:
+                return None
+            try:
+                import spacy
+                self._nlp = spacy.load("en_core_web_sm")
+                return self._nlp
+            except Exception:
+                self._nlp_failed = True
+                return None
+
+        def _extract_mentions(self, text: str) -> List[str]:
+            # Try spaCy if available
+            nlp = self._get_spacy_nlp()
+            if nlp is not None:
+                try:
+                    doc = nlp(text)
+                    ents = [ent.text for ent in doc.ents
+                            if ent.label_ in ("PERSON", "ORG", "GPE", "PRODUCT",
+                                              "EVENT", "WORK_OF_ART", "LAW")]
+                    if ents:
+                        return ents
+                except Exception:
+                    pass
+
+            # Fallback: regex for capitalized phrases (2+ words)
+            matches = re.findall(r"\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+\b", text)
+            # Also capture single capitalized words that aren't sentence starts
+            words = text.split()
+            single_word_ents = []
+            for i, word in enumerate(words):
+                clean = word.strip(".,;:!?()[]{}'\"")
+                if clean and clean[0].isupper() and len(clean) > 1:
+                    if i == 0 or words[i - 1].endswith((".", "!", "?")):
+                        continue
+                    single_word_ents.append(clean)
+            return list(dict.fromkeys(matches + single_word_ents))
+
+VERIFICATION:
+  - Run test_entity_linker.py; all tests should still pass.
+  - Optional: add a test that calls link() twice and assert the second call
+    does not call spacy.load() (mock/patch spacy.load to verify).
+
+--------------------------------------------------------------------------------
+1.2 Rate-limiting token bucket is registered but never consumed
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/v15_skill.py
+ISSUE:  _retrieve_single() manually checks the circuit breaker but never
+        invokes RateLimiterManager.can_query(), which is the unified gate
+        that checks BOTH the circuit breaker AND the token-bucket rate limit.
+        The token bucket is initialized in _setup_circuit_breakers() but its
+        consume() method is never called during evidence retrieval.
+
+CURRENT CODE (lines ~727-744):
+    def _retrieve_single(
+        self, subclaim: AtomicSubclaim, connector: BaseEvidenceConnector
+    ) -> List[EvidenceItem]:
+        cb = self._rate_limiter.get_circuit_breaker(connector.connector_id)
+        if cb is not None and not cb.can_execute():
+            logger.warning("Circuit breaker OPEN for %s", connector.connector_id)
+            return []
+
+        try:
+            result = connector.retrieve(subclaim)
+            if cb is not None:
+                cb.record_success()
+            return result
+        except Exception as e:
+            if cb is not None:
+                cb.record_failure()
+            raise
+
+FIX:
+  Replace the manual circuit-breaker check with the unified can_query() call.
+  Use record_success() / record_failure() on the manager (which already exist
+  and properly forward to the circuit breaker).
+
+REPLACEMENT CODE:
+
+    def _retrieve_single(
+        self, subclaim: AtomicSubclaim, connector: BaseEvidenceConnector
+    ) -> List[EvidenceItem]:
+        can_execute, reason = self._rate_limiter.can_query(connector.connector_id)
+        if not can_execute:
+            logger.warning(
+                "Source %s blocked: %s", connector.connector_id, reason or "unknown"
+            )
+            return []
+
+        try:
+            result = connector.retrieve(subclaim)
+            self._rate_limiter.record_success(connector.connector_id)
+            return result
+        except Exception:
+            self._rate_limiter.record_failure(connector.connector_id)
+            raise
+
+WHY THIS WORKS:
+  - SourceManager.can_query() checks circuit breaker state first, then the
+    token bucket (rate_limiter.consume()).
+  - SourceManager.record_success() resets the CB failure count and also
+    records the successful query for any future rate-limit accounting.
+  - SourceManager.record_failure() increments the CB failure count.
+
+VERIFICATION:
+  - Run test_evidence_router.py; all tests should still pass.
+  - Optional: add a test that registers a very low rate limit (e.g. 1 req/sec),
+    makes two rapid calls, and assert the second is rate-limited.
+
+================================================================================
+2. MEDIUM PRIORITY
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 EntityLinker.link() threshold check is misleading (no-op)
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/entity_linker.py
+ISSUE:  Both branches of the confidence_threshold if/else append the link,
+        so the threshold performs no filtering. This is confusing for readers.
+
+CURRENT CODE (lines ~79-93):
+    def link(self, subclaim_text: str) -> List[EntityLink]:
+        mentions = self._extract_mentions(subclaim_text)
+        links = []
+        for mention in mentions:
+            candidates = self.wikidata.search_candidates(mention)
+            if not candidates:
+                continue
+            link = self._disambiguate(mention, subclaim_text, candidates)
+            if link.linking_confidence >= self.confidence_threshold:
+                links.append(link)
+            else:
+                # Low confidence link with ambiguity flag
+                links.append(link)
+        return links
+
+FIX:
+  Since the LSD spec (03_PIPELINE.md §2) says low-confidence links should
+  still be returned (just flagged as ambiguous), the filtering intent is not
+  needed here. Remove the redundant branch and keep the method simple.
+
+REPLACEMENT CODE:
+
+    def link(self, subclaim_text: str) -> List[EntityLink]:
+        mentions = self._extract_mentions(subclaim_text)
+        links = []
+        for mention in mentions:
+            candidates = self.wikidata.search_candidates(mention)
+            if not candidates:
+                continue
+            link = self._disambiguate(mention, subclaim_text, candidates)
+            links.append(link)
+        return links
+
+ALTERNATIVE (if you DO want to separate high-confidence vs ambiguous):
+
+    def link(self, subclaim_text: str) -> List[EntityLink]:
+        mentions = self._extract_mentions(subclaim_text)
+        links = []
+        for mention in mentions:
+            candidates = self.wikidata.search_candidates(mention)
+            if not candidates:
+                continue
+            link = self._disambiguate(mention, subclaim_text, candidates)
+            links.append(link)
+        return links
+
+    def link_with_confidence_split(self, subclaim_text: str) -> Tuple[List[EntityLink], List[EntityLink]]:
+        """Return (high_confidence_links, low_confidence_or_ambiguous_links)."""
+        all_links = self.link(subclaim_text)
+        high = [l for l in all_links if l.linking_confidence >= self.confidence_threshold and not l.ambiguity_flag]
+        low = [l for l in all_links if l not in high]
+        return high, low
+
+VERIFICATION:
+  - Run test_entity_linker.py; all tests should still pass.
+
+--------------------------------------------------------------------------------
+2.2 _archive_web_evidence can crash on None quote fields
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/v15_skill.py
+ISSUE:  The concatenation ev.quote_or_span + ev.quote_context will raise
+        TypeError if quote_or_span is None. It is caught by a bare
+        "except Exception: pass", which silently drops the archive.
+
+CURRENT CODE (lines ~846-854):
+    def _archive_web_evidence(self, evidence: List[EvidenceItem]) -> None:
+        for ev in evidence:
+            if ev.source_type in (SourceType.WEB, SourceType.NEWS, SourceType.WIKIPEDIA):
+                if ev.source_url:
+                    try:
+                        archive_web_evidence(ev.source_url, ev.quote_or_span + ev.quote_context)
+                    except Exception:
+                        pass
+
+FIX:
+  Coerce both fields to strings before concatenation. Also log the exception
+  at debug level so silent failures are discoverable.
+
+REPLACEMENT CODE:
+
+    def _archive_web_evidence(self, evidence: List[EvidenceItem]) -> None:
+        for ev in evidence:
+            if ev.source_type in (SourceType.WEB, SourceType.NEWS, SourceType.WIKIPEDIA):
+                if ev.source_url:
+                    try:
+                        page_text = (ev.quote_or_span or "") + (ev.quote_context or "")
+                        archive_web_evidence(ev.source_url, page_text)
+                    except Exception as e:
+                        logger.debug("Failed to archive web evidence for %s: %s", ev.source_url, e)
+
+VERIFICATION:
+  - Run existing tests; none should fail.
+  - Optional: add a unit test with an EvidenceItem where quote_or_span=None
+    and ensure _archive_web_evidence does not raise.
+
+================================================================================
+3. LOW PRIORITY / POLISH
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 SimpleLLMBackend omits audit metadata fields
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/llm_backend.py
+ISSUE:  The PremiseDecomposition returned by SimpleLLMBackend is missing
+        decomposition_prompt_hash and decomposition_model_metadata, which
+        LSD spec 01_DATA_MODELS.md §6 expects for replay verification.
+
+CURRENT CODE (lines ~122-130):
+        decomposition = PremiseDecomposition(
+            premise_id=premise_id,
+            snapshot_id="llm_decomposition",
+            original_text=claim_text,
+            topic_id="unknown",
+            side=Side.FOR,
+            root_claim_expression=root,
+            atomic_subclaims=atomic_subclaims,
+        )
+
+FIX:
+  Set decomposition_prompt_hash to a stable hash of the prompt (or a
+  versioned string). Set decomposition_model_metadata to a small dict.
+
+REPLACEMENT CODE:
+
+        import hashlib
+        prompt_hash = hashlib.sha256(
+            (prompt + self.model).encode("utf-8")
+        ).hexdigest()[:16]
+
+        decomposition = PremiseDecomposition(
+            premise_id=premise_id,
+            snapshot_id="llm_decomposition",
+            original_text=claim_text,
+            topic_id="unknown",
+            side=Side.FOR,
+            root_claim_expression=root,
+            atomic_subclaims=atomic_subclaims,
+            decomposition_prompt_hash=prompt_hash,
+            decomposition_model_metadata={
+                "model": self.model,
+                "backend": "SimpleLLMBackend",
+            },
+        )
+
+NOTE:
+  If PremiseDecomposition is a dataclass without these fields, you may need
+  to add them to v15_models.py first. They are defined in the LSD spec as
+  optional but strongly recommended for audit traceability.
+
+--------------------------------------------------------------------------------
+3.2 Policy is looked up twice (redundant)
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/v15_skill.py  AND  skills/fact_checking/synthesis.py
+ISSUE:  v15_skill.py loads the policy in check_fact() for connector selection,
+        then SynthesisEngine._synthesize_atomic() loads it again by claim_type.
+        This is harmless but redundant.
+
+SCOPE:
+  Low priority — no behavioral bug, just a minor inefficiency.
+
+OPTIONAL FIX (if desired):
+  Thread the policy through to synthesis so it is only fetched once.
+
+  In v15_skill.py, pass the policy into synthesize():
+
+        policy = get_default_policy(claim_type)
+        active_connectors = self._select_connectors_for_claim(claim_type, policy)
+        ...
+        v15_result = self._synthesis_engine.synthesize(
+            decomposition=decomposition,
+            evidence_items=evidence_items,
+            entity_failure_subclaim_ids=entity_failure_ids,
+            predictive_subclaim_ids=predictive_ids,
+            policy=policy,   # <-- add
+        )
+
+  In synthesis.py, accept the optional policy in _synthesize_atomic and
+  skip the redundant get_default_policy() call when provided.
+
+  Because this touches the synthesize() signature and multiple call sites,
+  only do this if you are comfortable with the refactor.
+
+--------------------------------------------------------------------------------
+3.3 Add parallel-path circuit-breaker test
+--------------------------------------------------------------------------------
+FILE:   skills/fact_checking/tests/test_evidence_router.py
+ISSUE:  The circuit-breaker tests use max_connector_workers=1, so they exercise
+        only the sequential fallback path. The parallel ThreadPoolExecutor path
+        has slightly different exception handling (exceptions are surfaced via
+        Future.result()).
+
+SUGGESTED NEW TEST (add to test_evidence_router.py):
+
+    def test_circuit_breaker_opens_after_threshold_parallel():
+        skill = V15FactCheckingSkill(
+            mode="PERFECT_CHECKER",
+            connectors=[_make_failing_connector("failing_conn")],
+            max_connector_workers=2,
+        )
+        decomposition = skill._get_decomposition("Test claim.")
+
+        threshold = skill.config.circuit_breaker_threshold
+        for _ in range(threshold):
+            skill._retrieve_evidence(decomposition)
+
+        cb = skill._rate_limiter.get_circuit_breaker("failing_conn")
+        assert cb is not None
+        assert cb.get_state() == "open"
+
+VERIFICATION:
+  - After adding the test, run pytest and confirm it passes.
+
+================================================================================
+4. VERIFICATION CHECKLIST
+================================================================================
+
+After applying fixes, run the following commands from the repo root:
+
+  # 1. All fact-checking skill tests
+  PYTHONPATH=$(pwd):$PYTHONPATH python -m pytest skills/fact_checking/tests/ -v
+
+  # 2. All root-level integration/unit tests
+  PYTHONPATH=$(pwd):$PYTHONPATH python -m pytest tests/ -v
+
+  # 3. Gold fixture tests (if applicable)
+  PYTHONPATH=$(pwd):$PYTHONPATH python -m pytest tests/unit/test_fact_check_skill.py -v
+
+Expected result: all tests pass (currently 221 + 104 = 325 total).
+
+================================================================================
+END OF FIX GUIDE
+================================================================================

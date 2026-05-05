@@ -1,0 +1,44 @@
+================================================================================
+  TASK 6.1: Lock dependencies
+  Phase: 6 — DevOps & Quality of Life (Week 4)
+  Priority: 🟢 Medium | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • requirements.txt has mixed pinning (some ==, some >=)
+  • No lock file
+
+TARGET STATE
+────────────
+  • All dependencies pinned with exact versions
+  • Lock file generated and committed
+
+IMPLEMENTATION STEPS
+────────────────────
+  RECOMMENDED: Use pip-tools (pip-compile) or uv for proper resolution.
+
+  Option A — pip-tools (simplest, reproducible):
+
+    1. pip install pip-tools
+    2. Move top-level deps to requirements.in
+    3. pip-compile requirements.in -o requirements.txt
+    4. In production/Docker: pip install -r requirements.txt
+
+  Option B — Poetry (more features):
+
+    1. poetry init
+    2. poetry add $(cat requirements.txt | grep -v '^#' | grep -v '^$')
+    3. poetry.lock generated automatically
+    4. poetry export -f requirements.txt --output requirements.txt
+
+  Option C — uv (fast, modern):
+
+    1. uv pip compile requirements.in -o requirements.txt
+    2. Use uv in Docker for faster installs
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] All runtime dependencies pinned with ==
+  [ ] Lock file committed to repo
+  [ ] Docker build uses lock file

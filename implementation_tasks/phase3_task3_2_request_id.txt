@@ -1,0 +1,51 @@
+================================================================================
+  TASK 3.2: Add request_id tracing across API → Engine → DB → Job Queue
+  Phase: 3 — Testing & API Hardening (Week 2)
+  Priority: 🔴 Critical | Effort: 1–2 days
+================================================================================
+
+CURRENT STATE
+─────────────
+  • Structured JSON logging exists but no request_id correlation
+  • Hard to trace a single request through async pipeline
+
+TARGET STATE
+────────────
+  • Every request gets a UUID request_id
+  • request_id propagated to: engine calls, DB operations, job queue entries,
+    background worker logs
+  • Log format includes request_id field
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. In backend/utils/middleware.py:
+
+       import uuid
+       from flask import g, request
+
+       @app.before_request
+       def set_request_id():
+           g.request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+
+       @app.after_request
+       def add_request_id_header(response):
+           response.headers["X-Request-ID"] = g.request_id
+           return response
+
+  2. In logging configuration, include %(request_id)s in formatter
+
+  3. Pass request_id explicitly to debate_engine_v2.generate_snapshot()
+
+  4. Store request_id in job_queue table (add column if needed)
+
+  5. Background worker includes request_id in all log messages
+
+  6. DB layer accepts optional request_id parameter for audit records
+     (Consider using contextvars for less invasive propagation)
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] Every API response includes X-Request-ID header
+  [ ] Logs for a single snapshot request share the same request_id
+  [ ] Job queue entries include request_id
+  [ ] Can trace complete request lifecycle via grep request_id

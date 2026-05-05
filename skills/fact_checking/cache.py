@@ -2,6 +2,7 @@
 Multi-layer cache for fact checking results
 Implements memory → Redis → Database cache hierarchy
 """
+import copy
 import json
 import sqlite3
 import threading
@@ -54,7 +55,7 @@ class MemoryCache:
                 return None
             
             self._hits += 1
-            return entry.result
+            return copy.deepcopy(entry.result)
     
     def set(self, key: str, result: FactCheckResult, ttl_seconds: int):
         """Store result in memory cache"""
@@ -106,9 +107,13 @@ class SQLiteCache:
         self._lock = threading.RLock()
         self._init_db()
     
+    def _connect(self):
+        """Open a SQLite connection with a sensible timeout."""
+        return sqlite3.connect(self._db_path, timeout=10.0)
+
     def _init_db(self):
         """Initialize database schema"""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS fact_check_cache (
                     cache_key TEXT PRIMARY KEY,
@@ -244,7 +249,7 @@ class SQLiteCache:
         """Get result from SQLite cache"""
         with self._lock:
             try:
-                with sqlite3.connect(self._db_path) as conn:
+                with self._connect() as conn:
                     cursor = conn.execute(
                         "SELECT result_json, expires_at FROM fact_check_cache WHERE cache_key = ?",
                         (key,)
@@ -281,7 +286,7 @@ class SQLiteCache:
                 data = self._result_to_dict(result)
                 result_json = json.dumps(data)
                 
-                with sqlite3.connect(self._db_path) as conn:
+                with self._connect() as conn:
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO fact_check_cache 
@@ -296,7 +301,7 @@ class SQLiteCache:
                             result_json,
                             now.isoformat(),
                             expires_at.isoformat(),
-                        )
+                        ),
                     )
                     conn.commit()
                     
@@ -308,7 +313,7 @@ class SQLiteCache:
         """Remove entry from cache"""
         with self._lock:
             try:
-                with sqlite3.connect(self._db_path) as conn:
+                with self._connect() as conn:
                     conn.execute("DELETE FROM fact_check_cache WHERE cache_key = ?", (key,))
                     conn.commit()
             except Exception as e:
@@ -318,7 +323,7 @@ class SQLiteCache:
         """Invalidate all entries for a claim hash"""
         with self._lock:
             try:
-                with sqlite3.connect(self._db_path) as conn:
+                with self._connect() as conn:
                     conn.execute(
                         "DELETE FROM fact_check_cache WHERE claim_hash = ?",
                         (claim_hash,)
@@ -331,7 +336,7 @@ class SQLiteCache:
         """Get cache statistics"""
         with self._lock:
             try:
-                with sqlite3.connect(self._db_path) as conn:
+                with self._connect() as conn:
                     cursor = conn.execute("SELECT COUNT(*) FROM fact_check_cache")
                     count = cursor.fetchone()[0]
                     return {'size': count, 'db_path': self._db_path}

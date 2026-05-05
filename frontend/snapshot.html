@@ -36,6 +36,7 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
+          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -102,6 +103,27 @@
     </div>
 
     <hr />
+    <h3>Incident Report</h3>
+    <div id="incident-panel">
+      <div class="callout soft" id="incident-empty">
+        <p style="margin:0">No incidents reported.</p>
+      </div>
+      <div class="callout soft" id="incident-content" style="display:none;">
+        <div class="row">
+          <span class="pill bad">INCIDENT</span>
+          <span class="pill">Title: <span class="mono" id="incident-title">-</span></span>
+          <span class="pill">Timestamp: <span class="mono" id="incident-ts">-</span></span>
+        </div>
+        <p style="margin:12px 0 4px 0;"><strong>What happened:</strong></p>
+        <p id="incident-desc" style="margin:0 0 12px 0;"></p>
+        <p style="margin:4px 0;"><strong>Unreliable outputs:</strong></p>
+        <p id="incident-unreliable" style="margin:0 0 12px 0;"></p>
+        <p style="margin:4px 0;"><strong>Remediation planned:</strong></p>
+        <p id="incident-remediation" style="margin:0;"></p>
+      </div>
+    </div>
+
+    <hr />
     <h3>Moderation outcomes</h3>
     <div class="table-wrap">
       <table class="table">
@@ -111,6 +133,12 @@
           <tr><td><span class="pill bad">Blocked</span></td><td class="mono" id="blocked-count">-</td><td>Excluded from all downstream steps</td></tr>
         </tbody>
       </table>
+    </div>
+    <div class="callout soft" style="margin-top:12px;">
+      <div class="row">
+        <span class="pill">Mean AU completeness: <span class="mono" id="au-completeness-mean">-</span></span>
+        <span class="pill">p25/p50/p75: <span class="mono" id="au-completeness-dist">-</span></span>
+      </div>
     </div>
     <div>
       <h4>Blocked reasons histogram</h4>
@@ -167,6 +195,30 @@
         <summary>Show replay manifest</summary>
         <div class="codebox" id="integrity-replay-manifest">Loading...</div>
       </details>
+    </div>
+
+    <hr />
+    <h3>Governance Context</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Frame mode, review schedule, and active policy for this snapshot.</p>
+    <div class="callout soft">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+        <span class="pill">Frame mode: <span class="mono" id="governance-frame-mode">-</span></span>
+        <span class="pill">Review cadence: <span class="mono" id="governance-cadence">-</span></span>
+        <span class="pill">Moderation template: <span class="mono" id="governance-template">-</span></span>
+        <span class="pill">Frame set version: <span class="mono" id="governance-frame-set-version">-</span></span>
+        <span class="pill">Next scheduled review: <span class="mono" id="governance-next-review">-</span></span>
+      </div>
+    </div>
+
+    <hr />
+    <h3>Participation Concentration</h3>
+    <p style="font-size:12px;color:var(--muted);margin-top:0">Aggregate participation diagnostics for this snapshot.</p>
+    <div class="callout soft">
+      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+        <span class="pill">Participation entropy: <span class="mono" id="snap-part-entropy">-</span></span>
+        <span class="pill">Top-1% share: <span class="mono" id="snap-top1-share">-</span></span>
+        <span class="pill">Channel mix: <span class="mono" id="snap-channel-mix">-</span></span>
+      </div>
     </div>
 
     <hr />
@@ -264,6 +316,27 @@ function renderSnapshot(snapshot) {
   document.getElementById('allowed-count').textContent = snapshot.allowed_count ?? '-';
   document.getElementById('blocked-count').textContent = snapshot.blocked_count ?? '-';
 
+  // Incident report
+  const incident = snapshot.incident_report || null;
+  if (snapshot.status === 'incident' && incident) {
+    document.getElementById('incident-empty').style.display = 'none';
+    document.getElementById('incident-content').style.display = 'block';
+    document.getElementById('incident-title').textContent = incident.title || 'Incident';
+    document.getElementById('incident-ts').textContent = BDA.formatDateTime(incident.timestamp || incident.created_at);
+    document.getElementById('incident-desc').textContent = incident.description || 'No description available.';
+    document.getElementById('incident-unreliable').textContent = incident.unreliable_outputs || 'Not specified.';
+    document.getElementById('incident-remediation').textContent = incident.remediation_planned || 'No remediation plan documented.';
+  } else {
+    document.getElementById('incident-empty').style.display = 'block';
+    document.getElementById('incident-content').style.display = 'none';
+  }
+
+  // AU completeness
+  const au = snapshot.au_completeness || {};
+  document.getElementById('au-completeness-mean').textContent = BDA.formatNumber(au.mean, 3);
+  const dist = au.distribution || {};
+  document.getElementById('au-completeness-dist').textContent = `${BDA.formatNumber(dist.p25, 3)} / ${BDA.formatNumber(dist.p50, 3)} / ${BDA.formatNumber(dist.p75, 3)}`;
+
   const reasonsRow = document.getElementById('block-reasons-row');
   const reasons = Object.entries(snapshot.block_reasons || {}).sort((a, b) => b[1] - a[1]);
   if (!reasons.length) {
@@ -290,6 +363,19 @@ function renderSnapshot(snapshot) {
 
   const replayManifest = snapshot.replay_manifest || {};
   document.getElementById('integrity-replay-manifest').textContent = JSON.stringify(replayManifest, null, 2);
+
+  // Governance context
+  document.getElementById('governance-frame-mode').textContent = snapshot.frame_mode || '-';
+  document.getElementById('governance-cadence').textContent = snapshot.review_cadence_months ? `${snapshot.review_cadence_months} month(s)` : '-';
+  const policy = snapshot.policy_context || {};
+  document.getElementById('governance-template').textContent = policy.moderation_template_name ? `${policy.moderation_template_name} (${policy.moderation_template_version || '?'})` : '-';
+
+  // Participation concentration
+  const part = snapshot.participation_concentration || {};
+  document.getElementById('snap-part-entropy').textContent = part.entropy_bucket || BDA.formatNumber(part.participation_entropy, 3) || '-';
+  document.getElementById('snap-top1-share').textContent = part.top_1pct_share_bucket || BDA.formatNumber(part.top_1pct_share, 3) || '-';
+  const mix = part.channel_mix || {};
+  document.getElementById('snap-channel-mix').textContent = Object.entries(mix).map(([k, v]) => `${k}=${BDA.formatNumber(v, 2)}`).join(', ') || '-';
 }
 
 function renderFrameInfo(payload) {
@@ -411,6 +497,14 @@ async function initSnapshotPage() {
   try {
     const frameData = await BDA.api('/api/governance/frames');
     renderFrameInfo(frameData);
+    // Frame set version
+    if (frameData.frame_set_version) {
+      document.getElementById('governance-frame-set-version').textContent = frameData.frame_set_version;
+    }
+    const schedule = (frameData.review_schedule || [])[0] || {};
+    if (schedule.review_date || frameData.active_frame?.next_review_date) {
+      document.getElementById('governance-next-review').textContent = schedule.review_date || frameData.active_frame.next_review_date;
+    }
   } catch (error) {
     renderFrameInfo({});
   }

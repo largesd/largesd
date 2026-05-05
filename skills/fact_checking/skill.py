@@ -57,13 +57,13 @@ class _EvidenceRetrieverProxy:
         normalized_claim: str,
         claim_hash: str,
         allowlist_version: str,
-    ) -> Tuple[List[EvidenceRecord], int]:
-        source_results, sources_considered = self._skill._query_connectors(
+    ) -> Tuple[List[EvidenceRecord], int, List[str]]:
+        source_results, sources_considered, connector_errors = self._skill._query_connectors(
             normalized_claim,
             claim_hash,
             self._skill.connectors,
         )
-        return self._skill._to_evidence_records(source_results), sources_considered
+        return self._skill._to_evidence_records(source_results), sources_considered, connector_errors
 
 
 class FactCheckingSkill:
@@ -92,6 +92,7 @@ class FactCheckingSkill:
         ground_truth_db: Optional[GroundTruthDB] = None,
         cache_ttl_seconds: Optional[int] = None,
         policy: Optional[EvidencePolicy] = None,
+        v15_connectors: Optional[Any] = None,
     ):
         del source_registry
 
@@ -135,6 +136,18 @@ class FactCheckingSkill:
             self._queue.set_processor(self._process_job)
             self._queue.start_workers(async_worker_count)
 
+        # v1.5 delegation path
+        self._v15_skill: Optional[Any] = None
+        if v15_connectors is not None:
+            from .v15_skill import V15FactCheckingSkill
+
+            self._v15_skill = V15FactCheckingSkill(
+                mode=self.mode,
+                allowlist_version=self.allowlist_version,
+                enable_async=False,  # async handled at v1 layer
+                v15_connectors=v15_connectors,
+            )
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -149,8 +162,10 @@ class FactCheckingSkill:
         start_time = time.time()
         request_context = request_context or RequestContext()
 
+        claim_truncated = False
         if len(claim_text) > self.config.max_claim_length:
             claim_text = claim_text[:self.config.max_claim_length]
+            claim_truncated = True
 
         normalized = ClaimNormalizer.normalize(claim_text)
         claim_hash = ClaimNormalizer.compute_hash(normalized)
@@ -188,6 +203,23 @@ class FactCheckingSkill:
                     diagnostics={"reason_code": "pending_async_job"},
                 )
 
+        # v1.5 path: delegate to V15FactCheckingSkill if available
+        if self._v15_skill is not None:
+            result = self._v15_skill.check_fact(
+                claim_text,
+                temporal_context=temporal_context,
+                request_context=request_context,
+            )
+            # v15_skill already returns v1-compatible FactCheckResult
+            if result.status != FactCheckStatus.PENDING:
+                self._cache.set(cache_key, result)
+                self._audit.log_check(
+                    result=result,
+                    request_context=request_context,
+                    evidence_candidates_count=len(result.evidence),
+                )
+            return result
+
         if self.mode == "OFFLINE":
             result = self._check_offline(
                 claim_text,
@@ -195,6 +227,7 @@ class FactCheckingSkill:
                 claim_hash,
                 contains_pii,
                 temporal_context,
+                claim_truncated=claim_truncated,
             )
         elif self.mode in ("PERFECT_CHECKER", "PERFECT"):
             result = self._check_perfect(
@@ -203,6 +236,7 @@ class FactCheckingSkill:
                 claim_hash,
                 contains_pii,
                 temporal_context,
+                claim_truncated=claim_truncated,
             )
         else:
             if self._async_enabled and self._queue and not wait_for_async:
@@ -241,6 +275,7 @@ class FactCheckingSkill:
                     claim_hash,
                     contains_pii,
                     temporal_context,
+                    claim_truncated=claim_truncated,
                 )
 
         if result.status != FactCheckStatus.PENDING:
@@ -303,6 +338,7 @@ class FactCheckingSkill:
         claim_hash: str,
         contains_pii: bool,
         temporal_context: Optional[TemporalContext],
+        claim_truncated: bool = False,
     ) -> FactCheckResult:
         return FactCheckResult(
             claim_text=claim_text,
@@ -321,7 +357,7 @@ class FactCheckingSkill:
             cache_result=CacheResult.MISS,
             contains_pii=contains_pii,
             temporal_context=temporal_context,
-            diagnostics={"reason_code": "offline_mode"},
+            diagnostics={"reason_code": "offline_mode", "claim_truncated": claim_truncated},
         )
 
     def _check_perfect(
@@ -331,6 +367,7 @@ class FactCheckingSkill:
         claim_hash: str,
         contains_pii: bool,
         temporal_context: Optional[TemporalContext],
+        claim_truncated: bool = False,
     ) -> FactCheckResult:
         ground_truth_entry = self.ground_truth.lookup(claim_hash)
 
@@ -376,6 +413,7 @@ class FactCheckingSkill:
             fact_mode=self.mode,
             ground_truth_entry=ground_truth_entry,
             enforce_contract=self.mode == "PERFECT",
+            claim_truncated=claim_truncated,
         )
 
     def _check_online_allowlist(
@@ -385,6 +423,7 @@ class FactCheckingSkill:
         claim_hash: str,
         contains_pii: bool,
         temporal_context: Optional[TemporalContext],
+        claim_truncated: bool = False,
     ) -> FactCheckResult:
         return self._perfect_check(
             claim_text,
@@ -395,6 +434,7 @@ class FactCheckingSkill:
             fact_mode="ONLINE_ALLOWLIST",
             ground_truth_entry=None,
             enforce_contract=False,
+            claim_truncated=claim_truncated,
         )
 
     def _process_job(self, job: FactCheckJob) -> FactCheckResult:
@@ -402,6 +442,20 @@ class FactCheckingSkill:
         cached, _ = self._cache.get(cache_key)
         if cached:
             return cached
+
+        if self._v15_skill is not None:
+            result = self._v15_skill.check_fact(
+                job.claim_text,
+                temporal_context=job.temporal_context,
+                request_context=job.request_context,
+            )
+            self._cache.set(cache_key, result)
+            self._audit.log_check(
+                result=result,
+                request_context=job.request_context,
+                evidence_candidates_count=len(result.evidence),
+            )
+            return result
 
         result = self._check_online_allowlist(
             job.claim_text,
@@ -433,6 +487,7 @@ class FactCheckingSkill:
         fact_mode: str,
         ground_truth_entry: Optional[Dict[str, Any]],
         enforce_contract: bool,
+        claim_truncated: bool = False,
     ) -> FactCheckResult:
         start_time = time.time()
 
@@ -456,7 +511,7 @@ class FactCheckingSkill:
 
         subclaims = ClaimDecomposer.decompose(query_claim, source_fact_id=claim_hash)
         decisions = ConnectorPlanner.plan_claim(subclaims, self.connectors, fact_mode)
-        diagnostics = self._build_diagnostics(subclaims, decisions, fact_mode)
+        diagnostics = self._build_diagnostics(subclaims, decisions, fact_mode, claim_truncated)
 
         ground_truth_results: List[SourceResult] = []
         if ground_truth_entry and str(ground_truth_entry.get("verdict")) in {
@@ -529,18 +584,21 @@ class FactCheckingSkill:
                 ]
 
         if not enforce_contract and fact_mode == "ONLINE_ALLOWLIST":
-            evidence, sources_considered = self._evidence_retriever.retrieve_evidence(
+            evidence, sources_considered, connector_errors = self._evidence_retriever.retrieve_evidence(
                 query_claim,
                 claim_hash,
                 self.allowlist_version,
             )
             source_results = self._evidence_to_source_results(evidence)
+            diagnostics["connector_errors"] = connector_errors
         else:
-            source_results, sources_considered = self._query_connectors(
+            source_results, sources_considered, connector_errors = self._query_connectors(
                 query_claim,
                 claim_hash,
                 connectors_to_query,
             )
+            if connector_errors:
+                diagnostics["connector_errors"] = connector_errors
         combined_results = ground_truth_results + source_results
         verdict_bundle = self._adjudicate(
             combined_results,
@@ -601,22 +659,27 @@ class FactCheckingSkill:
         normalized_claim: str,
         claim_hash: str,
         connectors: List[SourceConnector],
-    ) -> Tuple[List[SourceResult], int]:
+    ) -> Tuple[List[SourceResult], int, List[str]]:
         results: List[SourceResult] = []
+        connector_errors: List[str] = []
         for connector in connectors:
             try:
                 source_result = connector.query(normalized_claim, claim_hash)
-            except Exception:
+            except Exception as exc:
+                error_msg = f"Connector {connector.source_id} failed: {exc}"
+                print(error_msg)
+                connector_errors.append(error_msg)
                 continue
             if source_result:
                 results.append(source_result)
-        return results, len(connectors)
+        return results, len(connectors), connector_errors
 
     def _build_diagnostics(
         self,
         subclaims: List[Subclaim],
         decisions: List[PlannerDecision],
         fact_mode: str,
+        claim_truncated: bool = False,
     ) -> Dict[str, Any]:
         return {
             "fact_mode": fact_mode,
@@ -626,6 +689,7 @@ class FactCheckingSkill:
             "unsupported_family": any(not decision.supported for decision in decisions),
             "compound": len(subclaims) > 1,
             "reason_code": decisions[0].reason_code if decisions else "no_planner_decision",
+            "claim_truncated": claim_truncated,
         }
 
     def _finalize_result(

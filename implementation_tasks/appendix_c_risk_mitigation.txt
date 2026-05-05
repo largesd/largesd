@@ -1,0 +1,37 @@
+================================================================================
+  APPENDIX C — RISK MITIGATION
+================================================================================
+
+RISK: Breaking changes during decomposition
+  MITIGATION:
+    • Maintain app_v3.py in parallel for 1 week (rename to app_v3_legacy.py)
+    • Run both old and new test suites
+    • Use feature flags to fall back to old implementation
+    • Deploy to staging environment first
+
+RISK: Database schema changes for job queue locking
+  MITIGATION:
+    • Use Alembic migration (already configured)
+    • Migration is additive only (new columns, no drops)
+    • Test migration on copy of production data
+    • Maintain backward compatibility for 1 release
+
+RISK: Frontend CSS split causes visual regressions
+  MITIGATION:
+    • Take screenshots before/after with Playwright
+    • Visual diff comparison
+    • Rollback plan: restore single styles.css
+    • Test on multiple browsers (Chrome, Firefox, Safari)
+
+RISK: Dependency lock breaks existing environments
+  MITIGATION:
+    • Pin only top-level dependencies in requirements.txt
+    • Lock file generated from resolved tree
+    • Test Docker build on clean machine
+    • Document upgrade process
+
+RISK: CORS lockdown breaks frontend development
+  MITIGATION:
+    • ALLOWED_ORIGINS defaults include localhost in development
+    • Document CORS troubleshooting in README
+    • Provide docker-compose.override.yml for dev overrides

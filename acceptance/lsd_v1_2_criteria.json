@@ -1,5 +1,5 @@
 {
-  "source_document": "/Users/jonathanleung/Documents/C++/LSD req.txt",
+  "source_document": "docs/requirements/LSD_req.txt",
   "source_version": "LSD v1.2",
   "generated_for_repo": "blind debate adjudicator / debate_system",
   "purpose": "Structured traceability map from the LSD v1.2 design spec into implementation and testing work.",

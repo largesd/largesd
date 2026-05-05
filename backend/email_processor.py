@@ -36,7 +36,7 @@ import smtplib
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
@@ -179,7 +179,10 @@ class EmailProcessor:
             path=config.github_path,
             branch=config.github_branch,
         )
-        self.results_builder = PublishedResultsBuilder(db_path=config.db_path)
+        self.results_builder = PublishedResultsBuilder(
+            db_path=config.db_path,
+            engine=self.debate_engine,
+        )
 
     def _log_startup(self, interval: Optional[int] = None) -> None:
         """Print the active processor configuration for diagnostics."""
@@ -655,7 +658,7 @@ class EmailProcessor:
                 f"Status: {status}\n"
                 f"Message: {message}\n\n"
                 f"Original subject: {original_subject}\n"
-                f"Processed at: {datetime.utcnow().isoformat()}Z\n"
+                f"Processed at: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}Z\n"
             )
 
             with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port) as server:

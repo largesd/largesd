@@ -1,0 +1,47 @@
+================================================================================
+  TASK 4.4: Remove frontend copy/ and clean git tree
+  Phase: 4 — Scaling Infrastructure (Week 3)
+  Priority: 🟡 High | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • frontend copy/ is exact duplicate of frontend/
+  • 100+ modified/deleted files in working tree
+
+TARGET STATE
+────────────
+  • Clean repo with no duplicate frontend directory
+  • Working tree has only intentional changes
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Verify frontend/ has all changes from frontend copy/:
+       diff -r frontend/ "frontend copy/" | head -100
+
+  2. If frontend/ is up-to-date: rm -rf "frontend copy/"
+
+  3. If frontend copy/ has newer changes: merge them into frontend/, then delete
+
+  4. Add to .gitignore if recreation is a risk:
+       "frontend copy/"
+
+  5. Clean git working tree:
+       git status  # review changes
+       git add -A
+       git commit -m "chore: remove frontend copy/ duplicate"
+       # For remaining modified files:
+       #   - If intentional: commit with descriptive messages
+       #   - If accidental: git checkout -- <file> or git restore <file>
+       #   - If work-in-progress: git stash
+
+  6. Establish commit discipline:
+       - Commit message format: type(scope): description
+       - Types: feat, fix, docs, style, refactor, test, chore
+       - One logical change per commit
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] No "frontend copy/" directory in repo
+  [ ] git status shows clean working tree (or only intentional changes)
+  [ ] Commit history follows conventional commits format

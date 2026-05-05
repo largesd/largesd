@@ -19,7 +19,7 @@ from llm_client import LLMClient
 from extraction import ExtractionEngine, ExtractedSpan, ExtractedFact, ExtractedArgument
 from extraction import CanonicalFact as ExCanonicalFact, CanonicalArgument as ExCanonicalArgument
 from topic_engine import TopicEngine, Topic
-from scoring_engine import ScoringEngine, TopicSideScores
+from scoring_engine import ScoringEngine, TopicSideScores, ReplicateResult
 from tokenizer import ContentMassCalculator, get_canonical_tokenizer
 from modulation import ModulationEngine, ModulationOutcome, create_modulated_post
 from snapshot_diff import SnapshotDiffEngine
@@ -57,11 +57,7 @@ from debate_proposal import (
 )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skills.fact_checking import (
-    FactCheckingSkill,
-    WikidataConnector,
-    SimulatedSourceConnector,
-)
+from skills.fact_checking import V15FactCheckingSkill
 
 
 class DebateEngineV2:
@@ -100,26 +96,8 @@ class DebateEngineV2:
         self._fact_check_wait_timeout_seconds = 2.0
         self._fact_check_poll_interval_seconds = 0.05
 
-        if self._fact_check_mode in ("PERFECT", "PERFECT_CHECKER"):
-            self.fact_checker = FactCheckingSkill(
-                mode=self._fact_check_mode,
-                allowlist_version="v1",
-                enable_async=False,
-                connectors=[
-                    # Tier-3 simulation stubs until real Tier-1 connectors are ready.
-                    # The evidence policy enforces that Tier-3 alone cannot
-                    # produce SUPPORTED/REFUTED in PERFECT mode.
-                    WikidataConnector(),
-                    SimulatedSourceConnector("sim_tier2_a", "example.org", priority=5),
-                    SimulatedSourceConnector("sim_tier2_b", "example.com", priority=5),
-                ],
-            )
-        else:
-            self.fact_checker = FactCheckingSkill(
-                mode=self._fact_check_mode,
-                allowlist_version="v1",
-                enable_async=self._async_enabled,
-            )
+        # v1.5 deterministic ternary fact-checking pipeline (LSD_FactCheck_v1_5_1)
+        self.fact_checker = self._create_v15_fact_checker()
         self.extraction_engine = ExtractionEngine(
             self.llm_client,
             fact_check_skill=self.fact_checker,
@@ -168,6 +146,14 @@ class DebateEngineV2:
         }
         public_mode = os.getenv("FACT_CHECKER_MODE")
         return aliases.get(str(public_mode or mode).strip(), aliases.get(str(public_mode or mode).strip().lower(), "OFFLINE"))
+
+    def _create_v15_fact_checker(self) -> V15FactCheckingSkill:
+        """Instantiate v1.5 deterministic ternary fact-checking skill."""
+        return V15FactCheckingSkill(
+            mode=self._fact_check_mode,
+            allowlist_version="v1",
+            enable_async=self._async_enabled,
+        )
 
     @staticmethod
     def _topic_from_record(record: Dict[str, Any]) -> Topic:
@@ -751,7 +737,12 @@ class DebateEngineV2:
                     ],
                     'evidence_tier_counts': getattr(cf, 'evidence_tier_counts', {}),
                     'referenced_by_au_ids': [],
-                    'created_at': datetime.now().isoformat()
+                    'created_at': datetime.now().isoformat(),
+                    # v1.5 deterministic ternary fields (first-class)
+                    'v15_status': cf.v15_status,
+                    'v15_insufficiency_reason': cf.v15_insufficiency_reason,
+                    'v15_human_review_flags': cf.v15_human_review_flags,
+                    'v15_best_evidence_tier': cf.v15_best_evidence_tier,
                 }
                 self.db.save_canonical_fact(fact_data)
                 topic_facts[tid].append(fact_data)
@@ -895,7 +886,7 @@ class DebateEngineV2:
             frame_context=frame_context,
         )
         
-        # Run replicates for verdict on selected items (LSD §18)
+        # --- LSD §18: Run judge/extraction/bootstrap replicates ---
         replicates = self.scoring_engine.run_replicates(
             [{'topic_id': t.topic_id} for t in topics],
             dict(selected_topic_facts),
@@ -906,9 +897,54 @@ class DebateEngineV2:
             extraction_reruns=2,
             bootstrap=True,
         )
-        
+
+        # --- LSD §6.1 & §18: Merge-variant replicate channel ---
+        replicate_topics = self.topic_engine.merge_variant_replicate(topics, variant_seed=99)
+        rep_mass, rep_facts, rep_args, primary_to_rep = self._remap_to_replicate(
+            topics, replicate_topics,
+            topic_content_mass,
+            dict(selected_topic_facts),
+            dict(selected_topic_arguments),
+        )
+        replicate_scores = self.scoring_engine.compute_debate_scores(
+            [{'topic_id': t.topic_id, 'scope': t.scope} for t in replicate_topics],
+            rep_facts,
+            rep_args,
+            rep_mass,
+            side_order=side_order,
+            frame_context=frame_context,
+        )
+
+        # Inject merge-variant as a true replicate channel
+        merge_replicate = ReplicateResult(
+            overall_for=replicate_scores.get("overall_for", 0.0),
+            overall_against=replicate_scores.get("overall_against", 0.0),
+            margin_d=replicate_scores.get("margin_d", 0.0),
+            topic_scores=replicate_scores.get("topic_scores", {}),
+            overall_scores=replicate_scores.get("overall_scores", {}),
+            side_order=side_order,
+            metadata={
+                "replicate_type": "merge_variant",
+                "replicate_seed": 99,
+                "variant_target": max(self.topic_engine.MIN_TOPICS, len(topics) - 1),
+            },
+        )
+        replicates.append(merge_replicate)
+
+        # Now compute verdict from the FULL replicate set (judges + extraction + merge)
         verdict_result = self.scoring_engine.compute_verdict(replicates, side_order=side_order)
-        
+
+        # Annotate replicate composition for downstream metadata consumers (LSD §18)
+        structural_count = sum(
+            1 for r in replicates
+            if getattr(r, 'metadata', {}).get('replicate_type') == 'merge_variant'
+        )
+        verdict_result['replicate_composition'] = {
+            'bootstrap_samples': len(replicates) - structural_count,
+            'structural_replicate_count': structural_count,
+            'replicate_count': len(replicates),
+        }
+
         # Compute counterfactuals on full sets
         counterfactuals = self.scoring_engine.compute_counterfactuals(
             [{'topic_id': t.topic_id} for t in topics],
@@ -994,9 +1030,32 @@ class DebateEngineV2:
             dict(selected_topic_facts),
             dict(selected_topic_arguments),
         )
+        # --- LSD §6.1: Merge sensitivity audit payload ---
         merge_audit = merge_sensitivity(
-            [{'topic_id': t.topic_id} for t in topics],
+            [
+                {
+                    'topic_id': t.topic_id,
+                    'name': t.name,
+                    'scope': t.scope,
+                    'relevance': t.relevance,
+                    'parent_topic_ids': list(t.parent_topic_ids),
+                }
+                for t in topics
+            ],
+            [
+                {
+                    'topic_id': t.topic_id,
+                    'name': t.name,
+                    'scope': t.scope,
+                    'relevance': t.relevance,
+                    'parent_topic_ids': list(t.parent_topic_ids),
+                }
+                for t in replicate_topics
+            ],
+            topic_content_mass,
             scores.get('margin_d', 0.0),
+            replicate_scores.get('margin_d', 0.0),
+            primary_to_rep,
         )
         evaluator_variance = evaluator_variance_from_scores(
             scores.get('topic_scores', {}),
@@ -1110,6 +1169,10 @@ class DebateEngineV2:
             'output_hash_root': output_hash_root,
             'recipe_versions_json': recipe_versions,
             'provider_metadata': provider_metadata,
+            # v1.5 deterministic ternary fact-checking metadata
+            'fact_checker_version': 'v1.5',
+            'evidence_policy_version': 'v1.5-default',
+            'synthesis_rule_engine_version': 'v1.5',
         }
         
         # Save snapshot
@@ -1406,6 +1469,46 @@ class DebateEngineV2:
                 arg['centrality'] = round(math.log1p(au_refs), 4)
                 arg['distinct_support'] = au_refs
     
+    @staticmethod
+    def _remap_to_replicate(primary_topics, replicate_topics,
+                            topic_content_mass,
+                            selected_topic_facts,
+                            selected_topic_arguments):
+        """
+        Build replicate_mass, replicate_facts, replicate_args by following
+        parent_topic_ids from merged replicate topics back to primary topics.
+        Returns (replicate_mass, replicate_facts, replicate_args, primary_to_replicate).
+        """
+        primary_ids = {p.topic_id for p in primary_topics}
+        primary_to_replicate = {}
+        for r in replicate_topics:
+            for parent_id in r.parent_topic_ids:
+                if parent_id in primary_ids:
+                    primary_to_replicate[parent_id] = r.topic_id
+        for p in primary_topics:
+            if p.topic_id not in primary_to_replicate:
+                primary_to_replicate[p.topic_id] = p.topic_id
+
+        replicate_mass = defaultdict(float)
+        for p in primary_topics:
+            r_id = primary_to_replicate.get(p.topic_id)
+            if r_id:
+                replicate_mass[r_id] += topic_content_mass.get(p.topic_id, 0)
+
+        replicate_facts = defaultdict(list)
+        for p_id, facts in selected_topic_facts.items():
+            r_id = primary_to_replicate.get(p_id)
+            if r_id:
+                replicate_facts[r_id].extend(facts)
+
+        replicate_args = defaultdict(list)
+        for p_id, args in selected_topic_arguments.items():
+            r_id = primary_to_replicate.get(p_id)
+            if r_id:
+                replicate_args[r_id].extend(args)
+
+        return dict(replicate_mass), dict(replicate_facts), dict(replicate_args), primary_to_replicate
+
     def _build_decision_dossier(self, topics: List[Topic],
                                 topic_facts: Dict[str, List[Dict]],
                                 topic_arguments: Dict[str, List[Dict]],
@@ -1437,10 +1540,19 @@ class DebateEngineV2:
                 side_facts = [f for f in facts if f.get('side') == side]
                 side_args = [a for a in args if a.get('side') == side]
                 
-                # Decisive premises: high decisiveness (|p - 0.5|)
+                # Decisive premises: v1.5 ternary semantics
                 for fact in side_facts:
-                    decisiveness = abs(fact.get('p_true', 0.5) - 0.5)
-                    if decisiveness > 0.2:
+                    status = fact.get('v15_status')
+                    if not status:
+                        d = fact.get('fact_check_diagnostics', {})
+                        status = d.get('v15_status') if isinstance(d, dict) else None
+                    is_decisive = status in ("SUPPORTED", "REFUTED")
+                    is_insufficient = status == "INSUFFICIENT" or status is None
+                    # Legacy fallback decisiveness from p_true
+                    p = fact.get('p_true', 0.5)
+                    legacy_decisiveness = abs(p - 0.5)
+                    decisiveness = 1.0 if is_decisive else legacy_decisiveness
+                    if is_decisive or legacy_decisiveness > 0.2:
                         decisive_premises.append({
                             'canon_fact_id': fact['canon_fact_id'],
                             'topic_id': tid,
@@ -1449,6 +1561,8 @@ class DebateEngineV2:
                             'p_true': fact['p_true'],
                             'p_or_q_score': fact.get('p_true', 0.5),
                             'decisiveness': round(decisiveness, 3),
+                            'v15_status': status,
+                            'v15_insufficiency_reason': fact.get('v15_insufficiency_reason'),
                             'span_ids': [
                                 link.get('span_id')
                                 for link in fact.get('provenance_links', [])
@@ -1461,14 +1575,15 @@ class DebateEngineV2:
                             }),
                             'operationalization': fact.get('operationalization', ''),
                         })
-                    if fact.get('p_true', 0.5) == 0.5 and fact.get('fact_type', 'empirical') == 'empirical':
+                    if is_insufficient and fact.get('fact_type', 'empirical') == 'empirical':
                         priority_gaps['insufficient_empirical_items'].append({
                             'canon_fact_id': fact.get('canon_fact_id'),
                             'topic_id': tid,
                             'side': side,
                             'text': fact.get('canon_fact_text', '')[:200],
-                            'priority_score': round((1 - abs(fact.get('p_true', 0.5) - 0.5)) * float(fact.get('centrality', 0.0) or 0.0), 4),
+                            'priority_score': round((1 - legacy_decisiveness) * float(fact.get('centrality', 0.0) or 0.0), 4),
                             'operationalization': fact.get('operationalization', ''),
+                            'v15_insufficiency_reason': fact.get('v15_insufficiency_reason'),
                         })
                     if fact.get('fact_type') == 'normative':
                         priority_gaps['high_dispersion_normative_items'].append({
@@ -1502,23 +1617,40 @@ class DebateEngineV2:
                             }),
                         })
                 
-                # Evidence gap summary
+                # Evidence gap summary using v1.5 ternary semantics
                 insufficiency_rate = 0.0
                 tier_counts = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
                 total_facts = len(side_facts)
                 f_all = 0.5
                 f_supported_only = 0.5
                 if total_facts > 0:
-                    insufficient_count = sum(1 for f in side_facts if f.get('p_true', 0.5) == 0.5)
+                    def _is_insufficient(f):
+                        s = f.get('v15_status')
+                        if not s:
+                            d = f.get('fact_check_diagnostics', {})
+                            s = d.get('v15_status') if isinstance(d, dict) else None
+                        return s == "INSUFFICIENT" or s is None
+                    def _is_decisive(f):
+                        s = f.get('v15_status')
+                        if not s:
+                            d = f.get('fact_check_diagnostics', {})
+                            s = d.get('v15_status') if isinstance(d, dict) else None
+                        return s in ("SUPPORTED", "REFUTED")
+                    insufficient_count = sum(1 for f in side_facts if _is_insufficient(f))
                     insufficiency_rate = insufficient_count / total_facts
                     f_all = sum(float(f.get('p_true', 0.5) or 0.5) for f in side_facts) / total_facts
-                    decisive = [f for f in side_facts if f.get('p_true', 0.5) != 0.5]
+                    decisive = [f for f in side_facts if _is_decisive(f)]
                     if decisive:
                         f_supported_only = sum(float(f.get('p_true', 0.5) or 0.5) for f in decisive) / len(decisive)
                     
                     for f in side_facts:
-                        for tier, count in f.get('evidence_tier_counts', {}).items():
-                            tier_counts[tier] = tier_counts.get(tier, 0) + count
+                        # Prefer v1.5 tier field
+                        tier = f.get('v15_best_evidence_tier')
+                        if tier is not None:
+                            tier_counts[f"TIER_{tier}"] = tier_counts.get(f"TIER_{tier}", 0) + 1
+                        else:
+                            for tier, count in f.get('evidence_tier_counts', {}).items():
+                                tier_counts[tier] = tier_counts.get(tier, 0) + count
                 
                 evidence_gaps[f"{tid}_{side}"] = {
                     'insufficiency_rate': round(insufficiency_rate, 3),
@@ -1583,6 +1715,13 @@ class DebateEngineV2:
                 'blocked_posts': len(blocked_posts),
                 'topics': len(topics),
             },
+            # v1.5 parameter pack per LSD §4
+            'v15_parameter_pack': {
+                'fact_checker_version': 'v1.5',
+                'evidence_policy_version': 'v1.5-default',
+                'synthesis_rule_engine_version': 'v1.5',
+                'decomposition_version': 'v1.5-phase2',
+            },
             'timestamp': datetime.now().isoformat(),
         }
 
@@ -1601,6 +1740,7 @@ class DebateEngineV2:
             'modulation_template': self.modulation_engine.template.get_version_string(),
             'modulation_template_record_id': active_template.get('template_record_id'),
             'fact_checker_mode': self._fact_check_mode,
+            'fact_checker_version': 'v1.5',
             'replicate_composition': {
                 'version_id': 'lsd-18-v1.2.0',
                 'extraction_reruns': 2,

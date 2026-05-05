@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blind Debate Adjudicator - Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script defer src="static/js/auth.js"></script>
+  <script defer src="static/js/common.js"></script>
+  <script defer src="static/js/data_bridge.js"></script>
+  <script defer src="static/js/index.js"></script>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <div class="nav">
+    <div class="brand">
+      <div>
+        <p class="brand-title">Blind Debate Adjudicator</p>
+        <p class="brand-subtitle">LLM-adjudicated • auditable • <span class="nowrap">identity-blind</span></p>
+      </div>
+    </div>
+    <nav class="navlinks" aria-label="Primary">
+      <a href="index.html" class="active" aria-current="page">Home</a>
+      <a href="new_debate.html">Post Argument</a>
+      <a href="snapshot.html">Snapshot</a>
+      <a href="verdict.html">Verdict</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <div class="nav-more-menu">
+          <a href="topics.html">Topics</a>
+          <a href="audits.html">Audits</a>
+          <a href="evidence.html">Evidence</a>
+          <a href="admin.html">Admin</a>
+          <a href="about.html">About</a>
+        </div>
+      </details>
+      <button type="button" class="help-btn" id="helpToggleBtn" aria-label="Open help and glossary" aria-controls="helpPanel" aria-expanded="false">?</button>
+      <!-- Auth link will be inserted here by auth.js -->
+    </nav>
+  </div>
+</header>
+
+<section class="state-strip" aria-label="Current debate state">
+  <div class="state-wrap" id="state-wrap-desktop" aria-live="polite" aria-atomic="true">
+    <div class="state-item" data-state-tone="warn"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
+    <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="confidence-display">-</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title="">Loading...</strong></div>
+  </div>
+  <div class="state-wrap" id="state-wrap-mobile" hidden aria-live="polite" aria-atomic="true">
+    <div class="state-compact" data-state-tone="warn"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
+    <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
+  </div>
+</section>
+
+<main id="main-content" class="home-main layout-home">
+  <section class="panel panel-current-state">
+    <div class="panel-head panel-head-home">
+      <div>
+        <p class="eyebrow">Current Debate</p>
+        <h1>Understand the current state in one screen</h1>
+        <p class="intro-copy">This view highlights what is being debated, where the verdict stands, and the clearest next steps for participating or auditing.</p>
+      </div>
+      <span class="api-status" id="api-status" role="status" aria-live="polite">Loading...</span>
+    </div>
+
+    <div class="resolution-block resolution-block-home" id="debate-prompt-content">
+      <p class="resolution-text is-empty" id="resolution-display">No debate started yet.</p>
+      <p class="meta-line" id="frame-display" hidden>Create a new debate to get started.</p>
+      <p class="meta-line" id="frame-meta-display" hidden></p>
+      <p class="meta-line" id="sides-display" hidden></p>
+      <p class="meta-line" id="criteria-display" hidden></p>
+    </div>
+  </section>
+
+  <div class="home-layout">
+    <div class="primary-stack">
+      <section class="panel panel-signal-summary">
+        <h2>Snapshot at a glance</h2>
+        <p class="lede">Three core indicators summarize outcome confidence and scoring cadence.</p>
+
+        <div class="signal-list" aria-label="Snapshot signals">
+          <article class="signal-row">
+            <p class="signal-label">Verdict status</p>
+            <p class="signal-value" id="kpi-verdict" data-state-tone="warn">NO VERDICT</p>
+            <p class="signal-note"><span class="tooltip" data-tooltip="Confidence interval of D (FOR - AGAINST) crosses zero">CI(D) crosses 0</span> across replicates.</p>
+          </article>
+          <article class="signal-row">
+            <p class="signal-label">Confidence</p>
+            <p class="signal-value mono" id="kpi-confidence">-</p>
+            <p class="signal-note">Share of replicate runs that support one direction.</p>
+          </article>
+          <article class="signal-row">
+            <p class="signal-label">Snapshot trigger</p>
+            <p class="signal-value" id="kpi-trigger">Activity</p>
+            <p class="signal-note">Event that produced the latest immutable scoring run.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel panel-latest-changes">
+        <h2>What changed in the latest snapshot</h2>
+        <p class="lede">Use this summary before opening detailed scoring pages.</p>
+        <ul class="compact-list update-list" id="changes-list" aria-live="polite" aria-busy="true">
+          <li>Loading snapshot changes...</li>
+        </ul>
+      </section>
+
+      <section class="panel panel-start-here">
+        <h2>Start here</h2>
+        <p class="lede">Choose one path based on your intent: contribute, inspect, or audit.</p>
+
+        <div class="action-lanes">
+          <article class="action-lane action-lane-primary" id="home-cta-primary">
+            <p class="action-lane-label">Contribute</p>
+            <a class="action-link prominent" id="home-cta-link" href="new_debate.html">Post an argument</a>
+            <p class="action-lane-copy" id="home-cta-copy">Submit FOR or AGAINST argument units with explicit facts and inference.</p>
+          </article>
+          <article class="action-lane">
+            <p class="action-lane-label">Inspect</p>
+            <p class="action-lane-copy">Read the current state before posting new arguments.</p>
+            <div class="action-link-list">
+              <a class="action-link" href="snapshot.html">Review latest snapshot</a>
+              <a class="action-link" href="verdict.html">Inspect verdict math</a>
+              <a class="action-link" href="topics.html">Explore topic surfaces</a>
+              <a class="action-link" href="dossier.html">Open decision dossier</a>
+            </div>
+          </article>
+          <article class="action-lane">
+            <p class="action-lane-label">Audit</p>
+            <p class="action-lane-copy">Challenge robustness and identify evidence that could move the decision.</p>
+            <div class="action-link-list">
+              <a class="action-link" href="audits.html">Audit robustness</a>
+              <a class="action-link" href="evidence.html">Find decisive evidence</a>
+              <a class="action-link" href="governance.html">View governance status</a>
+              <a class="action-link" href="appeals.html">Submit an appeal</a>
+            </div>
+          </article>
+        </div>
+
+        <div id="login-notice" class="notice" hidden role="status" aria-live="polite">
+          Participation requires authentication. <a href="login.html">Log in</a> or <a href="register.html">create an account</a> to post arguments.
+        </div>
+      </section>
+    </div>
+
+    <aside class="secondary-stack">
+      <section class="panel snapshot-essentials-panel">
+        <div class="panel-head">
+          <h3>Snapshot essentials</h3>
+          <button type="button" class="refresh-btn" id="refresh-data-btn" hidden>Refresh snapshot</button>
+          <button type="button" class="refresh-btn" id="generate-snapshot-btn" hidden>Generate snapshot</button>
+          <button type="button" class="refresh-btn" id="github-refresh-btn" hidden>Refresh from GitHub</button>
+        </div>
+
+        <dl class="snapshot-meta">
+          <div class="snapshot-meta-item">
+            <dt>Snapshot ID</dt>
+            <dd class="mono" id="badge-snapshot-id">-</dd>
+          </div>
+          <div class="snapshot-meta-item">
+            <dt>Timestamp</dt>
+            <dd class="mono" id="badge-timestamp">-</dd>
+          </div>
+          <div class="snapshot-meta-item">
+            <dt>Trigger</dt>
+            <dd class="mono" id="badge-trigger">-</dd>
+          </div>
+        </dl>
+
+        <div class="snapshot-group">
+          <h4>Moderation template</h4>
+          <div class="row snapshot-template-row">
+            <span class="pill">Template: <span class="mono" id="template-name">Standard Civility + PII Guard v3</span></span>
+            <span class="pill">Version: <span class="mono" id="template-version">3.2.1</span></span>
+          </div>
+        </div>
+
+        <div class="snapshot-group">
+          <h4>Allowed vs blocked</h4>
+          <div class="table-wrap">
+            <table class="table table-compact">
+              <tbody>
+                <tr><th scope="row">Allowed</th><td class="mono" id="allowed-count">84</td></tr>
+                <tr><th scope="row">Blocked</th><td class="mono" id="blocked-count">11</td></tr>
+                <tr><th scope="row">Top block reasons</th><td id="block-reasons" class="pill-cluster"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <small>Only Allowed posts influence topics, facts, arguments, scoring, and verdict.</small>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Need help?</h3>
+        <p class="lede">Use the glossary for term definitions and the About page for system rules.</p>
+        <div class="row">
+          <button class="button" type="button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Open Glossary</button>
+          <a class="button" href="about.html">Open About</a>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-simple">
+    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
+    <div class="mono">v3.0</div>
+  </div>
+</footer>
+
+<button type="button" class="back-to-top" aria-label="Back to top">&uarr;</button>
+
+<div class="help-overlay" aria-hidden="true"></div>
+<div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
+  <div class="help-panel-header">
+    <h3 id="help-panel-title">Glossary and Help</h3>
+    <button type="button" class="close-help" aria-label="Close help">&times;</button>
+  </div>
+  <div class="help-panel-body">
+    <p class="help-panel-note help-panel-note-top">Key terms used across snapshot, topic, and verdict pages.</p>
+
+    <div class="glossary-term">CI(D)</div>
+    <p class="glossary-def">Confidence interval of D (difference score). If the interval crosses zero, verdict remains NO VERDICT.</p>
+
+    <div class="glossary-term">D = FOR - AGAINST</div>
+    <p class="glossary-def">Margin between overall FOR and AGAINST scores. Positive values favor FOR; negative values favor AGAINST.</p>
+
+    <div class="glossary-term">F_t,s (Factuality)</div>
+    <p class="glossary-def">Average truth probability across canonical FACT nodes for each topic and side.</p>
+
+    <div class="glossary-term">Reason_t,s (Reasoning)</div>
+    <p class="glossary-def">Median reasoning strength across canonical ARGUMENT nodes for each topic and side.</p>
+
+    <div class="glossary-term">Cov_t,s (Coverage)</div>
+    <p class="glossary-def">How well one side addresses opposing arguments, weighted by leverage.</p>
+
+    <div class="glossary-term">Q_t,s (Quality)</div>
+    <p class="glossary-def">Geometric mean of factuality, reasoning, and coverage for balanced scoring.</p>
+
+    <div class="glossary-term">Rel_t (Relevance)</div>
+    <p class="glossary-def">Topic relevance weight derived from claim-producing content mass.</p>
+
+    <div class="glossary-term">Steelman</div>
+    <p class="glossary-def">Strongest representation of each side based on canonical arguments, not weakest points.</p>
+
+    <div class="glossary-term">IQR</div>
+    <p class="glossary-def">Interquartile range showing spread of judge scores; wider means less evaluator agreement.</p>
+
+    <div class="glossary-term">Drift score</div>
+    <p class="glossary-def">Degree of topic change relative to previous snapshot.</p>
+
+    <div class="glossary-term">Canonical FACT and ARGUMENT</div>
+    <p class="glossary-def">Normalized, deduplicated claim and argument units used for stable scoring.</p>
+
+    <hr />
+    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="about.html">About</a>.</p>
+  </div>
+</div>
+
+</body>
+</html>

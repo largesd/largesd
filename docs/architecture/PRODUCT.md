@@ -30,7 +30,8 @@ The interface should project trust, procedural fairness, and seriousness without
 2. Procedural trust over spectacle: interfaces should foreground evidence, reasoning, and state, not decoration.
 3. Clarity under complexity: progressively disclose detail so novice users are not overwhelmed.
 4. Consistent role-aware flows: debaters, judges, admins, and observers should each get predictable, purpose-fit paths.
-5. Composed interaction rhythm: motion and feedback should support comprehension while preserving a calm tone.
+5. Plain language before notation: outcomes must be interpretable without reading mathematical symbols. Technical details belong in expandable sections.
+6. Composed interaction rhythm: motion and feedback should support comprehension while preserving a calm tone.
 
 ## Accessibility & Inclusion
 - Accessibility target: WCAG 2.1 AA (assumed baseline unless you specify a stricter target).

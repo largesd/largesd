@@ -182,6 +182,11 @@ class SourceManager:
             self._rate_limiter.register_source(source_id, rate_config)
             self._circuit_breakers[source_id] = CircuitBreaker(circuit_config)
     
+    def get_circuit_breaker(self, source_id: str) -> Optional[CircuitBreaker]:
+        """Get the circuit breaker for a source, or None if not registered."""
+        with self._lock:
+            return self._circuit_breakers.get(source_id)
+    
     def can_query(self, source_id: str) -> tuple[bool, Optional[str]]:
         """
         Check if source can be queried.
@@ -222,3 +227,7 @@ class SourceManager:
             if source_id in self._circuit_breakers:
                 status['circuit_breaker'] = self._circuit_breakers[source_id].get_state()
             return status
+
+
+# Alias for compatibility with v1.5 plan documentation
+RateLimiterManager = SourceManager

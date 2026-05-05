@@ -31,6 +31,7 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
+          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -88,6 +89,7 @@
               <th>Insufficiency rate</th>
               <th>Supported-only factuality</th>
               <th>All-claims factuality</th>
+              <th>max_abs_delta_D</th>
               <th>Tier distribution</th>
             </tr>
           </thead>
@@ -156,6 +158,56 @@
         <summary>Show unselected tail summary</summary>
         <div class="codebox" id="unselected-tail-raw">No unselected tail summary loaded.</div>
       </details>
+
+      <hr />
+      <h3>Insufficiency Swing Analysis</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">If all currently INSUFFICIENT empirical premises were resolved, the overall margin D could move by at most this amount.</p>
+      <div class="row">
+        <span class="pill">max_abs_delta_D: <span class="mono" id="swing-max-delta">-</span></span>
+        <span class="pill">Overall swing bound: <span class="mono" id="swing-bound">-</span></span>
+      </div>
+
+      <hr />
+      <h3>Decisive Premise Rank</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">INSUFFICIENT premises sorted by marginal swing |δ_i| descending.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Rank</th><th>Premise ID</th><th>Topic-side</th><th>Current status</th><th>Marginal swing δ_i</th></tr></thead>
+          <tbody id="decisive-rank-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">No INSUFFICIENT premises are currently decisive.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Component Breakdown</h3>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic-side</th><th>F (factuality)</th><th>N (normative)</th><th>Reason</th><th>Coverage</th><th>Q (geomean)</th></tr></thead>
+          <tbody id="component-breakdown-tbody">
+            <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading component breakdown...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Drop-Component Sensitivity</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Diagnostic only. Shows which component most influences the verdict.</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Topic</th><th>D without F</th><th>D without N</th><th>D without Reason</th><th>D without Coverage</th></tr></thead>
+          <tbody id="drop-component-tbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading drop-component sensitivity...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr />
+      <h3>Coverage Adequacy Trace</h3>
+      <p style="font-size:12px;color:var(--muted);margin-top:0">Rebuttal type distribution from coverage adequacy labels.</p>
+      <div class="row" id="coverage-trace-row">
+        <small style="color:var(--muted)">No coverage trace available.</small>
+      </div>
     </div>
   </section>
 </main>
@@ -188,7 +240,7 @@ function renderEvidenceGaps(evidenceGaps) {
   const tbody = document.getElementById('evidence-gaps-tbody');
   const entries = Object.entries(evidenceGaps || {});
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No evidence gap data available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No evidence gap data available.</td></tr>';
     return;
   }
 
@@ -198,6 +250,7 @@ function renderEvidenceGaps(evidenceGaps) {
       <td class="mono">${BDA.formatNumber(Number(value.insufficiency_rate || 0), 3)}</td>
       <td class="mono">${BDA.formatNumber(Number(value.f_supported_only || 0), 3)}</td>
       <td class="mono">${BDA.formatNumber(Number(value.f_all || 0), 3)}</td>
+      <td class="mono">${BDA.formatNumber(Number(value.max_abs_delta_d || 0), 4)}</td>
       <td class="mono">${BDA.escapeHtml(JSON.stringify(value.tier_distribution || {}))}</td>
     </tr>
   `).join('');
@@ -281,10 +334,11 @@ function renderCounterfactuals(counterfactuals) {
 }
 
 function renderPriorityGaps(priorityGaps) {
-  const empirical = priorityGaps?.insufficient_empirical_items || [];
+  const empirical = (priorityGaps?.insufficient_empirical_items || []).slice();
+  empirical.sort((a, b) => Math.abs(b.marginal_swing_delta_i || 0) - Math.abs(a.marginal_swing_delta_i || 0));
   const normative = priorityGaps?.high_dispersion_normative_items || [];
   const rows = [
-    ...empirical.slice(0, 4).map((item) => `Empirical ${item.canon_fact_id}: ${item.operationalization || item.text || ''}`),
+    ...empirical.slice(0, 6).map((item) => `Empirical ${item.canon_fact_id}: δ_i=${BDA.formatNumber(item.marginal_swing_delta_i || 0, 4)} — ${item.operationalization || item.text || ''}`),
     ...normative.slice(0, 4).map((item) => `Normative ${item.canon_fact_id}: review frame acceptability (${item.normative_provenance || 'no provenance'})`),
   ];
   document.getElementById('priority-gaps-list').innerHTML = rows.length
@@ -298,6 +352,81 @@ function renderSensitivityAndTail(dossier) {
   document.getElementById('insuff-false').textContent = BDA.formatNumber(sensitivity.D_if_insufficient_false || 0, 4);
   document.getElementById('insuff-deltas').textContent = `${BDA.formatNumber(sensitivity.delta_D_true || 0, 4)} / ${BDA.formatNumber(sensitivity.delta_D_false || 0, 4)}`;
   document.getElementById('unselected-tail-raw').textContent = JSON.stringify(dossier.unselected_tail_summary || {}, null, 2);
+
+  // Swing analysis
+  const swing = dossier.insufficiency_swing || {};
+  document.getElementById('swing-max-delta').textContent = BDA.formatNumber(swing.max_abs_delta_D || 0, 4);
+  document.getElementById('swing-bound').textContent = BDA.formatNumber(swing.overall_swing_bound || 0, 4);
+
+  // Decisive premise rank
+  const decisive = (dossier.decisive_premises || []).filter(p => p.status === 'INSUFFICIENT');
+  decisive.sort((a, b) => Math.abs(b.marginal_swing_delta_i || 0) - Math.abs(a.marginal_swing_delta_i || 0));
+  const rankTbody = document.getElementById('decisive-rank-tbody');
+  if (!decisive.length) {
+    rankTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No INSUFFICIENT premises are currently decisive.</td></tr>';
+  } else {
+    rankTbody.innerHTML = decisive.slice(0, 10).map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td class="mono">${BDA.escapeHtml(p.canon_fact_id || p.premise_id || '-')}</td>
+        <td>${BDA.escapeHtml(p.topic_side || `${p.topic_id || ''}-${p.side || ''}`)}</td>
+        <td>${BDA.escapeHtml(p.status || 'INSUFFICIENT')}</td>
+        <td class="mono">${BDA.formatNumber(p.marginal_swing_delta_i || 0, 4)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Component breakdown
+  const breakdown = dossier.component_breakdown || {};
+  const cbEntries = Object.entries(breakdown);
+  const cbTbody = document.getElementById('component-breakdown-tbody');
+  if (!cbEntries.length) {
+    cbTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No component breakdown available.</td></tr>';
+  } else {
+    cbTbody.innerHTML = cbEntries.map(([key, val]) => `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(key)}</td>
+        <td class="mono">${BDA.formatNumber(val.factuality, 3)}</td>
+        <td class="mono">${BDA.formatNumber(val.normative, 3)}</td>
+        <td class="mono">${BDA.formatNumber(val.reasoning, 3)}</td>
+        <td class="mono">${BDA.formatNumber(val.coverage, 3)}</td>
+        <td class="mono"><strong>${BDA.formatNumber(val.quality, 3)}</strong></td>
+      </tr>
+    `).join('');
+  }
+
+  // Drop-component sensitivity
+  const drop = dossier.drop_component_sensitivity || {};
+  const dropEntries = Object.entries(drop);
+  const dropTbody = document.getElementById('drop-component-tbody');
+  if (!dropEntries.length) {
+    dropTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No drop-component sensitivity data available.</td></tr>';
+  } else {
+    dropTbody.innerHTML = dropEntries.map(([key, val]) => `
+      <tr>
+        <td class="mono">${BDA.escapeHtml(key)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_factuality, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_normative, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_reasoning, 4)}</td>
+        <td class="mono">${BDA.formatNumber(val.d_without_coverage, 4)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Coverage adequacy trace
+  const trace = dossier.coverage_adequacy_trace || {};
+  const overall = trace.overall || {};
+  const traceRow = document.getElementById('coverage-trace-row');
+  if (overall.empirical_rebuttals === undefined) {
+    traceRow.innerHTML = '<small style="color:var(--muted)">No coverage trace available.</small>';
+  } else {
+    traceRow.innerHTML = `
+      <span class="pill">EMPIRICAL: <span class="mono">${overall.empirical_rebuttals ?? '-'}</span></span>
+      <span class="pill">NORMATIVE: <span class="mono">${overall.normative_rebuttals ?? '-'}</span></span>
+      <span class="pill">INFERENCE: <span class="mono">${overall.inference_rebuttals ?? '-'}</span></span>
+      <span class="pill">SCOPE/DEF: <span class="mono">${overall.scope_definition_shifts ?? '-'}</span></span>
+    `;
+  }
 }
 
 async function loadDossier() {
@@ -317,6 +446,10 @@ async function loadDossier() {
 
   try {
     const dossier = await BDA.api('/api/debate/decision-dossier');
+    if (dossier.insufficient_data) {
+      showDossierEmpty(`<strong>Insufficient adjudication data</strong><p>${BDA.escapeHtml(dossier.message || 'No allowed posts or scores are available for this debate yet.')}</p>`);
+      return;
+    }
     showDossierContent();
 
     document.getElementById('dossier-snapshot-id').textContent = dossier.snapshot_id || '-';

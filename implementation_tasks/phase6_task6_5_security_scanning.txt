@@ -1,0 +1,43 @@
+================================================================================
+  TASK 6.5: Add security scanning to CI
+  Phase: 6 — DevOps & Quality of Life (Week 4)
+  Priority: 🟢 Medium | Effort: 0.5 day
+================================================================================
+
+CURRENT STATE
+─────────────
+  • No Bandit, Safety, pip-audit, or Trivy in CI
+
+TARGET STATE
+────────────
+  • GitHub Actions runs security scan on every PR
+  • Fails build on high-severity findings
+
+IMPLEMENTATION STEPS
+────────────────────
+  1. Add to .github/workflows/ci.yml:
+
+       - name: Security scan with Bandit
+         run: bandit -r backend/ -f json -o bandit-report.json || true
+
+       - name: Check dependencies with pip-audit
+         run: pip-audit --requirement requirements.txt
+
+       - name: Run Trivy filesystem scan
+         uses: aquasecurity/trivy-action@master
+         with:
+           scan-type: 'fs'
+           format: 'sarif'
+           output: 'trivy-results.sarif'
+
+  2. Add bandit to requirements-test.txt
+
+  3. Configure fail thresholds (fail on HIGH/CRITICAL)
+
+  4. Upload SARIF results to GitHub Security tab
+
+ACCEPTANCE CRITERIA
+───────────────────
+  [ ] CI fails on known vulnerable dependencies
+  [ ] CI flags insecure code patterns (bandit)
+  [ ] Security scan results visible in GitHub Security tab

@@ -2,8 +2,8 @@
 Configuration for Fact Checking Skill
 All thresholds and parameters are versioned
 """
-from dataclasses import dataclass
-from typing import Dict, Any
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, Optional
 
 
 @dataclass
@@ -44,6 +44,25 @@ class FactCheckConfig:
     
     # Cache settings
     cache_ttl_seconds: int = 86400 * 30  # 30 days
+    
+    # v1.5 parallel router settings
+    max_connector_workers: int = 4
+    connector_timeout_seconds: float = 30.0
+    
+    # v1.5 circuit breaker settings
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_recovery_seconds: float = 60.0
+    
+    # v1.5 fallback chains: primary connector_id -> [fallback connector_ids]
+    fallback_chains: Dict[str, List[str]] = field(default_factory=lambda: {
+        "bls_statistics_v15": ["curated_rag_v15"],
+        "wikidata_entity_v15": ["curated_rag_v15"],
+        "crossref_v15": ["curated_rag_v15"],
+        "brave_search_v15": ["curated_rag_v15"],
+    })
+    
+    # v1.5 claim-type-specific fallback chains
+    claim_type_fallbacks: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FactCheckConfig':

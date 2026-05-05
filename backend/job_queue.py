@@ -8,7 +8,7 @@ import uuid
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Optional, List, Any, Callable
 from contextlib import contextmanager
@@ -94,7 +94,7 @@ class JobQueue:
             parameters=parameters,
             runtime_profile_id=runtime_profile_id,
             status=JobStatus.QUEUED,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         )
         
         conn = self.db._get_connection()
@@ -145,7 +145,7 @@ class JobQueue:
         )
         params: List[Any] = [
             JobStatus.RUNNING.value,
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             job_id,
             JobStatus.QUEUED.value,
         ]
@@ -165,7 +165,7 @@ class JobQueue:
         cursor.execute(
             """UPDATE jobs SET status = ?, completed_at = ?, result = ?, progress = 100
                WHERE job_id = ?""",
-            (JobStatus.COMPLETED.value, datetime.utcnow().isoformat(),
+            (JobStatus.COMPLETED.value, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
              json.dumps(result), job_id)
         )
         conn.commit()
@@ -178,7 +178,7 @@ class JobQueue:
         cursor.execute(
             """UPDATE jobs SET status = ?, completed_at = ?, error = ?
                WHERE job_id = ?""",
-            (JobStatus.FAILED.value, datetime.utcnow().isoformat(), error, job_id)
+            (JobStatus.FAILED.value, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), error, job_id)
         )
         conn.commit()
         conn.close()
