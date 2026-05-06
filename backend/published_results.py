@@ -11,8 +11,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from database import DebateDatabase
-from lsd_v1_2 import AUDIT_SCHEMA_VERSION, formula_registry
+from backend.database import DebateDatabase
+from backend.lsd_v1_2 import AUDIT_SCHEMA_VERSION, formula_registry
 
 
 def _coerce_json(raw: Any, fallback: Any = None) -> Any:

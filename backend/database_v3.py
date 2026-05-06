@@ -8,7 +8,7 @@ import hashlib
 import secrets
 from datetime import datetime
 from typing import List, Dict, Optional, Any
-from database import DebateDatabase
+from backend.database import DebateDatabase
 from werkzeug.security import check_password_hash
 
 
@@ -196,27 +196,40 @@ class DatabaseV3(DebateDatabase):
         password_hash = self._hash_password(password)
         created_at = datetime.now().isoformat()
         
-        # First user ever created is automatically the admin
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users")
-        count = cursor.fetchone()[0]
-        conn.close()
-        is_admin = (count == 0)
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users")
+            count = cursor.fetchone()[0]
+            is_admin = (count == 0)
+            
+            user_data = {
+                'user_id': user_id,
+                'email': email.lower().strip(),
+                'password_hash': password_hash,
+                'display_name': display_name.strip(),
+                'created_at': created_at,
+                'is_active': True,
+                'is_verified': False,
+                'is_admin': is_admin,
+                'last_login': None
+            }
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO users
+                (user_id, email, password_hash, display_name, created_at, is_active, is_verified, is_admin, last_login)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_data['user_id'],
+                user_data['email'],
+                user_data['password_hash'],
+                user_data['display_name'],
+                user_data['created_at'],
+                1 if user_data.get('is_active', True) else 0,
+                1 if user_data.get('is_verified', False) else 0,
+                1 if user_data.get('is_admin', False) else 0,
+                user_data.get('last_login')
+            ))
         
-        user_data = {
-            'user_id': user_id,
-            'email': email.lower().strip(),
-            'password_hash': password_hash,
-            'display_name': display_name.strip(),
-            'created_at': created_at,
-            'is_active': True,
-            'is_verified': False,
-            'is_admin': is_admin,
-            'last_login': None
-        }
-        
-        self.save_user(user_data)
         return user_data
     
     def verify_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:

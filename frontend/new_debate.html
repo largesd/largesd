@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>New Debate - Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -31,7 +31,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -47,7 +46,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> NO VERDICT</div>
     <div class="state-compact"><strong>Confidence:</strong> -</div>
   </div>
@@ -102,10 +101,10 @@
     <span class="pill" id="debate-status">No active debate</span>
   </div>
 
-  <div id="debate-selector" style="margin-bottom: var(--space-md);"></div>
+  <div id="debate-selector" class="mb-md"></div>
 
   <div id="current-debate-info" class="callout soft current-debate-callout">
-    <strong>Active:</strong> <span id="current-resolution">Loading...</span>
+    <strong>Active:</strong> <span id="current-resolution"><span class="skeleton skeleton-text-md"></span></span>
   </div>
 
   <div class="callout soft" id="email-mode-notice">
@@ -118,13 +117,13 @@
   <h2>Post Your Argument</h2>
   
   <div class="callout soft post-active-debate">
-    <strong>Active Debate:</strong> <span id="display-resolution">Loading...</span>
+    <strong>Active Debate:</strong> <span id="display-resolution"><span class="skeleton skeleton-text-md"></span></span>
     <div class="post-access-wrap">
       <small id="post-access-hint">Checking whether posting is available...</small>
     </div>
   </div>
   
-  <div id="status-message" class="status-message" style="display:none;"></div>
+  <div id="status-message" class="status-message hidden"></div>
   
   <div class="grid cols2 post-meta-grid">
     <div class="form-group">
@@ -176,21 +175,21 @@
 
   <div class="row post-action-row">
     <div class="row post-submit-actions">
-      <button class="button" id="submit-post-button" onclick="submitPost()">Submit Argument</button>
-      <button class="button secondary" onclick="previewPost()">Preview</button>
+      <button class="button" id="submit-post-button" data-action="submit-post">Submit Argument</button>
+      <button class="button secondary" data-action="preview-post">Preview</button>
     </div>
     <span class="pill">Posts pending: <span class="mono" id="pending-count">0</span></span>
   </div>
 
-  <div id="email-preview-panel" class="callout post-preview-panel" style="display: none;">
+  <div id="email-preview-panel" class="callout post-preview-panel hidden">
     <h4>Email Preview</h4>
     <p>Click the link below to open your email client with a pre-filled submission.</p>
     <a id="mailto-link" class="button" href="#">Open Email Client</a>
-    <button class="button secondary" onclick="copyEmailBody()">Copy Body</button>
-    <pre id="email-body-preview" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:0.8125rem;white-space:pre-wrap;"></pre>
+    <button class="button secondary" data-action="copy-email-body">Copy Body</button>
+    <pre id="email-body-preview" class="post-preview-pre"></pre>
   </div>
 
-  <div id="preview-panel" class="callout post-preview-panel" style="display: none;">
+  <div id="preview-panel" class="callout post-preview-panel hidden">
     <h4>Post Preview</h4>
     <div id="preview-content"></div>
   </div>
@@ -211,7 +210,7 @@
   </div>
   
   <div class="row pending-actions-row">
-    <button class="button secondary" onclick="clearPending()">Clear Pending</button>
+    <button class="button secondary" data-action="clear-pending">Clear Pending</button>
     <a class="pill" href="snapshot.html">View Current Snapshot →</a>
   </div>
 </section>
@@ -225,7 +224,7 @@
   </div>
 </footer>
 
-<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
+<button type="button" class="back-to-top" data-action="scroll-top" aria-label="Back to top">^</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -251,6 +250,12 @@
 </div>
 
 <script>
+BDA.registerAction('submit-post', submitPost);
+BDA.registerAction('preview-post', previewPost);
+BDA.registerAction('copy-email-body', copyEmailBody);
+BDA.registerAction('clear-pending', clearPending);
+BDA.registerAction('remove-pending', (el) => removePendingPost(parseInt(el.dataset.index, 10)));
+
 let hasActiveDebate = false;
 let currentDebateId = null;
 let currentResolution = '';
@@ -352,6 +357,15 @@ async function loadDebate() {
     }
   } catch (error) {
     console.error('Error loading debate:', error);
+    const errorMsg = error?.message || 'Error loading debate.';
+    const requestId = error?.payload?.request_id || '';
+    const displayResEl = document.getElementById('display-resolution');
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && displayResEl) {
+      BDA.showInlineError(displayResEl, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading debate`);
+        loadDebate();
+      });
+    }
     hasActiveDebate = false;
     currentDebateId = null;
     currentResolution = '';
@@ -394,6 +408,18 @@ async function loadTopics() {
     }
   } catch (e) {
     console.warn('Could not load topics from cache:', e);
+  }
+
+  if (topics.length === 0) {
+    const errorMsg = 'Failed to load topics.';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function') {
+      const container = document.getElementById('argument-topic')?.parentElement;
+      if (container) {
+        BDA.showInlineError(container, errorMsg, () => {
+          loadTopics();
+        });
+      }
+    }
   }
 
   // No hardcoded fallback: show honest empty state
@@ -661,7 +687,7 @@ function updatePendingPostsList() {
         <small>Facts:</small>
         <div class="pending-post-facts">${BDA.escapeHtml(post.facts.substring(0, 100))}${post.facts.length > 100 ? '...' : ''}</div>
       </div>
-      <button class="button secondary pending-remove-btn" onclick="removePendingPost(${index})">Remove</button>
+      <button class="button secondary pending-remove-btn" data-action="remove-pending" data-index="${index}">Remove</button>
     </article>
   `).join('');
 }

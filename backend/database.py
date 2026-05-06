@@ -8,11 +8,17 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from pathlib import Path
+from contextlib import contextmanager
 
 try:
     from debate_proposal import hydrate_frame_record, serialize_frame_record
 except ModuleNotFoundError:
     from .debate_proposal import hydrate_frame_record, serialize_frame_record
+
+try:
+    from backend.db_engine import create_pooled_engine, transaction
+except ModuleNotFoundError:
+    from db_engine import create_pooled_engine, transaction
 
 
 class DebateDatabase:
@@ -21,26 +27,18 @@ class DebateDatabase:
     def __init__(self, db_path: str = "data/debate_system.db"):
         self.db_path = db_path
         self._db_url = os.getenv("DATABASE_URL", "")
+        self._engine = create_pooled_engine(db_path=db_path, db_url=self._db_url)
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_tables()
     
     def _get_connection(self):
-        db_url = os.getenv("DATABASE_URL", "")
-        if db_url.startswith("postgresql://"):
-            try:
-                import psycopg2
-                conn = psycopg2.connect(db_url)
-                return conn
-            except ImportError:
-                raise RuntimeError("psycopg2 required for PostgreSQL. Install: pip install psycopg2-binary")
-        elif db_url.startswith("sqlite:///"):
-            conn = sqlite3.connect(db_url.replace("sqlite:///", ""))
-            conn.row_factory = sqlite3.Row
-            return conn
-        else:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            return conn
+        return self._engine.raw_connection()
+
+    @contextmanager
+    def transaction(self):
+        """Context manager for multi-statement transactions with automatic rollback on error."""
+        with transaction(self._engine) as conn:
+            yield conn
 
     def _ensure_column(self, cursor: sqlite3.Cursor, table_name: str,
                        column_name: str, column_definition: str):
@@ -284,6 +282,7 @@ class DebateDatabase:
                 FOREIGN KEY (snapshot_id) REFERENCES snapshots(snapshot_id)
             )
         """)
+        self._ensure_column(cursor, "audit_records", "request_id", "TEXT")
         
         # Users table
         cursor.execute("""
@@ -710,22 +709,20 @@ class DebateDatabase:
 
     def set_active_frame(self, debate_id: str, frame_id: str):
         """Mark one frame active for a debate and deactivate the rest."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE debate_frames SET is_active = 0 WHERE debate_id = ?",
-            (debate_id,),
-        )
-        cursor.execute(
-            "UPDATE debate_frames SET is_active = 1 WHERE frame_id = ?",
-            (frame_id,),
-        )
-        cursor.execute(
-            "UPDATE debates SET active_frame_id = ? WHERE debate_id = ?",
-            (frame_id, debate_id),
-        )
-        conn.commit()
-        conn.close()
+        with self.transaction() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE debate_frames SET is_active = 0 WHERE debate_id = ?",
+                (debate_id,),
+            )
+            cursor.execute(
+                "UPDATE debate_frames SET is_active = 1 WHERE frame_id = ?",
+                (frame_id,),
+            )
+            cursor.execute(
+                "UPDATE debates SET active_frame_id = ? WHERE debate_id = ?",
+                (frame_id, debate_id),
+            )
 
     def get_debate_frame(self, frame_id: str) -> Optional[Dict[str, Any]]:
         """Get a debate frame by ID."""
@@ -1275,17 +1272,32 @@ class DebateDatabase:
         """Save an audit record"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO audit_records
-            (audit_id, snapshot_id, audit_type, result_data, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            audit_data['audit_id'],
-            audit_data['snapshot_id'],
-            audit_data['audit_type'],
-            json.dumps(audit_data['result_data']),
-            audit_data['created_at']
-        ))
+        request_id = audit_data.get('request_id')
+        if request_id is not None:
+            cursor.execute("""
+                INSERT OR REPLACE INTO audit_records
+                (audit_id, snapshot_id, audit_type, result_data, created_at, request_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                audit_data['audit_id'],
+                audit_data['snapshot_id'],
+                audit_data['audit_type'],
+                json.dumps(audit_data['result_data']),
+                audit_data['created_at'],
+                request_id,
+            ))
+        else:
+            cursor.execute("""
+                INSERT OR REPLACE INTO audit_records
+                (audit_id, snapshot_id, audit_type, result_data, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                audit_data['audit_id'],
+                audit_data['snapshot_id'],
+                audit_data['audit_type'],
+                json.dumps(audit_data['result_data']),
+                audit_data['created_at']
+            ))
         conn.commit()
         conn.close()
     
@@ -1403,47 +1415,44 @@ class DebateDatabase:
         template_record_id = f"modtpl_{uuid.uuid4().hex[:12]}"
         now = datetime.now().isoformat()
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO moderation_templates
-            (template_record_id, base_template_id, template_name, version, status,
-             topic_requirements, toxicity_settings, pii_settings, spam_rate_limit_settings,
-             prompt_injection_settings, author_user_id, notes, created_at, updated_at, applied_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                template_record_id,
-                base_template_id,
-                template_name,
-                version,
-                status,
-                json.dumps(topic_requirements),
-                json.dumps(toxicity_settings),
-                json.dumps(pii_settings),
-                json.dumps(spam_rate_limit_settings),
-                json.dumps(prompt_injection_settings),
-                author_user_id,
-                notes or "",
-                now,
-                now,
-                now if status == "active" else None,
-            ),
-        )
-
-        if status == "active":
+        with self.transaction() as conn:
+            cursor = conn.cursor()
             cursor.execute(
                 """
-                UPDATE moderation_template_state
-                SET active_template_record_id = ?, updated_at = ?
-                WHERE state_id = 1
+                INSERT INTO moderation_templates
+                (template_record_id, base_template_id, template_name, version, status,
+                 topic_requirements, toxicity_settings, pii_settings, spam_rate_limit_settings,
+                 prompt_injection_settings, author_user_id, notes, created_at, updated_at, applied_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (template_record_id, now),
+                (
+                    template_record_id,
+                    base_template_id,
+                    template_name,
+                    version,
+                    status,
+                    json.dumps(topic_requirements),
+                    json.dumps(toxicity_settings),
+                    json.dumps(pii_settings),
+                    json.dumps(spam_rate_limit_settings),
+                    json.dumps(prompt_injection_settings),
+                    author_user_id,
+                    notes or "",
+                    now,
+                    now,
+                    now if status == "active" else None,
+                ),
             )
 
-        conn.commit()
-        conn.close()
+            if status == "active":
+                cursor.execute(
+                    """
+                    UPDATE moderation_template_state
+                    SET active_template_record_id = ?, updated_at = ?
+                    WHERE state_id = 1
+                    """,
+                    (template_record_id, now),
+                )
 
         row = self.get_moderation_template_by_id(template_record_id)
         if not row:
@@ -1476,36 +1485,33 @@ class DebateDatabase:
     ) -> Optional[Dict[str, Any]]:
         """Mark an existing template record as active and update the pointer."""
         now = datetime.now().isoformat()
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        with self.transaction() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute(
-            """
-            UPDATE moderation_templates
-            SET status = 'active',
-                updated_at = ?,
-                applied_at = COALESCE(applied_at, ?),
-                author_user_id = COALESCE(?, author_user_id)
-            WHERE template_record_id = ?
-            """,
-            (now, now, author_user_id, template_record_id),
-        )
+            cursor.execute(
+                """
+                UPDATE moderation_templates
+                SET status = 'active',
+                    updated_at = ?,
+                    applied_at = COALESCE(applied_at, ?),
+                    author_user_id = COALESCE(?, author_user_id)
+                WHERE template_record_id = ?
+                """,
+                (now, now, author_user_id, template_record_id),
+            )
 
-        if cursor.rowcount == 0:
-            conn.close()
-            return None
+            if cursor.rowcount == 0:
+                return None
 
-        cursor.execute(
-            """
-            UPDATE moderation_template_state
-            SET active_template_record_id = ?, updated_at = ?
-            WHERE state_id = 1
-            """,
-            (template_record_id, now),
-        )
+            cursor.execute(
+                """
+                UPDATE moderation_template_state
+                SET active_template_record_id = ?, updated_at = ?
+                WHERE state_id = 1
+                """,
+                (template_record_id, now),
+            )
 
-        conn.commit()
-        conn.close()
         return self.get_moderation_template_by_id(template_record_id)
 
     def get_active_moderation_template(self) -> Optional[Dict[str, Any]]:

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Snapshot — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -36,7 +36,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -52,7 +51,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -69,9 +68,9 @@
     <a class="button secondary" href="topics.html">Open topic map</a>
   </div>
 
-  <div class="callout soft" id="snapshot-empty" style="display:none;"></div>
+  <div class="callout soft hidden" id="snapshot-empty"></div>
 
-  <div id="snapshot-content" style="display:none;">
+  <div id="snapshot-content" class="hidden">
       <div class="row">
         <span class="pill">ID: <span class="mono" id="snapshot-id">-</span></span>
         <span class="pill">Timestamp: <span class="mono" id="snapshot-timestamp">-</span></span>
@@ -99,27 +98,27 @@
         <span class="pill">Frame id: <span class="mono" id="frame-id">-</span></span>
         <span class="pill">Frame version: <span class="mono" id="frame-version">-</span></span>
       </div>
-      <p style="margin:10px 0 0 0" id="frame-statement">Loading active frame...</p>
+      <p class="mt-10" id="frame-statement"><span class="skeleton skeleton-text-md"></span></p>
     </div>
 
     <hr />
     <h3>Incident Report</h3>
     <div id="incident-panel">
       <div class="callout soft" id="incident-empty">
-        <p style="margin:0">No incidents reported.</p>
+        <p class="m-0">No incidents reported.</p>
       </div>
-      <div class="callout soft" id="incident-content" style="display:none;">
+      <div class="callout soft hidden" id="incident-content">
         <div class="row">
           <span class="pill bad">INCIDENT</span>
           <span class="pill">Title: <span class="mono" id="incident-title">-</span></span>
           <span class="pill">Timestamp: <span class="mono" id="incident-ts">-</span></span>
         </div>
-        <p style="margin:12px 0 4px 0;"><strong>What happened:</strong></p>
-        <p id="incident-desc" style="margin:0 0 12px 0;"></p>
-        <p style="margin:4px 0;"><strong>Unreliable outputs:</strong></p>
-        <p id="incident-unreliable" style="margin:0 0 12px 0;"></p>
-        <p style="margin:4px 0;"><strong>Remediation planned:</strong></p>
-        <p id="incident-remediation" style="margin:0;"></p>
+        <p class="my-12-4"><strong>What happened:</strong></p>
+        <p id="incident-desc" class="mb-12"></p>
+        <p class="my-4"><strong>Unreliable outputs:</strong></p>
+        <p id="incident-unreliable" class="mb-12"></p>
+        <p class="my-4"><strong>Remediation planned:</strong></p>
+        <p id="incident-remediation" class="m-0"></p>
       </div>
     </div>
 
@@ -129,12 +128,12 @@
       <table class="table">
         <thead><tr><th>Outcome</th><th>Count</th><th>Notes</th></tr></thead>
         <tbody>
-          <tr><td><span class="pill good">Allowed</span></td><td class="mono" id="allowed-count">-</td><td>Included in this snapshot</td></tr>
-          <tr><td><span class="pill bad">Blocked</span></td><td class="mono" id="blocked-count">-</td><td>Excluded from all downstream steps</td></tr>
+          <tr><td data-label="Outcome"><span class="pill good">Allowed</span></td><td class="mono" id="allowed-count" data-label="Count">-</td><td data-label="Notes">Included in this snapshot</td></tr>
+          <tr><td data-label="Outcome"><span class="pill bad">Blocked</span></td><td class="mono" id="blocked-count" data-label="Count">-</td><td data-label="Notes">Excluded from all downstream steps</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="callout soft" style="margin-top:12px;">
+    <div class="callout soft mt-12">
       <div class="row">
         <span class="pill">Mean AU completeness: <span class="mono" id="au-completeness-mean">-</span></span>
         <span class="pill">p25/p50/p75: <span class="mono" id="au-completeness-dist">-</span></span>
@@ -143,65 +142,65 @@
     <div>
       <h4>Blocked reasons histogram</h4>
       <div class="row" id="block-reasons-row">
-        <small style="color:var(--muted)">No blocked-post data yet.</small>
+        <small class="text-muted">No blocked-post data yet.</small>
       </div>
     </div>
 
     <hr />
     <h3>Snapshot history</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Snapshots are immutable. The table below shows how the current debate has evolved over time.</p>
+    <p class="text-12-muted-mt-0">Snapshots are immutable. The table below shows how the current debate has evolved over time.</p>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Snapshot</th><th>Timestamp</th><th>Trigger</th><th>Verdict</th><th>Confidence</th><th>D</th></tr></thead>
         <tbody id="history-tbody">
-          <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading snapshot history...</td></tr>
+          <tr><td colspan="6"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
 
     <hr />
     <h3>Latest diff summary</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">When at least two snapshots exist, this compares the newest run to the previous one.</p>
-    <div id="diff-empty" class="callout soft" style="display:none;"></div>
-    <div id="diff-content" style="display:none;">
+    <p class="text-12-muted-mt-0">When at least two snapshots exist, this compares the newest run to the previous one.</p>
+    <div id="diff-empty" class="callout soft hidden"></div>
+    <div id="diff-content" class="hidden">
       <div class="row">
         <span class="pill">From: <span class="mono" id="diff-old-id">-</span></span>
         <span class="pill">To: <span class="mono" id="diff-new-id">-</span></span>
         <span class="pill">Confidence Δ: <span class="mono" id="diff-confidence-delta">-</span></span>
         <span class="pill">D Δ: <span class="mono" id="diff-margin-delta">-</span></span>
       </div>
-      <div class="callout soft" style="margin-top:16px;">
+      <div class="callout soft mt-16">
         <ul class="diff-list" id="diff-summary-list"></ul>
       </div>
       <details class="trace">
         <summary>Show diff surfaces for latest snapshot</summary>
-        <div class="codebox" id="diff-surfaces">Loading...</div>
+        <div class="codebox" id="diff-surfaces"><span class="skeleton skeleton-block"></span></div>
       </details>
     </div>
 
     <hr />
     <h3>Snapshot Integrity</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Tamper-evident digests and replay metadata for independent verification.</p>
+    <p class="text-12-muted-mt-0">Tamper-evident digests and replay metadata for independent verification.</p>
     <div class="callout soft">
-      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
-        <span class="pill">Input Hash: <span class="mono" id="integrity-input-hash" style="font-size:0.72rem">-</span></span>
-        <span class="pill">Output Hash: <span class="mono" id="integrity-output-hash" style="font-size:0.72rem">-</span></span>
+      <div class="row row-wrap-gap-sm">
+        <span class="pill">Input Hash: <span class="mono text-72" id="integrity-input-hash">-</span></span>
+        <span class="pill">Output Hash: <span class="mono text-72" id="integrity-output-hash">-</span></span>
       </div>
-      <div style="margin-top:var(--space-sm)">
+      <div class="mt-sm">
         <small><strong>Recipe versions:</strong></small>
-        <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px" id="integrity-recipe-versions"></div>
+        <div class="row wrap-gap-6-mt-4" id="integrity-recipe-versions"></div>
       </div>
-      <details class="trace" style="margin-top:var(--space-sm)">
+      <details class="trace mt-sm">
         <summary>Show replay manifest</summary>
-        <div class="codebox" id="integrity-replay-manifest">Loading...</div>
+        <div class="codebox" id="integrity-replay-manifest"><span class="skeleton skeleton-block"></span></div>
       </details>
     </div>
 
     <hr />
     <h3>Governance Context</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Frame mode, review schedule, and active policy for this snapshot.</p>
+    <p class="text-12-muted-mt-0">Frame mode, review schedule, and active policy for this snapshot.</p>
     <div class="callout soft">
-      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+      <div class="row row-wrap-gap-sm">
         <span class="pill">Frame mode: <span class="mono" id="governance-frame-mode">-</span></span>
         <span class="pill">Review cadence: <span class="mono" id="governance-cadence">-</span></span>
         <span class="pill">Moderation template: <span class="mono" id="governance-template">-</span></span>
@@ -212,9 +211,9 @@
 
     <hr />
     <h3>Participation Concentration</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Aggregate participation diagnostics for this snapshot.</p>
+    <p class="text-12-muted-mt-0">Aggregate participation diagnostics for this snapshot.</p>
     <div class="callout soft">
-      <div class="row" style="flex-wrap:wrap;gap:var(--space-sm)">
+      <div class="row row-wrap-gap-sm">
         <span class="pill">Participation entropy: <span class="mono" id="snap-part-entropy">-</span></span>
         <span class="pill">Top-1% share: <span class="mono" id="snap-top1-share">-</span></span>
         <span class="pill">Channel mix: <span class="mono" id="snap-channel-mix">-</span></span>
@@ -236,12 +235,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -250,7 +249,7 @@
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    <p class="text-12-muted-mt-0">Key terms and metrics used throughout the system.</p>
 
     <div class="glossary-term">Snapshot</div>
     <div class="glossary-def">An immutable capture of the debate state at a point in time. Includes the current verdict, moderation outcomes, topics, and scores.</div>
@@ -265,7 +264,7 @@
     <div class="glossary-def">The concrete items that changed between two snapshots: posts, topics, facts, arguments, and scores.</div>
 
     <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+    <p class="text-12-muted">For full specification, see <a href="about.html">About</a> page.</p>
   </div>
 </div>
 
@@ -340,7 +339,7 @@ function renderSnapshot(snapshot) {
   const reasonsRow = document.getElementById('block-reasons-row');
   const reasons = Object.entries(snapshot.block_reasons || {}).sort((a, b) => b[1] - a[1]);
   if (!reasons.length) {
-    reasonsRow.innerHTML = '<small style="color:var(--muted)">No blocked-post data in this snapshot.</small>';
+    reasonsRow.innerHTML = '<small class="text-muted">No blocked-post data in this snapshot.</small>';
   } else {
     reasonsRow.innerHTML = reasons.map(([reason, count]) =>
       `<span class="pill">${BDA.escapeHtml(reason)}: <span class="mono">${count}</span></span>`
@@ -358,7 +357,7 @@ function renderSnapshot(snapshot) {
   const recipeVersions = snapshot.recipe_versions || {};
   const recipeContainer = document.getElementById('integrity-recipe-versions');
   recipeContainer.innerHTML = Object.entries(recipeVersions).map(([k, v]) =>
-    `<span class="pill" style="font-size:0.72rem">${BDA.escapeHtml(k)}: ${BDA.escapeHtml(String(v))}</span>`
+    `<span class="pill text-72">${BDA.escapeHtml(k)}: ${BDA.escapeHtml(String(v))}</span>`
   ).join('');
 
   const replayManifest = snapshot.replay_manifest || {};
@@ -388,7 +387,7 @@ function renderFrameInfo(payload) {
 function renderHistory(history) {
   const tbody = document.getElementById('history-tbody');
   if (!history.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No snapshot history yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center-muted">No snapshot history yet.</td></tr>';
     return;
   }
 
@@ -484,14 +483,34 @@ async function initSnapshotPage() {
     const historyData = await BDA.api('/api/debate/snapshot-history');
     renderHistory(historyData.snapshots || []);
   } catch (error) {
-    renderHistory([]);
+    const container = document.getElementById('snapshot-history');
+    const errorMsg = error?.message || 'Unable to load snapshot history.';
+    const requestId = error?.payload?.request_id || '';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && container) {
+      BDA.showInlineError(container, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading snapshot history`);
+        initSnapshotPage();
+      });
+    } else {
+      renderHistory([]);
+    }
   }
 
   try {
     const diffData = await BDA.api('/api/debate/snapshot-diff');
     renderDiff(diffData);
   } catch (error) {
-    renderDiff({ error: error.message });
+    const errorMsg = error?.message || 'Unable to load snapshot diff.';
+    const requestId = error?.payload?.request_id || '';
+    const diffSurfaces = document.getElementById('diff-surfaces');
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && diffSurfaces) {
+      BDA.showInlineError(diffSurfaces, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading snapshot diff`);
+        initSnapshotPage();
+      });
+    } else {
+      renderDiff({ error: errorMsg });
+    }
   }
 
   try {
@@ -506,7 +525,17 @@ async function initSnapshotPage() {
       document.getElementById('governance-next-review').textContent = schedule.review_date || frameData.active_frame.next_review_date;
     }
   } catch (error) {
-    renderFrameInfo({});
+    const errorMsg = error?.message || 'Unable to load frame data.';
+    const requestId = error?.payload?.request_id || '';
+    const frameInfoEl = document.getElementById('frame-info');
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && frameInfoEl) {
+      BDA.showInlineError(frameInfoEl, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading frame data`);
+        initSnapshotPage();
+      });
+    } else {
+      renderFrameInfo({});
+    }
   }
 
   BDA.setupTableScroll();

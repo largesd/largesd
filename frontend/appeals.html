@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Appeals - Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <style>
     html.route-auth-pending {
       cursor: progress;
@@ -930,7 +930,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -946,7 +945,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -1038,6 +1037,7 @@
         </ol>
       </div>
       <form class="appeals-form" id="appeal-form" novalidate>
+        <input type="hidden" name="csrf_token" id="csrf_token" />
         <div class="form-group">
           <label for="appeal-grounds">Grounds</label>
           <textarea id="appeal-grounds" rows="5" required minlength="10" aria-describedby="appeal-grounds-hint appeal-grounds-error" placeholder="Explain why this snapshot should be reviewed (min 10 characters)."></textarea>
@@ -1090,7 +1090,7 @@
               <tr><th scope="col">Appeal</th><th scope="col">Status</th><th scope="col">Claimant</th><th scope="col">Filed</th></tr>
             </thead>
             <tbody id="appeals-tbody">
-              <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading appeals...</td></tr>
+              <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
             </tbody>
           </table>
         </div>
@@ -1111,7 +1111,16 @@
 <div id="shared-help-panel" data-panel="help-panel"></div>
 
 <script>
-const APPEALS_LOADING_ROW = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading appeals...</td></tr>';
+// Populate CSRF token from cookie into hidden form field
+(function() {
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  if (match) {
+    const input = document.getElementById('csrf_token');
+    if (input) input.value = decodeURIComponent(match[1]);
+  }
+})();
+
+const APPEALS_LOADING_ROW = '<tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>';
 const APPEALS_EMPTY_ROW = `
   <tr class="appeals-empty-row">
     <td colspan="4">
@@ -1202,9 +1211,13 @@ function setAppealsTableState(state) {
 function setAppealSubmitDisabled(disabled) {
   const button = document.getElementById('appeal-submit-btn');
   if (!button) return;
-  button.disabled = disabled;
-  button.setAttribute('aria-busy', String(disabled));
-  button.textContent = disabled ? 'Submitting Appeal...' : 'Submit Appeal';
+  if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+    BDA.setButtonBusy(button, disabled, 'Submitting Appeal...');
+  } else {
+    button.disabled = disabled;
+    button.setAttribute('aria-busy', String(disabled));
+    button.textContent = disabled ? 'Submitting Appeal...' : 'Submit Appeal';
+  }
 }
 
 function normalizeEvidenceList(raw) {
@@ -1293,10 +1306,17 @@ function renderAppealsMobilePlaceholder(message, kind = 'empty') {
   list.innerHTML = `<p class="${itemClass}">${BDA.escapeHtml(message)}</p>`;
 }
 
-function renderAppealsErrorRow(message) {
+function renderAppealsErrorRow(message, retryCallback = null) {
   const tbody = document.getElementById('appeals-tbody');
   setAppealsTableState('error');
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--bad)">${BDA.escapeHtml(message)}</td></tr>`;
+  const retryHtml = retryCallback
+    ? `<button type="button" class="retry-btn" data-retry="true">Retry</button>`
+    : '';
+  tbody.innerHTML = `<tr><td colspan="4" class="text-center-bad">${BDA.escapeHtml(message)} ${retryHtml}</td></tr>`;
+  if (retryCallback) {
+    const retryBtn = tbody.querySelector('[data-retry="true"]');
+    if (retryBtn) retryBtn.addEventListener('click', retryCallback);
+  }
 }
 
 function setAppealsLoading(isLoading, options = {}) {
@@ -1311,10 +1331,11 @@ function setAppealsLoading(isLoading, options = {}) {
   }
   if (isLoading && !preserveRows) {
     renderAppealsLoadingRow();
-    renderAppealsMobilePlaceholder('Loading appeals...');
+    renderAppealsMobilePlaceholder('<span class="spinner" aria-label="Loading" role="status"></span> Loading appeals...');
   }
   if (isLoading) {
-    updateAppealsMeta({ updatedLabel: preserveRows ? 'Refreshing...' : 'Loading...' });
+    const label = preserveRows ? 'Refreshing...' : 'Loading...';
+    updateAppealsMeta({ updatedLabel: `<span class="spinner" aria-label="Loading" role="status"></span> ${label}` });
   }
 }
 
@@ -1421,9 +1442,13 @@ async function loadAppeals(options = {}) {
   } catch (error) {
     if (requestId !== latestAppealsLoadRequest) return;
     const errorMessage = error.message || 'Failed to load appeals.';
+    const requestIdStr = error?.payload?.request_id || '';
     if (!hasHydratedAppeals) {
       setAppealsMessage(errorMessage, 'error');
-      renderAppealsErrorRow(errorMessage);
+      renderAppealsErrorRow(errorMessage, () => {
+        if (requestIdStr) console.error(`[request_id: ${requestIdStr}] Retry loading appeals`);
+        loadAppeals();
+      });
       renderAppealsMobilePlaceholder(errorMessage, 'error');
       updateAppealsMeta({ queueCount: '-', pendingCount: '-', updatedLabel: 'Unavailable' });
     } else {

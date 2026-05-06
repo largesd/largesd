@@ -10,12 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 
-from llm_client import LLMClient
+from backend.llm_client import LLMClient
 
 # Import from new fact checking skill
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from skills.fact_checking import RequestContext, V15FactCheckingSkill
 
 

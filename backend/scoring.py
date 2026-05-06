@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Dict, Tuple
 from dataclasses import dataclass
 
-from models import (
+from backend.models import (
     CanonicalFact, CanonicalArgument, TopicSideScores, Side, Topic
 )
 

@@ -1,13 +1,19 @@
 // Home page data loading and page-specific behavior.
 
+/* global BDA, DataBridge, Auth */
+
 function setButtonBusy(button, isBusy, busyLabel) {
-  if (!button) return;
-  if (!button.dataset.defaultLabel) {
-    button.dataset.defaultLabel = button.textContent.trim();
+  if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+    BDA.setButtonBusy(button, isBusy, busyLabel);
+  } else {
+    if (!button) return;
+    if (!button.dataset.defaultLabel) {
+      button.dataset.defaultLabel = button.textContent.trim();
+    }
+    button.disabled = isBusy;
+    button.setAttribute('aria-busy', String(isBusy));
+    button.textContent = isBusy ? busyLabel : button.dataset.defaultLabel;
   }
-  button.disabled = isBusy;
-  button.setAttribute('aria-busy', String(isBusy));
-  button.textContent = isBusy ? busyLabel : button.dataset.defaultLabel;
 }
 
 function updateHomeCTA(hasDebate) {
@@ -60,8 +66,10 @@ async function loadData() {
   setButtonBusy(refreshBtn, true, 'Refreshing...');
   setButtonBusy(ghRefreshBtn, true, 'Refreshing...');
   setHomeLoadingState(true);
-  statusEl.textContent = 'Loading...';
-  statusEl.className = 'api-status';
+  if (statusEl) {
+    statusEl.innerHTML = '<span class="spinner" aria-label="Loading" role="status"></span> Loading...';
+    statusEl.className = 'api-status';
+  }
 
   try {
     // Hard cutover: prefer DataBridge (GitHub mode)
@@ -171,8 +179,15 @@ async function loadData() {
     if (generateSnapshotBtn) {
       generateSnapshotBtn.hidden = true;
     }
-    statusEl.textContent = 'Offline';
-    statusEl.className = 'api-status error';
+    const errorMsg = error?.message || 'Failed to load data.';
+    const requestId = error?.payload?.request_id || '';
+    if (statusEl) {
+      statusEl.dataset.requestId = requestId;
+      BDA.showInlineError(statusEl, errorMsg, () => {
+        BDA.clearInlineError(statusEl);
+        void loadData();
+      });
+    }
 
     // Try to show cached data even on error
     if (DataBridge.hasCache()) {
@@ -278,14 +293,19 @@ async function triggerGenerateSnapshot() {
     }
   } catch (error) {
     console.error('Snapshot generation failed:', error);
+    const errorMsg = error?.message || 'Snapshot generation failed.';
+    const requestId = error?.payload?.request_id || '';
     if (statusEl) {
-      statusEl.textContent = 'Snapshot failed';
-      statusEl.className = 'api-status error';
+      statusEl.dataset.requestId = requestId;
+      BDA.showInlineError(statusEl, errorMsg, () => {
+        BDA.clearInlineError(statusEl);
+        void triggerGenerateSnapshot();
+      });
     }
     if (changesList) {
-      changesList.innerHTML = `<li class="post-error">Snapshot generation failed: ${BDA.escapeHtml(error.message || 'Unknown error')}</li>`;
+      changesList.innerHTML = `<li class="post-error">Snapshot generation failed: ${BDA.escapeHtml(errorMsg)}</li>`;
     }
-    BDA.showStatus('Snapshot generation failed: ' + (error.message || 'Unknown error'), true);
+    BDA.showStatus('Snapshot generation failed: ' + errorMsg, true);
   } finally {
     setButtonBusy(btn, false, 'Generating...');
   }
@@ -304,8 +324,14 @@ async function refreshFromGitHub() {
     statusEl.className = 'api-status connected';
     statusEl.title = 'Cached ' + DataBridge.formatCacheAge();
   } catch (error) {
-    statusEl.textContent = 'Refresh failed';
-    BDA.showStatus('Failed to refresh from GitHub: ' + error.message, true);
+    const errorMsg = error?.message || 'Refresh failed.';
+    const requestId = error?.payload?.request_id || '';
+    statusEl.dataset.requestId = requestId;
+    BDA.showInlineError(statusEl, errorMsg, () => {
+      BDA.clearInlineError(statusEl);
+      void refreshFromGitHub();
+    });
+    BDA.showStatus('Failed to refresh from GitHub: ' + errorMsg, true);
   } finally {
     setButtonBusy(btn, false, 'Refreshing...');
   }

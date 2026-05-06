@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Propose Debate - Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
 </head>
@@ -31,7 +31,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -51,7 +50,7 @@
     </div>
   </div>
 
-  <div id="status-message" class="status-message" style="display:none;"></div>
+  <div id="status-message" class="status-message hidden"></div>
 
   <div class="form-group">
     <label for="proposal-motion">Motion *</label>
@@ -84,7 +83,7 @@
   </div>
 
   <div class="row propose-action-row">
-    <button class="button" onclick="submitProposal()">Submit Proposal</button>
+    <button class="button" data-action="submit-proposal">Submit Proposal</button>
   </div>
 </section>
 
@@ -95,7 +94,7 @@
   </div>
   <div id="my-proposals-list">
     <div class="callout soft">
-      <p>Loading your proposals...</p>
+      <p><span class="spinner" aria-label="Loading" role="status"></span> Loading your proposals...</p>
     </div>
   </div>
 </section>
@@ -109,7 +108,7 @@
   </div>
 </footer>
 
-<button type="button" class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">^</button>
+<button type="button" class="back-to-top" data-action="scroll-top" aria-label="Back to top">^</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -136,6 +135,8 @@ async function init() {
   }
   await loadMyProposals();
 }
+
+BDA.registerAction('submit-proposal', submitProposal);
 
 async function submitProposal() {
   const motion = document.getElementById('proposal-motion').value.trim();

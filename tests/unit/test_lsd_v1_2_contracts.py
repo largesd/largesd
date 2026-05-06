@@ -138,7 +138,7 @@ def test_job_queue_claims_only_matching_runtime_profile_once():
 
 
 def test_rebuttal_types_from_judges():
-    from llm_client import MockLLMProvider
+    from backend.llm_client import MockLLMProvider
     provider = MockLLMProvider(seed=42)
     response = provider._mock_coverage_response()
     data = json.loads(response.content)
@@ -198,7 +198,7 @@ def test_v15_deterministic_ternary_p_values():
 
 def test_api_route_contracts_are_registered():
     os.environ["DEBATE_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "contracts.db")
-    from app_v3 import app
+    from backend.app_v3 import app
 
     routes = {rule.rule for rule in app.url_map.iter_rules()}
     expected = {

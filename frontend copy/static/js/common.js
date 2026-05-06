@@ -250,6 +250,13 @@ ${commonFooter}`;
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    // Add CSRF token for double-submit cookie pattern
+    const csrfInput = document.getElementById('csrf_token');
+    const csrfToken = csrfInput ? csrfInput.value : '';
+    if (csrfToken && !headers['X-CSRF-Token']) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+
     const debateId = this.getActiveDebateId();
     if (debateId && !headers['X-Debate-ID']) {
       headers['X-Debate-ID'] = debateId;

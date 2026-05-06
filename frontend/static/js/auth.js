@@ -125,18 +125,20 @@ const Auth = {
       userDiv.className = 'auth-link';
       userDiv.style.cssText = 'position:relative;display:inline-block;margin-left:8px';
       userDiv.innerHTML = `
-        <button class="auth-menu-btn" type="button" onclick="Auth.toggleUserMenu()" aria-label="Account menu" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu">
+        <button class="auth-menu-btn" type="button" data-action="toggle-user-menu" aria-label="Account menu" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu">
           <span>Account</span>
-          <span style="font-size:10px">▼</span>
+          <span class="text-10">▼</span>
         </button>
-        <div id="user-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 0;min-width:160px;z-index:100">
-          <div style="padding:8px 16px;border-bottom:1px solid var(--line)">
-            <div style="font-size:11px;color:var(--muted)">Signed in</div>
+        <div id="user-menu" class="user-menu">
+          <div class="user-menu-header">
+            <div class="text-11-muted">Signed in</div>
           </div>
-          <a href="#" onclick="Auth.logout();return false;" style="display:block;padding:10px 16px;color:var(--bad);font-size:13px;text-decoration:none">Logout</a>
+          <a href="#" class="user-menu-link" data-action="logout">Logout</a>
         </div>
       `;
       nav.appendChild(userDiv);
+      userDiv.querySelector('[data-action="toggle-user-menu"]').addEventListener('click', () => this.toggleUserMenu());
+      userDiv.querySelector('[data-action="logout"]').addEventListener('click', (e) => { e.preventDefault(); this.logout(); });
 
       // Close menu when clicking outside
       if (!this._userMenuDismissBound) {

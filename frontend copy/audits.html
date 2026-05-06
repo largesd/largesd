@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Evidence & Audits — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -347,6 +347,31 @@
             <span class="pill">Cap value: <span class="mono" id="audit-cap-value">-</span></span>
             <span class="pill">Pool capped: <span class="mono" id="audit-pool-capped">-</span></span>
           </div>
+          <div class="row" style="margin-top:12px;">
+            <span class="pill">Canonical mass: <span class="mono" id="audit-canonical-mass">-</span></span>
+            <span class="pill">Top-k coverage: <span class="mono" id="audit-topk-coverage">-</span></span>
+            <span class="pill">Selection coverage: <span class="mono" id="audit-selection-coverage">-</span></span>
+          </div>
+          <small style="color:var(--muted)">Diagnostic only. Shows what fraction of total canonical reference mass is represented by the selected set.</small>
+        </div>
+        <div class="callout soft">
+          <h4>Rarity utilization</h4>
+          <div class="row">
+            <span class="pill">Rarity slice ρ: <span class="mono" id="audit-rarity-rho">-</span></span>
+            <span class="pill">Low-centrality size: <span class="mono" id="audit-rarity-size">-</span></span>
+            <span class="pill">Utilization: <span class="mono" id="audit-rarity-util">-</span></span>
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <span class="pill">Impact: <span class="mono" id="audit-rarity-impact">-</span></span>
+          </div>
+        </div>
+        <div class="callout soft">
+          <h4>Participation concentration</h4>
+          <div class="row">
+            <span class="pill">Concentration buckets: <span class="mono" id="audit-conc-buckets">-</span></span>
+            <span class="pill">Channel mix: <span class="mono" id="audit-channel-mix">-</span></span>
+          </div>
+          <small style="color:var(--muted)">Aggregate, bucketed, small-count suppressed.</small>
         </div>
         <div class="callout soft">
           <h4>Coverage + frame sensitivity</h4>
@@ -355,6 +380,10 @@
             <span class="pill">Frame ΔD max: <span class="mono" id="audit-frame-delta">-</span></span>
             <span class="pill">Audit schema: <span class="mono" id="audit-schema-version">-</span></span>
           </div>
+        </div>
+        <div class="callout soft">
+          <h4>Drop-Component Sensitivity</h4>
+          <div id="audit-drop-component" style="font-size:0.84rem;color:var(--muted);">No drop-component sensitivity data in audit response.</div>
         </div>
       </div>
       <details class="trace" style="margin-top:16px;">
@@ -896,6 +925,8 @@ function renderV12AuditMatrix(audits) {
   const cap = audits.centrality_cap_effect || {};
   const coverage = audits.coverage_adequacy_trace || {};
   const frame = audits.frame_sensitivity || {};
+  const budget = audits.budget_adequacy || {};
+  const rarity = audits.rarity_utilization || {};
 
   document.getElementById('audit-schema-version').textContent = audits.audit_schema_version || '-';
   document.getElementById('audit-top3-pre').textContent = BDA.formatNumber(dominance.top_3_canonical_mass_share || 0, 4);
@@ -909,6 +940,41 @@ function renderV12AuditMatrix(audits) {
   document.getElementById('audit-pool-capped').textContent = BDA.formatNumber(cap.fraction_of_pool_capped || 0, 4);
   document.getElementById('audit-coverage-mode').textContent = audits.formula_registry?.feature_flags?.COVERAGE_MODE || 'leverage_legacy';
   document.getElementById('audit-frame-delta').textContent = BDA.formatNumber(frame.max_delta_d || 0, 4);
+
+  // Budget adequacy
+  document.getElementById('audit-canonical-mass').textContent = BDA.formatNumber(budget.canonical_mass_represented || 0, 4);
+  document.getElementById('audit-topk-coverage').textContent = BDA.formatNumber(budget.top_k_central_coverage || 0, 4);
+  document.getElementById('audit-selection-coverage').textContent = BDA.formatNumber(budget.selection_coverage || 0, 4);
+
+  // Rarity utilization
+  document.getElementById('audit-rarity-rho').textContent = BDA.formatNumber(rarity.rarity_slice_rho || 0, 4);
+  document.getElementById('audit-rarity-size').textContent = rarity.low_centrality_set_size ?? '-';
+  document.getElementById('audit-rarity-util').textContent = BDA.formatNumber(rarity.rarity_utilization || 0, 4);
+  document.getElementById('audit-rarity-impact').textContent = rarity.impact_on_verdict_description || '-';
+
+  // Participation concentration
+  const buckets = concentration.buckets || {};
+  const bucketDisplay = Object.entries(buckets).map(([k, v]) => `${k}=${v}`).join(', ') || '-';
+  document.getElementById('audit-conc-buckets').textContent = bucketDisplay;
+  const mix = participation.channel_mix || {};
+  const mixDisplay = Object.entries(mix).map(([k, v]) => `${k}=${BDA.formatNumber(v, 2)}`).join(', ') || '-';
+  document.getElementById('audit-channel-mix').textContent = mixDisplay;
+
+  // Drop-component sensitivity
+  const drop = audits.drop_component_sensitivity || {};
+  const dropEl = document.getElementById('audit-drop-component');
+  if (Object.keys(drop).length) {
+    dropEl.innerHTML = Object.entries(drop).map(([topic, vals]) => `
+      <div class="row" style="margin-bottom:6px;">
+        <span class="mono" style="min-width:120px;">${BDA.escapeHtml(topic)}</span>
+        <span class="pill" style="font-size:0.72rem;">without F: ${BDA.formatNumber(vals.d_without_factuality, 4)}</span>
+        <span class="pill" style="font-size:0.72rem;">without N: ${BDA.formatNumber(vals.d_without_normative, 4)}</span>
+        <span class="pill" style="font-size:0.72rem;">without Reason: ${BDA.formatNumber(vals.d_without_reasoning, 4)}</span>
+        <span class="pill" style="font-size:0.72rem;">without Cov: ${BDA.formatNumber(vals.d_without_coverage, 4)}</span>
+      </div>
+    `).join('');
+  }
+
   document.getElementById('audit-v12-raw').textContent = JSON.stringify({
     topic_dominance: audits.topic_dominance,
     topic_concentration: audits.topic_concentration,
@@ -920,6 +986,7 @@ function renderV12AuditMatrix(audits) {
     rarity_utilization: audits.rarity_utilization,
     coverage_adequacy_trace: audits.coverage_adequacy_trace,
     frame_sensitivity: audits.frame_sensitivity,
+    drop_component_sensitivity: audits.drop_component_sensitivity,
   }, null, 2);
 }
 

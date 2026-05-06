@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Register — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <style>
     .auth-container{max-width:420px;margin:40px auto;padding:0 18px}
     .auth-card{background:var(--surface-raised);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
@@ -81,6 +81,7 @@
       <div class="alert alert-success" id="success-alert"></div>
       
       <form id="register-form">
+        <input type="hidden" name="csrf_token" id="csrf_token" />
         <div class="form-group">
           <label for="display_name">Display Name</label>
           <input type="text" id="display_name" name="display_name" placeholder="How you'll appear in debates" required autocomplete="name" aria-describedby="error-alert" aria-invalid="false">
@@ -139,6 +140,15 @@ function getSafeNextPath() {
 }
 
 // Check if already logged in
+// Populate CSRF token from cookie into hidden form field
+(function() {
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  if (match) {
+    const input = document.getElementById('csrf_token');
+    if (input) input.value = decodeURIComponent(match[1]);
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
   const token = localStorage.getItem('access_token');
   if (token) {
@@ -242,10 +252,12 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
   submitBtn.innerHTML = '<span class="loading-spinner"></span>Creating account...';
   
   try {
+    const csrfToken = document.getElementById('csrf_token')?.value || '';
     const response = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken
       },
       body: JSON.stringify({ display_name, email, password })
     });

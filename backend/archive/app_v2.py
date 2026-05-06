@@ -9,11 +9,8 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from debate_engine_v2 import DebateEngineV2
-from debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
+from backend.debate_engine_v2 import DebateEngineV2
+from backend.debate_proposal import hydrate_debate_record, parse_debate_proposal_payload
 
 app = Flask(__name__, static_folder=None)
 CORS(app)

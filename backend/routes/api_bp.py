@@ -1,0 +1,100 @@
+"""API misc blueprint — health, version, metrics, static files."""
+import os
+from datetime import datetime
+
+from flask import Blueprint, jsonify, request, send_from_directory
+
+from backend import extensions
+from backend.email_submission_parser import EmailSubmissionParser
+
+api_bp = Blueprint('api', __name__)
+
+
+@api_bp.route('/api/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    redis_status = (
+        "connected" if extensions.redis_connected is True
+        else "disconnected" if extensions.redis_connected is False
+        else "not_configured"
+    )
+    return jsonify({
+        "status": "healthy",
+        "version": "3.0",
+        "auth_enabled": True,
+        "timestamp": datetime.now().isoformat(),
+        "redis": redis_status,
+    })
+
+
+@api_bp.route('/api/email-submission-template', methods=['GET'])
+def get_email_submission_template():
+    """Return the canonical email body template and expected fields."""
+    return jsonify({
+        "version": "BDA Submission v1",
+        "required_headers": [
+            "Debate-ID", "Resolution", "Submission-ID",
+            "Submitted-At", "Position", "Topic-Area"
+        ],
+        "body_sections": ["Facts", "Inference", "Counter-Arguments"],
+        "example": EmailSubmissionParser().build_email_body(
+            debate_id="DEBATE_ID",
+            resolution="RESOLUTION_TEXT",
+            side="FOR",
+            topic_id="t1",
+            facts="Your facts here.",
+            inference="Your inference here.",
+            counter_arguments="Optional counter-arguments."
+        ),
+    })
+
+
+@api_bp.route('/metrics', methods=['GET'])
+def get_metrics():
+    """Prometheus-style metrics endpoint for observability."""
+    lines = []
+    lines.append('# HELP snapshot_count_total Total snapshots generated')
+    lines.append('# TYPE snapshot_count_total counter')
+    try:
+        conn = extensions.db._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as c FROM snapshots")
+        count = cursor.fetchone()['c']
+        conn.close()
+        lines.append(f'snapshot_count_total {count}')
+    except Exception:
+        lines.append('snapshot_count_total 0')
+    lines.append('# HELP llm_calls_total Total LLM API calls')
+    lines.append('# TYPE llm_calls_total counter')
+    usage = extensions.debate_engine.llm_client.get_usage_summary()
+    lines.append(f'llm_calls_total{{provider="{usage.get("provider", "mock")}"}} {usage.get("call_count", 0)}')
+    lines.append('# HELP llm_tokens_total Total LLM tokens consumed')
+    lines.append('# TYPE llm_tokens_total counter')
+    lines.append(f'llm_tokens_total{{type="prompt"}} {usage.get("prompt_tokens", 0)}')
+    lines.append(f'llm_tokens_total{{type="completion"}} {usage.get("completion_tokens", 0)}')
+    return '\n'.join(lines) + '\n', 200, {'Content-Type': 'text/plain; version=0.0.4'}
+
+
+@api_bp.route('/', defaults={'path': ''})
+@api_bp.route('/<path:path>')
+def serve_static(path):
+    """Serve static files"""
+    if not path:
+        path = 'index.html'
+    # Security: prevent directory traversal
+    path = path.replace('..', '').lstrip('/')
+
+    frontend_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'frontend')
+
+    try:
+        response = send_from_directory(frontend_dir, path)
+    except Exception:
+        # Return index.html for SPA routing
+        response = send_from_directory(frontend_dir, 'index.html')
+
+    # Set CSRF cookie for HTML pages so forms can include the token
+    if getattr(response, 'content_type', '').startswith('text/html'):
+        from backend.utils.middleware import set_csrf_cookie
+        response = set_csrf_cookie(response)
+
+    return response

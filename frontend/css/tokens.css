@@ -1,0 +1,48 @@
+:root {
+  --surface-base: oklch(0.96 0.009 248);
+  --surface-raised: oklch(0.985 0.006 248);
+  --surface-muted: oklch(0.93 0.012 248);
+  --surface-accent: oklch(0.92 0.028 248);
+  --ink-strong: oklch(0.26 0.028 248);
+  --ink-default: oklch(0.37 0.024 248);
+  --ink-soft: oklch(0.5 0.02 248);
+  --line: oklch(0.84 0.015 248);
+  --line-strong: oklch(0.74 0.02 248);
+  --accent: oklch(0.44 0.1 248);
+  --accent-hover: oklch(0.39 0.11 248);
+  --good: oklch(0.55 0.14 155);
+  --warn: oklch(0.55 0.14 88);
+  --bad: oklch(0.57 0.17 28);
+  --state-good-ink: oklch(0.42 0.09 155);
+  --state-warn-ink: oklch(0.35 0.09 88);
+  --state-bad-ink: oklch(0.42 0.12 28);
+
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+
+  --sans: "Public Sans", "Noto Sans", sans-serif;
+  --serif: "Source Serif 4", "Literata", serif;
+  --mono: "Red Hat Mono", "Menlo", "Consolas", monospace;
+
+  /* Legacy aliases used in page-level styles */
+  --bg: var(--surface-base);
+  --panel: var(--surface-raised);
+  --panel-2: var(--surface-muted);
+  --muted: var(--ink-soft);
+  --text: var(--ink-strong);
+  --line-2: var(--line-strong);
+  --shadow: 0 1px 1px color-mix(in oklch, var(--ink-strong), white 92%);
+
+  color-scheme: light;
+}

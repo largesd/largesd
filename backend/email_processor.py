@@ -41,13 +41,10 @@ from email.message import EmailMessage
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
-# Ensure backend modules are importable
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from debate_engine_v2 import DebateEngineV2
-from email_submission_parser import EmailSubmissionParser, EmailSubmissionError
-from github_publisher import GitHubPublisher, GitHubPublishError
-from published_results import PublishedResultsBuilder
+from backend.debate_engine_v2 import DebateEngineV2
+from backend.email_submission_parser import EmailSubmissionParser, EmailSubmissionError
+from backend.github_publisher import GitHubPublisher, GitHubPublishError
+from backend.published_results import PublishedResultsBuilder
 
 
 class EmailProcessorConfig:

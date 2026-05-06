@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Topic — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -57,7 +57,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -73,7 +72,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -83,11 +82,11 @@
 
 <div class="topic-shell">
   <aside class="subnav card">
-    <h3 style="margin-top:0;font-size:14px">Topic Navigation</h3>
+    <h3 class="mt-0-text-14">Topic Navigation</h3>
     <a href="topics.html" class="subnav-link">← All Topics</a>
     <hr />
     <div id="topic-list">
-      <small style="color:var(--muted)">Loading topics...</small>
+      <span class="skeleton skeleton-text-sm"></span>
     </div>
   </aside>
 
@@ -95,7 +94,7 @@
     <section class="card">
       <div class="section-head">
         <div>
-          <h1 id="topic-name">Loading...</h1>
+          <h1 id="topic-name"><span class="skeleton skeleton-text-lg"></span></h1>
           <p class="lede" id="topic-scope"></p>
         </div>
         <span class="pill" id="topic-id-badge">-</span>
@@ -122,20 +121,20 @@
 
       <div class="row">
         <span class="pill">Status: <span class="mono" id="topic-status">-</span></span>
-        <span class="pill" id="topic-operation" style="display:none">-</span>
+        <span class="pill hidden" id="topic-operation">-</span>
       </div>
 
       <hr />
       <h3>Steelman Summaries</h3>
       
       <div class="steelman for">
-        <strong style="color:var(--good)">FOR:</strong>
-        <p id="summary-for" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
+        <strong class="text-good">FOR:</strong>
+        <p id="summary-for" class="mt-8-text-muted">No summary available yet.</p>
       </div>
       
       <div class="steelman against">
-        <strong style="color:var(--warn)">AGAINST:</strong>
-        <p id="summary-against" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
+        <strong class="text-warn">AGAINST:</strong>
+        <p id="summary-against" class="mt-8-text-muted">No summary available yet.</p>
       </div>
 
       <hr />
@@ -152,7 +151,7 @@
             </tr>
           </thead>
           <tbody id="scores-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading scores...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -169,12 +168,12 @@
       <h3>Facts & Arguments</h3>
       <div class="grid cols2" id="facts-args-grid">
         <div>
-          <h4 style="color:var(--good)">FOR Facts</h4>
-          <div id="for-facts"><small style="color:var(--muted)">Loading...</small></div>
+          <h4 class="text-good">FOR Facts</h4>
+          <div id="for-facts"><span class="skeleton skeleton-text-md"></span></div>
         </div>
         <div>
-          <h4 style="color:var(--warn)">AGAINST Facts</h4>
-          <div id="against-facts"><small style="color:var(--muted)">Loading...</small></div>
+          <h4 class="text-warn">AGAINST Facts</h4>
+          <div id="against-facts"><span class="skeleton skeleton-text-md"></span></div>
         </div>
       </div>
     </section>
@@ -190,7 +189,7 @@
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -199,7 +198,7 @@
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Topic geometry metrics and terms.</p>
+    <p class="text-12-muted-mt-0">Topic geometry metrics and terms.</p>
     
     <div class="glossary-term">Relevance (Rel)</div>
     <div class="glossary-def">Content mass share - how much of the total debate content belongs to this topic.</div>
@@ -286,7 +285,17 @@ async function loadTopicData() {
     
   } catch (error) {
     console.error('Error loading topic:', error);
-    document.getElementById('topic-name').textContent = 'Error Loading Topic';
+    const topicNameEl = document.getElementById('topic-name');
+    const errorMsg = error?.message || 'Error loading topic.';
+    const requestId = error?.payload?.request_id || '';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function') {
+      BDA.showInlineError(topicNameEl, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading topic`);
+        loadTopicData();
+      });
+    } else {
+      topicNameEl.textContent = 'Error Loading Topic';
+    }
   }
 }
 
@@ -326,7 +335,7 @@ function renderFactList(elementId, facts, colorVar) {
   const container = document.getElementById(elementId);
   
   if (facts.length === 0) {
-    container.innerHTML = '<small style="color:var(--muted)">No facts yet.</small>';
+    container.innerHTML = '<small class="text-muted">No facts yet.</small>';
     return;
   }
   
@@ -347,43 +356,43 @@ function renderFactList(elementId, facts, colorVar) {
     const provenance = f.provenance_spans || [];
     
     return `
-    <div style="background:var(--surface-muted);padding:10px;border-radius:8px;margin:8px 0;border:1px solid var(--line)">
-      <div style="font-size:13px">${BDA.escapeHtml(f.canon_fact_text)}</div>
-      <div class="row" style="margin:8px 0 0 0;font-size:11px;flex-wrap:wrap;gap:6px;">
-        <span class="pill" style="border-color:${statusColor};color:${statusColor}">${BDA.escapeHtml(status)}</span>
+    <div class="surface-box">
+      <div class="text-13">${BDA.escapeHtml(f.canon_fact_text)}</div>
+      <div class="row mt-8-text-11-wrap-gap-6">
+        <span class="pill border-${status === 'SUPPORTED' ? 'good' : status === 'REFUTED' ? 'bad' : 'warn'} text-${status === 'SUPPORTED' ? 'good' : status === 'REFUTED' ? 'bad' : 'warn'}">${BDA.escapeHtml(status)}</span>
         <span class="pill mono">p=${BDA.formatNumber(Number(p), 1)}</span>
         <span class="pill mono">Best: ${formatTier(f.v15_best_evidence_tier)}</span>
-        <span style="color:var(--muted)">${f.member_count} source${f.member_count !== 1 ? 's' : ''}</span>
+        <span class="text-muted">${f.member_count} source${f.member_count !== 1 ? 's' : ''}</span>
       </div>
       ${status === 'INSUFFICIENT' && f.v15_insufficiency_reason ? `
-      <div style="margin-top:6px;">
-        <span class="pill warn" style="font-size:0.72rem;">${BDA.escapeHtml(f.v15_insufficiency_reason)}</span>
+      <div class="mt-6">
+        <span class="pill warn text-72">${BDA.escapeHtml(f.v15_insufficiency_reason)}</span>
       </div>` : ''}
-      ${flags.length ? `<div style="margin-top:6px;">${flagTags}</div>` : ''}
+      ${flags.length ? `<div class="mt-6">${flagTags}</div>` : ''}
       ${f.operationalization ? `
-      <details style="margin-top:8px;font-size:0.82rem;">
+      <details class="mt-8-text-82">
         <summary>Operationalization</summary>
-        <p style="margin:4px 0 0 0;color:var(--ink-soft);">${BDA.escapeHtml(f.operationalization)}</p>
+        <p class="mt-4-text-ink-soft">${BDA.escapeHtml(f.operationalization)}</p>
       </details>` : ''}
-      <details style="margin-top:8px;font-size:0.82rem;">
+      <details class="mt-8-text-82">
         <summary>Tier distribution</summary>
-        <p style="margin:4px 0 0 0;color:var(--ink-soft);">${tierDist}</p>
+        <p class="mt-4-text-ink-soft">${tierDist}</p>
       </details>
       ${Object.keys(synth).length ? `
-      <details style="margin-top:8px;font-size:0.82rem;">
+      <details class="mt-8-text-82">
         <summary>Synthesis logic</summary>
-        <div class="codebox" style="font-size:0.78rem;margin-top:4px;">${BDA.escapeHtml(JSON.stringify(synth, null, 2))}</div>
+        <div class="codebox text-78-mt-4">${BDA.escapeHtml(JSON.stringify(synth, null, 2))}</div>
       </details>` : ''}
       ${resolved ? `
-      <div style="margin-top:6px;font-size:0.82rem;">
+      <div class="mt-6-text-82">
         <span class="pill mono">Value: ${BDA.escapeHtml(String(resolved.value))} ${BDA.escapeHtml(resolved.unit || '')}</span>
         <span class="pill mono">Type: ${BDA.escapeHtml(resolved.type || '-')}</span>
         ${resolved.lower_bound !== undefined ? `<span class="pill mono">[${BDA.formatNumber(resolved.lower_bound, 3)}, ${BDA.formatNumber(resolved.upper_bound, 3)}]</span>` : ''}
       </div>` : ''}
       ${provenance.length ? `
-      <details style="margin-top:8px;font-size:0.82rem;">
+      <details class="mt-8-text-82">
         <summary>Provenance spans (${provenance.length})</summary>
-        <ul style="margin:4px 0 0 0;padding-left:16px;color:var(--ink-soft);">
+        <ul class="mt-4-pl-16-text-ink-soft">
           ${provenance.map(s => `<li class="mono">${BDA.escapeHtml(s.span_id || s)}</li>`).join('')}
         </ul>
       </details>` : ''}
@@ -399,7 +408,7 @@ async function loadTopicList() {
     
     const container = document.getElementById('topic-list');
     if (topics.length === 0) {
-      container.innerHTML = '<small style="color:var(--muted)">No topics available.</small>';
+      container.innerHTML = '<small class="text-muted">No topics available.</small>';
       return;
     }
     
@@ -412,6 +421,17 @@ async function loadTopicList() {
     
   } catch (error) {
     console.error('Error loading topic list:', error);
+    const container = document.getElementById('topic-list');
+    const errorMsg = error?.message || 'Failed to load topics.';
+    const requestId = error?.payload?.request_id || '';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function') {
+      BDA.showInlineError(container, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading topics`);
+        loadTopicList();
+      });
+    } else if (container) {
+      container.innerHTML = '<small class="text-muted">Failed to load topics.</small>';
+    }
   }
 }
 

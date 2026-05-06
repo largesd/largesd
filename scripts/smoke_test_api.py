@@ -55,6 +55,14 @@ class SmokeTestClient:
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
 
+    def _get_csrf_token(self) -> str:
+        """Fetch an HTML page to set the CSRF cookie, then return the token."""
+        self.session.get(f"{self.base}/login.html")
+        for cookie in self.session.cookies:
+            if cookie.name == "csrf_token":
+                return cookie.value
+        return ""
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -64,6 +72,8 @@ class SmokeTestClient:
             headers["Authorization"] = f"Bearer {self.token}"
         if self.debate_id:
             headers["X-Debate-ID"] = self.debate_id
+        if not headers.get("Authorization"):
+            headers["X-CSRF-Token"] = self._get_csrf_token()
         resp = self.session.post(
             f"{self.base}{endpoint}",
             headers=headers,

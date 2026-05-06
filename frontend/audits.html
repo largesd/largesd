@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Evidence & Audits — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -107,7 +107,6 @@
           <a href="topics.html" role="menuitem">Topics</a>
           <a href="audits.html" role="menuitem" class="active" aria-current="page">Audits</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -123,7 +122,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -139,16 +138,16 @@
     <a class="button secondary" href="verdict.html">Jump to verdict</a>
   </div>
 
-  <div class="callout soft" id="analysis-empty" style="display:none;"></div>
+  <div class="callout soft hidden" id="analysis-empty"></div>
 
-  <div id="analysis-content" style="display:none;">
+  <div id="analysis-content" class="hidden">
     <div class="analysis-tabs" role="tablist" aria-label="Evidence and audits views">
       <button type="button" class="analysis-tab" id="analysis-tab-evidence" data-tab="evidence" role="tab" aria-controls="analysis-panel-evidence" aria-selected="false" tabindex="-1">Evidence</button>
       <button type="button" class="analysis-tab" id="analysis-tab-audits" data-tab="audits" role="tab" aria-controls="analysis-panel-audits" aria-selected="false" tabindex="-1">Audits</button>
     </div>
 
     <section class="analysis-panel" id="analysis-panel-evidence" data-tab-panel="evidence" role="tabpanel" aria-labelledby="analysis-tab-evidence" hidden>
-      <div class="callout soft" id="evidence-panel-error" style="display:none;"></div>
+      <div class="callout soft hidden" id="evidence-panel-error"></div>
 
       <div class="callout soft">
         <div class="row">
@@ -157,7 +156,7 @@
           <span class="pill">Margin D: <span class="mono" id="evidence-margin">-</span></span>
           <span class="pill">Margin needed for flip: <span class="mono" id="evidence-flip-margin">-</span></span>
         </div>
-        <p style="margin-bottom:0" id="evidence-summary">Loading evidence targets...</p>
+        <p class="mb-0" id="evidence-summary"><span class="skeleton skeleton-text-sm"></span></p>
       </div>
 
       <hr />
@@ -166,7 +165,7 @@
         <table class="table">
           <thead><tr><th>Target</th><th>Side</th><th>Current state</th><th>Impact on D</th><th>Evidence needed</th></tr></thead>
           <tbody id="high-impact-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -177,57 +176,57 @@
         <table class="table">
           <thead><tr><th>Target</th><th>Side</th><th>Leverage</th><th>Impact on D</th><th>Evidence type</th></tr></thead>
           <tbody id="medium-impact-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
 
       <hr />
       <h3>Update triggers</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">These are the live threshold statements most likely to change the current outcome.</p>
+      <p class="text-12-muted-mt-0">These are the live threshold statements most likely to change the current outcome.</p>
       <div class="callout soft">
         <ul class="compact-list" id="trigger-list">
-          <li>Loading update triggers...</li>
+          <li><span class="skeleton skeleton-text-sm"></span></li>
         </ul>
       </div>
 
       <hr />
       <div class="row">
         <a class="pill" href="verdict.html">← Back to Verdict</a>
-        <button class="pill" type="button" onclick="setAnalysisTab('audits')">View audit stress tests →</button>
+        <button class="pill" type="button" data-action="set-analysis-tab" data-tab="audits">View audit stress tests →</button>
       </div>
     </section>
 
     <section class="analysis-panel" id="analysis-panel-audits" data-tab-panel="audits" role="tabpanel" aria-labelledby="analysis-tab-audits" hidden>
-      <div class="callout soft" id="audits-panel-error" style="display:none;"></div>
+      <div class="callout soft hidden" id="audits-panel-error"></div>
 
       <p><small>Audit outputs are live calculations tied to the current snapshot rather than canned examples.</small></p>
 
       <!-- Topic focus bar -->
       <div class="topic-focus-bar" id="topic-focus-bar">
-        <div class="row" style="align-items:stretch;">
+        <div class="row items-stretch">
           <select class="topic-focus-select" id="topic-focus-select" aria-label="Focus audits on a topic">
             <option value="">All topics</option>
           </select>
-          <button type="button" class="pill" id="topic-focus-clear" style="display:none;">Clear focus</button>
+          <button type="button" class="pill hidden" id="topic-focus-clear">Clear focus</button>
         </div>
         <div class="row" id="topic-focus-pills"></div>
-        <div class="topic-focus-context" id="topic-focus-context" style="display:none;"></div>
+        <div class="topic-focus-context hidden" id="topic-focus-context"></div>
       </div>
 
       <hr />
       <h3 id="topic-geometry">Topic geometry audit</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
+      <p class="text-12-muted-mt-0">Tracks topic formation, evolution, and quality across the current snapshot.</p>
 
       <!-- Selected topic summary -->
-      <div class="topic-focus-summary" id="selected-topic-summary" style="display:none;"></div>
+      <div class="topic-focus-summary hidden" id="selected-topic-summary"></div>
 
       <h4>Lineage map</h4>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Topic</th><th>Parent topic ids</th><th>Operation</th><th>Drift</th></tr></thead>
           <tbody id="lineage-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -237,7 +236,7 @@
         <table class="table">
           <thead><tr><th>Topic</th><th><span class="tooltip" data-tooltip="Share of claim-producing content">Content mass</span></th><th><span class="tooltip" data-tooltip="Change from previous snapshot">Drift score</span></th><th><span class="tooltip" data-tooltip="Coherence / Distinctness">Geometry quality</span></th></tr></thead>
           <tbody id="geometry-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -245,14 +244,14 @@
 
       <hr />
       <h3>Side-label symmetry audit</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests whether the verdict changes when FOR and AGAINST labels are swapped.</p>
+      <p class="text-12-muted-mt-0">Tests whether the verdict changes when FOR and AGAINST labels are swapped.</p>
       <div class="audit-grid">
         <div class="callout soft">
           <div class="row">
             <span class="pill">median ΔD: <span class="mono" id="symmetry-median-delta">-</span></span>
             <span class="pill">|ΔD|: <span class="mono" id="symmetry-abs-delta">-</span></span>
           </div>
-          <p style="margin-bottom:0" id="symmetry-interpretation">Loading symmetry audit...</p>
+          <p class="mb-0" id="symmetry-interpretation"><span class="skeleton skeleton-text-sm"></span></p>
         </div>
         <div class="callout soft">
           <div class="row">
@@ -262,23 +261,23 @@
           <small>Swapped D is reflected back into the original orientation to show how far the label flip moves the margin.</small>
         </div>
       </div>
-      <div class="table-wrap" style="margin-top:16px;">
+      <div class="table-wrap mt-16">
         <table class="table">
           <thead><tr><th>Topic</th><th>ΔQ FOR</th><th>ΔQ AGAINST</th><th>Asymmetry</th></tr></thead>
           <tbody id="symmetry-topics-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">No topic-level symmetry deltas available.</td></tr>
+            <tr><td colspan="4" class="text-center-muted">No topic-level symmetry deltas available.</td></tr>
           </tbody>
         </table>
       </div>
 
       <hr />
       <h3>Extraction stability</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Measures consistency of FACT and ARGUMENT extraction across reruns.</p>
+      <p class="text-12-muted-mt-0">Measures consistency of FACT and ARGUMENT extraction across reruns.</p>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Layer</th><th>Jaccard</th><th>Precision</th><th>Recall</th><th>Set sizes</th></tr></thead>
           <tbody id="stability-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -286,14 +285,14 @@
         <span class="pill">Runs: <span class="mono" id="stability-runs">-</span></span>
         <span class="pill">Stability score: <span class="mono" id="stability-score">-</span></span>
       </div>
-      <details class="trace" style="margin-top:16px;">
+      <details class="trace mt-16">
         <summary>Mismatch report</summary>
         <div class="codebox" id="mismatch-report">No mismatch report yet.</div>
       </details>
 
       <hr />
       <h3>Evaluator disagreement</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Shows how much judge scores diverge in the current run.</p>
+      <p class="text-12-muted-mt-0">Shows how much judge scores diverge in the current run.</p>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Quantity</th><th>Median / IQR</th><th>Interpretation</th></tr></thead>
@@ -303,7 +302,7 @@
 
       <hr />
       <h3>Relevance sensitivity</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Tests how perturbing topic relevance weights affects the verdict.</p>
+      <p class="text-12-muted-mt-0">Tests how perturbing topic relevance weights affects the verdict.</p>
       <div class="audit-grid">
         <div class="callout soft">
           <div class="row">
@@ -317,13 +316,13 @@
             <span class="pill">Stability ratio: <span class="mono" id="rel-stability-ratio">-</span></span>
             <span class="pill">Interpretation: <span class="mono" id="rel-interpretation">-</span></span>
           </div>
-          <div class="row" id="rel-verdict-distribution" style="margin-top:12px;"></div>
+          <div class="row mt-12" id="rel-verdict-distribution"></div>
         </div>
       </div>
 
       <hr />
       <h3>v1.2 audit matrix</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">High-leverage LSD v1.2 channels: dominance, merge sensitivity, integrity, rarity, budget adequacy, and cap effects.</p>
+      <p class="text-12-muted-mt-0">High-leverage LSD v1.2 channels: dominance, merge sensitivity, integrity, rarity, budget adequacy, and cap effects.</p>
       <div class="audit-grid">
         <div class="callout soft">
           <h4>Topic dominance + merge sensitivity</h4>
@@ -348,12 +347,12 @@
             <span class="pill">Cap value: <span class="mono" id="audit-cap-value">-</span></span>
             <span class="pill">Pool capped: <span class="mono" id="audit-pool-capped">-</span></span>
           </div>
-          <div class="row" style="margin-top:12px;">
+          <div class="row mt-12">
             <span class="pill">Canonical mass: <span class="mono" id="audit-canonical-mass">-</span></span>
             <span class="pill">Top-k coverage: <span class="mono" id="audit-topk-coverage">-</span></span>
             <span class="pill">Selection coverage: <span class="mono" id="audit-selection-coverage">-</span></span>
           </div>
-          <small style="color:var(--muted)">Diagnostic only. Shows what fraction of total canonical reference mass is represented by the selected set.</small>
+          <small class="text-muted">Diagnostic only. Shows what fraction of total canonical reference mass is represented by the selected set.</small>
         </div>
         <div class="callout soft">
           <h4>Rarity utilization</h4>
@@ -362,7 +361,7 @@
             <span class="pill">Low-centrality size: <span class="mono" id="audit-rarity-size">-</span></span>
             <span class="pill">Utilization: <span class="mono" id="audit-rarity-util">-</span></span>
           </div>
-          <div class="row" style="margin-top:12px;">
+          <div class="row mt-12">
             <span class="pill">Impact: <span class="mono" id="audit-rarity-impact">-</span></span>
           </div>
         </div>
@@ -372,7 +371,7 @@
             <span class="pill">Concentration buckets: <span class="mono" id="audit-conc-buckets">-</span></span>
             <span class="pill">Channel mix: <span class="mono" id="audit-channel-mix">-</span></span>
           </div>
-          <small style="color:var(--muted)">Aggregate, bucketed, small-count suppressed.</small>
+          <small class="text-muted">Aggregate, bucketed, small-count suppressed.</small>
         </div>
         <div class="callout soft">
           <h4>Coverage + frame sensitivity</h4>
@@ -384,10 +383,10 @@
         </div>
         <div class="callout soft">
           <h4>Drop-Component Sensitivity</h4>
-          <div id="audit-drop-component" style="font-size:0.84rem;color:var(--muted);">No drop-component sensitivity data in audit response.</div>
+          <div id="audit-drop-component" class="text-84-muted">No drop-component sensitivity data in audit response.</div>
         </div>
       </div>
-      <details class="trace" style="margin-top:16px;">
+      <details class="trace mt-16">
         <summary>Show raw v1.2 audit channels</summary>
         <div class="codebox" id="audit-v12-raw">No v1.2 audit channels loaded.</div>
       </details>
@@ -398,12 +397,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -412,7 +411,7 @@
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms used in evidence-target analysis and robustness audits.</p>
+    <p class="text-12-muted-mt-0">Key terms used in evidence-target analysis and robustness audits.</p>
 
     <div class="glossary-term">Impact on D</div>
     <div class="glossary-def">Estimated movement in the verdict margin if the target changes substantially.</div>
@@ -430,7 +429,7 @@
     <div class="glossary-def">How much the verdict changes when topic relevance weights are perturbed.</div>
 
     <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+    <p class="text-12-muted">For full specification, see <a href="about.html">About</a> page.</p>
   </div>
 </div>
 
@@ -455,6 +454,8 @@ function getRequestedTab() {
 function getRequestedTopicId() {
   return new URLSearchParams(window.location.search).get('topic') || null;
 }
+
+BDA.registerAction('set-analysis-tab', (el) => setAnalysisTab(el.dataset.tab));
 
 function setAnalysisTab(tab, options = {}) {
   const { updateUrl = true } = options;
@@ -534,7 +535,7 @@ function currentStateText(target) {
 function renderTargets(tbodyId, targets, includeEvidenceNeeded) {
   const tbody = document.getElementById(tbodyId);
   if (!targets.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No targets in this bucket.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No targets in this bucket.</td></tr>';
     return;
   }
 
@@ -636,8 +637,8 @@ function renderTopicGeometrySection() {
   const geometryTbody = document.getElementById('geometry-tbody');
 
   if (!items.length) {
-    lineageTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No lineage data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
-    geometryTbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No geometry data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
+    lineageTbody.innerHTML = `<tr><td colspan="4" class="text-center-muted">${AUDITS_STATE.selectedTopicId ? 'No lineage data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
+    geometryTbody.innerHTML = `<tr><td colspan="4" class="text-center-muted">${AUDITS_STATE.selectedTopicId ? 'No geometry data for the selected topic.' : 'No topic geometry available.'}</td></tr>`;
     document.getElementById('geometry-summary-row').innerHTML = '';
     return;
   }
@@ -681,7 +682,7 @@ function renderSymmetrySection() {
   const topicDeltas = Object.entries(filterSymmetryTopicDeltas(symmetry.topic_deltas || {}));
   const tbody = document.getElementById('symmetry-topics-tbody');
   if (!topicDeltas.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${AUDITS_STATE.selectedTopicId ? 'No symmetry deltas for the selected topic.' : 'No topic-level symmetry deltas available.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center-muted">${AUDITS_STATE.selectedTopicId ? 'No symmetry deltas for the selected topic.' : 'No topic-level symmetry deltas available.'}</td></tr>`;
     return;
   }
 
@@ -721,7 +722,7 @@ function renderSelectedTopicSummary() {
       <span class="pill">Coherence: <span class="mono">${BDA.formatNumber(meta.coherence, 2)}</span></span>
       <span class="pill">Distinctness: <span class="mono">${BDA.formatNumber(meta.distinctness, 2)}</span></span>
     </div>
-    <div class="row" style="margin-top:8px;">
+    <div class="row mt-8">
       <a class="pill" href="topic.html?id=${encodeURIComponent(meta.topic_id)}">Open topic detail</a>
       <a class="pill" href="topics.html">Back to full topics list</a>
     </div>
@@ -896,9 +897,9 @@ function renderStability(stability) {
 
 function renderDisagreement(disagreement) {
   document.getElementById('disagreement-tbody').innerHTML = `
-    <tr><td>Reasoning spread</td><td class="mono">${BDA.formatNumber(disagreement.reasoning_iqr_median, 2)}</td><td>Median IQR across judge reasoning scores.</td></tr>
-    <tr><td>Coverage spread</td><td class="mono">${BDA.formatNumber(disagreement.coverage_iqr_median, 2)}</td><td>Median IQR across judge coverage scores.</td></tr>
-    <tr><td>Overall score spread</td><td class="mono">${BDA.formatNumber(disagreement.overall_iqr, 2)}</td><td>Spread of final side scores.</td></tr>
+    <tr><td data-label="Quantity">Reasoning spread</td><td class="mono" data-label="Median / IQR">${BDA.formatNumber(disagreement.reasoning_iqr_median, 2)}</td><td data-label="Interpretation">Median IQR across judge reasoning scores.</td></tr>
+    <tr><td data-label="Quantity">Coverage spread</td><td class="mono" data-label="Median / IQR">${BDA.formatNumber(disagreement.coverage_iqr_median, 2)}</td><td data-label="Interpretation">Median IQR across judge coverage scores.</td></tr>
+    <tr><td data-label="Quantity">Overall score spread</td><td class="mono" data-label="Median / IQR">${BDA.formatNumber(disagreement.overall_iqr, 2)}</td><td data-label="Interpretation">Spread of final side scores.</td></tr>
   `;
 }
 
@@ -913,7 +914,7 @@ function renderRelevanceSensitivity(data) {
   const row = document.getElementById('rel-verdict-distribution');
   row.innerHTML = verdictDistribution.length
     ? verdictDistribution.map(([label, count]) => `<span class="pill">${BDA.escapeHtml(label)}: <span class="mono">${count}</span></span>`).join('')
-    : '<small style="color:var(--muted)">No verdict distribution available.</small>';
+    : '<small class="text-muted">No verdict distribution available.</small>';
 }
 
 function renderV12AuditMatrix(audits) {
@@ -966,12 +967,12 @@ function renderV12AuditMatrix(audits) {
   const dropEl = document.getElementById('audit-drop-component');
   if (Object.keys(drop).length) {
     dropEl.innerHTML = Object.entries(drop).map(([topic, vals]) => `
-      <div class="row" style="margin-bottom:6px;">
-        <span class="mono" style="min-width:120px;">${BDA.escapeHtml(topic)}</span>
-        <span class="pill" style="font-size:0.72rem;">without F: ${BDA.formatNumber(vals.d_without_factuality, 4)}</span>
-        <span class="pill" style="font-size:0.72rem;">without N: ${BDA.formatNumber(vals.d_without_normative, 4)}</span>
-        <span class="pill" style="font-size:0.72rem;">without Reason: ${BDA.formatNumber(vals.d_without_reasoning, 4)}</span>
-        <span class="pill" style="font-size:0.72rem;">without Cov: ${BDA.formatNumber(vals.d_without_coverage, 4)}</span>
+      <div class="row mb-6">
+        <span class="mono min-w-120">${BDA.escapeHtml(topic)}</span>
+        <span class="pill text-72">without F: ${BDA.formatNumber(vals.d_without_factuality, 4)}</span>
+        <span class="pill text-72">without N: ${BDA.formatNumber(vals.d_without_normative, 4)}</span>
+        <span class="pill text-72">without Reason: ${BDA.formatNumber(vals.d_without_reasoning, 4)}</span>
+        <span class="pill text-72">without Cov: ${BDA.formatNumber(vals.d_without_coverage, 4)}</span>
       </div>
     `).join('');
   }
@@ -1043,9 +1044,19 @@ async function initAnalysisPage() {
     renderEvidence(evidence);
     evidenceOk = true;
   } catch (error) {
+    const errorMsg = error?.message || 'Unable to load live evidence targets right now.';
+    const requestId = error?.payload?.request_id || '';
     const callout = document.getElementById('evidence-panel-error');
-    callout.innerHTML = `Unable to load live evidence targets right now: ${BDA.escapeHtml(error.message)}`;
-    callout.style.display = 'block';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && callout) {
+      BDA.showInlineError(callout, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading evidence targets`);
+        initAnalysisPage();
+      });
+      callout.style.display = 'block';
+    } else if (callout) {
+      callout.innerHTML = `Unable to load live evidence targets right now: ${BDA.escapeHtml(errorMsg)}`;
+      callout.style.display = 'block';
+    }
   }
 
   try {
@@ -1054,9 +1065,19 @@ async function initAnalysisPage() {
     rerenderAuditPanels();
     auditsOk = true;
   } catch (error) {
+    const errorMsg = error?.message || 'Unable to load live audits right now.';
+    const requestId = error?.payload?.request_id || '';
     const callout = document.getElementById('audits-panel-error');
-    callout.innerHTML = `Unable to load live audits right now: ${BDA.escapeHtml(error.message)}`;
-    callout.style.display = 'block';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && callout) {
+      BDA.showInlineError(callout, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading audits`);
+        initAnalysisPage();
+      });
+      callout.style.display = 'block';
+    } else if (callout) {
+      callout.innerHTML = `Unable to load live audits right now: ${BDA.escapeHtml(errorMsg)}`;
+      callout.style.display = 'block';
+    }
   }
 
   bindAuditTopicControls();

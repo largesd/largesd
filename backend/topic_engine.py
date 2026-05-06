@@ -12,7 +12,7 @@ import json
 import numpy as np
 from collections import defaultdict
 
-from llm_client import LLMClient
+from backend.llm_client import LLMClient
 
 
 @dataclass

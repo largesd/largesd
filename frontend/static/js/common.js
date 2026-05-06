@@ -29,10 +29,54 @@ const BDA = {
     this.setupTooltips();
     this.setupMobileState();
     this.setupTableScroll();
+    this.setupTableLabels();
     this.normalizeNavigation();
     this.setupNavigationDismiss();
     this.setupNavigationResize();
+    this.setupActionDelegation();
     Auth.updateNavigation();
+  },
+
+  /**
+   * Action delegation registry for data-action buttons
+   */
+  _actionRegistry: {},
+  registerAction(name, handler) {
+    this._actionRegistry[name] = handler;
+  },
+
+  /**
+   * Setup universal data-action event delegation
+   */
+  setupActionDelegation() {
+    document.addEventListener('click', (e) => {
+      const trigger = e.target.closest('[data-action]');
+      if (!trigger) return;
+      const action = trigger.dataset.action;
+      if (!action) return;
+
+      // Universal actions
+      if (action === 'scroll-top') {
+        e.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      if (action === 'toggle-help') {
+        e.preventDefault();
+        if (typeof BDA !== 'undefined' && BDA.toggleHelp) {
+          BDA.toggleHelp();
+        } else if (typeof toggleHelp === 'function') {
+          toggleHelp();
+        }
+        return;
+      }
+
+      // Page-registered actions
+      if (this._actionRegistry[action]) {
+        e.preventDefault();
+        this._actionRegistry[action](trigger, e);
+      }
+    });
   },
 
   /**
@@ -94,13 +138,13 @@ const BDA = {
 `;
     const commonFooter = `
     <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+    <p class="help-panel-footer">For full specification, see <a href="about.html">About</a> page.</p>
   </div>
 </div>`;
 
     if (panelName === 'help-panel-admin') {
       return `${commonHeader}
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Administrative terms for moderation configuration.</p>
+    <p class="help-panel-desc">Administrative terms for moderation configuration.</p>
     <div class="glossary-term">Modulation Template</div>
     <div class="glossary-def">Versioned moderation rule set for allow or block decisions.</div>
     <div class="glossary-term">PII</div>
@@ -112,7 +156,7 @@ ${commonFooter}`;
 
     if (panelName === 'help-panel-posting') {
       return `${commonHeader}
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms for posting and debate structure.</p>
+    <p class="help-panel-desc">Key terms for posting and debate structure.</p>
     <div class="glossary-term">Argument Unit</div>
     <div class="glossary-def">Structured contribution made from factual premises and inference.</div>
     <div class="glossary-term">Canonical FACT</div>
@@ -123,7 +167,7 @@ ${commonFooter}`;
     }
 
     return `${commonHeader}
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    <p class="help-panel-desc">Key terms and metrics used throughout the system.</p>
     <div class="glossary-term">CI(D)</div>
     <div class="glossary-def">Confidence interval of D (FOR minus AGAINST). If it crosses zero, verdict remains NO VERDICT.</div>
     <div class="glossary-term">D = FOR - AGAINST</div>
@@ -248,6 +292,13 @@ ${commonFooter}`;
     const token = Auth.getToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Add CSRF token for double-submit cookie pattern
+    const csrfInput = document.getElementById('csrf_token');
+    const csrfToken = csrfInput ? csrfInput.value : '';
+    if (csrfToken && !headers['X-CSRF-Token']) {
+      headers['X-CSRF-Token'] = csrfToken;
     }
 
     const debateId = this.getActiveDebateId();
@@ -694,6 +745,69 @@ ${commonFooter}`;
   },
   
   /**
+   * Auto-populate data-label attributes on table cells based on header text.
+   * Runs on all .table elements and watches for dynamic updates.
+   */
+  setupTableLabels() {
+    const hydrateTable = (table) => {
+      const thead = table.querySelector('thead');
+      const headers = thead
+        ? Array.from(thead.querySelectorAll('th')).map(th => th.textContent.trim())
+        : [];
+
+      table.querySelectorAll('tr').forEach(tr => {
+        const tds = Array.from(tr.querySelectorAll('td'));
+        const rowTh = tr.querySelector('th');
+
+        tds.forEach((td, index) => {
+          if (td.hasAttribute('data-label')) return;
+          if (td.hasAttribute('colspan')) return;
+
+          if (headers[index]) {
+            td.setAttribute('data-label', headers[index]);
+          } else if (rowTh) {
+            td.setAttribute('data-label', rowTh.textContent.trim());
+          }
+        });
+      });
+    };
+
+    document.querySelectorAll('.table').forEach(hydrateTable);
+
+    const observer = new MutationObserver((mutations) => {
+      const tablesToHydrate = new Set();
+
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+          // Direct table additions
+          if (node.matches && node.matches('.table')) {
+            tablesToHydrate.add(node);
+          }
+
+          // Tables within added subtree
+          if (node.querySelectorAll) {
+            node.querySelectorAll('.table').forEach(t => tablesToHydrate.add(t));
+          }
+
+          // Added nodes inside existing tables
+          if (node.closest) {
+            const parentTable = node.closest('.table');
+            if (parentTable) {
+              tablesToHydrate.add(parentTable);
+            }
+          }
+        });
+      });
+
+      tablesToHydrate.forEach(hydrateTable);
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+  },
+
+  /**
    * Setup table scroll indicators
    */
   setupTableScroll() {
@@ -991,6 +1105,90 @@ ${commonFooter}`;
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
     };
+  },
+
+  /**
+   * Set button busy state with spinner.
+   * Replaces button content with a spinner + label while busy.
+   */
+  setButtonBusy(button, isBusy, busyLabel) {
+    if (!button) return;
+    if (!button.dataset.defaultLabel) {
+      button.dataset.defaultLabel = button.textContent.trim();
+    }
+    button.disabled = isBusy;
+    button.setAttribute('aria-busy', String(isBusy));
+    if (isBusy) {
+      const label = this.escapeHtml(busyLabel || 'Processing...');
+      button.innerHTML = `<span class="spinner" aria-label="Loading" role="status"></span> ${label}`;
+    } else {
+      button.textContent = button.dataset.defaultLabel;
+    }
+  },
+
+  /**
+   * Show an inline error message with an optional retry button.
+   * @param {HTMLElement} container - Element to display error inside
+   * @param {string} message - Error message
+   * @param {Function|null} retryCallback - Called when retry button is clicked
+   */
+  showInlineError(container, message, retryCallback = null) {
+    if (!container) return;
+    const requestId = container.dataset.requestId || '';
+    const safeMessage = this.escapeHtml(message || 'Something went wrong. Please try again.');
+    const retryHtml = retryCallback
+      ? `<button type="button" class="retry-btn" data-retry="true">Retry</button>`
+      : '';
+    container.innerHTML = `<div class="inline-error"><span>${safeMessage}</span>${retryHtml}</div>`;
+    if (retryCallback) {
+      const retryBtn = container.querySelector('[data-retry="true"]');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          retryCallback();
+        });
+      }
+    }
+    if (requestId) {
+      console.error(`[request_id: ${requestId}]`, message);
+    } else {
+      console.error(message);
+    }
+  },
+
+  /**
+   * Clear an inline error from a container.
+   */
+  clearInlineError(container) {
+    if (!container) return;
+    const errorEl = container.querySelector('.inline-error');
+    if (errorEl) errorEl.remove();
+  },
+
+  /**
+   * Replace an element's children with skeleton placeholders.
+   * @param {HTMLElement} element
+   * @param {number} rows - number of skeleton bars
+   */
+  showSkeleton(element, rows = 1) {
+    if (!element) return;
+    element.dataset.originalContent = element.innerHTML;
+    let html = '';
+    for (let i = 0; i < rows; i++) {
+      html += '<span class="skeleton skeleton-text-md"></span>';
+    }
+    element.innerHTML = html;
+  },
+
+  /**
+   * Restore original content from skeleton state.
+   */
+  hideSkeleton(element) {
+    if (!element) return;
+    if (element.dataset.originalContent !== undefined) {
+      element.innerHTML = element.dataset.originalContent;
+      delete element.dataset.originalContent;
+    }
   }
 };
 
@@ -1070,16 +1268,20 @@ const DebateSelector = {
     }).join('');
 
     this.container.innerHTML = `
-      <div class="form-group" style="margin-bottom:0">
+      <div class="form-group form-group-no-margin">
         <label for="debate-selector-select">Select Active Debate</label>
-        <div class="row" style="gap:var(--space-sm);align-items:flex-end">
-          <select id="debate-selector-select" class="debate-selector-select" style="min-width:220px;flex:1">
+        <div class="row row-gap-sm-items-end">
+          <select id="debate-selector-select" class="debate-selector-select select-wide">
             ${optionsHtml}
           </select>
-          ${this.allowActivate ? `<button class="button" id="debate-selector-activate" onclick="DebateSelector.activate()">Activate</button>` : ''}
+          ${this.allowActivate ? `<button class="button" id="debate-selector-activate" data-action="activate-debate">Activate</button>` : ''}
         </div>
       </div>
     `;
+    const activateBtn = this.container.querySelector('#debate-selector-activate');
+    if (activateBtn) {
+      activateBtn.addEventListener('click', () => this.activate());
+    }
   },
 
   async activate() {

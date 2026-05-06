@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Decision Dossier - Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -31,7 +31,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -47,7 +46,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -63,9 +62,9 @@
       <a class="button secondary" href="snapshot.html">Back to snapshot</a>
     </div>
 
-    <div class="callout soft" id="dossier-empty" style="display:none;"></div>
+    <div class="callout soft hidden" id="dossier-empty"></div>
 
-    <div id="dossier-content" style="display:none;">
+    <div id="dossier-content" class="hidden">
       <div class="row">
         <span class="pill">Snapshot: <span class="mono" id="dossier-snapshot-id">-</span></span>
         <span class="pill">Verdict: <span class="mono" id="dossier-verdict">-</span></span>
@@ -75,7 +74,7 @@
       <hr />
       <h3>Active Frame</h3>
       <div class="callout soft">
-        <p style="margin-top:0;margin-bottom:8px"><strong id="frame-statement">No active frame metadata.</strong></p>
+        <p class="mt-0-mb-8"><strong id="frame-statement">No active frame metadata.</strong></p>
         <small id="frame-meta">Frame version unavailable.</small>
       </div>
 
@@ -94,7 +93,7 @@
             </tr>
           </thead>
           <tbody id="evidence-gaps-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading dossier evidence gaps...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -112,11 +111,11 @@
             </tr>
           </thead>
           <tbody id="selection-diag-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading selection diagnostics...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
-      <details class="trace" style="margin-top:16px;">
+      <details class="trace mt-16">
         <summary>Show raw selection diagnostics</summary>
         <div class="codebox" id="selection-diag-raw">No diagnostics loaded yet.</div>
       </details>
@@ -127,7 +126,7 @@
         <table class="table">
           <thead><tr><th>Type</th><th>Item</th><th>Side</th><th>Score</th><th>Provenance</th></tr></thead>
           <tbody id="decisive-outputs-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading decisive outputs...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -138,13 +137,13 @@
         <table class="table">
           <thead><tr><th>Topic</th><th>D without topic</th><th>Change in D</th><th>Would flip?</th></tr></thead>
           <tbody id="counterfactuals-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading counterfactuals...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
-      <div class="callout soft" style="margin-top:16px;">
-        <h4 style="margin-top:0">What would change this</h4>
-        <ul class="compact-list" id="priority-gaps-list"><li>Loading priority gaps...</li></ul>
+      <div class="callout soft mt-16">
+        <h4 class="mt-0">What would change this</h4>
+        <ul class="compact-list" id="priority-gaps-list"><li><span class="skeleton skeleton-text-sm"></span></li></ul>
       </div>
 
       <hr />
@@ -154,14 +153,14 @@
         <span class="pill">If insufficient false: <span class="mono" id="insuff-false">-</span></span>
         <span class="pill">Δ true / false: <span class="mono" id="insuff-deltas">-</span></span>
       </div>
-      <details class="trace" style="margin-top:16px;">
+      <details class="trace mt-16">
         <summary>Show unselected tail summary</summary>
         <div class="codebox" id="unselected-tail-raw">No unselected tail summary loaded.</div>
       </details>
 
       <hr />
       <h3>Insufficiency Swing Analysis</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">If all currently INSUFFICIENT empirical premises were resolved, the overall margin D could move by at most this amount.</p>
+      <p class="text-12-muted-mt-0">If all currently INSUFFICIENT empirical premises were resolved, the overall margin D could move by at most this amount.</p>
       <div class="row">
         <span class="pill">max_abs_delta_D: <span class="mono" id="swing-max-delta">-</span></span>
         <span class="pill">Overall swing bound: <span class="mono" id="swing-bound">-</span></span>
@@ -169,12 +168,12 @@
 
       <hr />
       <h3>Decisive Premise Rank</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">INSUFFICIENT premises sorted by marginal swing |δ_i| descending.</p>
+      <p class="text-12-muted-mt-0">INSUFFICIENT premises sorted by marginal swing |δ_i| descending.</p>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Rank</th><th>Premise ID</th><th>Topic-side</th><th>Current status</th><th>Marginal swing δ_i</th></tr></thead>
           <tbody id="decisive-rank-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">No INSUFFICIENT premises are currently decisive.</td></tr>
+            <tr><td colspan="5" class="text-center-muted">No INSUFFICIENT premises are currently decisive.</td></tr>
           </tbody>
         </table>
       </div>
@@ -185,28 +184,28 @@
         <table class="table">
           <thead><tr><th>Topic-side</th><th>F (factuality)</th><th>N (normative)</th><th>Reason</th><th>Coverage</th><th>Q (geomean)</th></tr></thead>
           <tbody id="component-breakdown-tbody">
-            <tr><td colspan="6" style="text-align:center;color:var(--muted)">Loading component breakdown...</td></tr>
+            <tr><td colspan="6"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
 
       <hr />
       <h3>Drop-Component Sensitivity</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Diagnostic only. Shows which component most influences the verdict.</p>
+      <p class="text-12-muted-mt-0">Diagnostic only. Shows which component most influences the verdict.</p>
       <div class="table-wrap">
         <table class="table">
           <thead><tr><th>Topic</th><th>D without F</th><th>D without N</th><th>D without Reason</th><th>D without Coverage</th></tr></thead>
           <tbody id="drop-component-tbody">
-            <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading drop-component sensitivity...</td></tr>
+            <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
 
       <hr />
       <h3>Coverage Adequacy Trace</h3>
-      <p style="font-size:12px;color:var(--muted);margin-top:0">Rebuttal type distribution from coverage adequacy labels.</p>
+      <p class="text-12-muted-mt-0">Rebuttal type distribution from coverage adequacy labels.</p>
       <div class="row" id="coverage-trace-row">
-        <small style="color:var(--muted)">No coverage trace available.</small>
+        <small class="text-muted">No coverage trace available.</small>
       </div>
     </div>
   </section>
@@ -214,12 +213,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="BDA.toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div id="shared-help-panel" data-panel="help-panel"></div>
 
@@ -240,7 +239,7 @@ function renderEvidenceGaps(evidenceGaps) {
   const tbody = document.getElementById('evidence-gaps-tbody');
   const entries = Object.entries(evidenceGaps || {});
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No evidence gap data available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center-muted">No evidence gap data available.</td></tr>';
     return;
   }
 
@@ -260,7 +259,7 @@ function renderSelectionDiagnostics(selectionDiagnostics) {
   const tbody = document.getElementById('selection-diag-tbody');
   const entries = Object.entries(selectionDiagnostics || {});
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No selection diagnostics recorded yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center-muted">No selection diagnostics recorded yet.</td></tr>';
     document.getElementById('selection-diag-raw').textContent = 'No selection diagnostics available.';
     return;
   }
@@ -302,7 +301,7 @@ function renderDecisiveOutputs(dossier) {
   const rows = [...premises, ...argumentsRows].slice(0, 12);
   const tbody = document.getElementById('decisive-outputs-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No decisive outputs published for this snapshot.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No decisive outputs published for this snapshot.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((row) => `
@@ -320,7 +319,7 @@ function renderCounterfactuals(counterfactuals) {
   const entries = Object.entries(counterfactuals || {});
   const tbody = document.getElementById('counterfactuals-tbody');
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No remove-topic counterfactuals available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center-muted">No remove-topic counterfactuals available.</td></tr>';
     return;
   }
   tbody.innerHTML = entries.map(([topicId, item]) => `
@@ -363,7 +362,7 @@ function renderSensitivityAndTail(dossier) {
   decisive.sort((a, b) => Math.abs(b.marginal_swing_delta_i || 0) - Math.abs(a.marginal_swing_delta_i || 0));
   const rankTbody = document.getElementById('decisive-rank-tbody');
   if (!decisive.length) {
-    rankTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No INSUFFICIENT premises are currently decisive.</td></tr>';
+    rankTbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No INSUFFICIENT premises are currently decisive.</td></tr>';
   } else {
     rankTbody.innerHTML = decisive.slice(0, 10).map((p, i) => `
       <tr>
@@ -381,7 +380,7 @@ function renderSensitivityAndTail(dossier) {
   const cbEntries = Object.entries(breakdown);
   const cbTbody = document.getElementById('component-breakdown-tbody');
   if (!cbEntries.length) {
-    cbTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No component breakdown available.</td></tr>';
+    cbTbody.innerHTML = '<tr><td colspan="6" class="text-center-muted">No component breakdown available.</td></tr>';
   } else {
     cbTbody.innerHTML = cbEntries.map(([key, val]) => `
       <tr>
@@ -400,7 +399,7 @@ function renderSensitivityAndTail(dossier) {
   const dropEntries = Object.entries(drop);
   const dropTbody = document.getElementById('drop-component-tbody');
   if (!dropEntries.length) {
-    dropTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No drop-component sensitivity data available.</td></tr>';
+    dropTbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No drop-component sensitivity data available.</td></tr>';
   } else {
     dropTbody.innerHTML = dropEntries.map(([key, val]) => `
       <tr>
@@ -418,7 +417,7 @@ function renderSensitivityAndTail(dossier) {
   const overall = trace.overall || {};
   const traceRow = document.getElementById('coverage-trace-row');
   if (overall.empirical_rebuttals === undefined) {
-    traceRow.innerHTML = '<small style="color:var(--muted)">No coverage trace available.</small>';
+    traceRow.innerHTML = '<small class="text-muted">No coverage trace available.</small>';
   } else {
     traceRow.innerHTML = `
       <span class="pill">EMPIRICAL: <span class="mono">${overall.empirical_rebuttals ?? '-'}</span></span>

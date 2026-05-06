@@ -9,18 +9,15 @@ import time
 from datetime import datetime
 from typing import List, Dict, Optional
 
-from models import (
+from backend.models import (
     Debate, Post, Topic, CanonicalFact, CanonicalArgument, Snapshot,
     Side, ModulationOutcome, BlockReason, TopicSideScores
 )
-from extraction import ExtractionEngine
-from scoring import ScoringEngine
-from debate_proposal import parse_debate_proposal_payload
+from backend.extraction import ExtractionEngine
+from backend.scoring import ScoringEngine
+from backend.debate_proposal import parse_debate_proposal_payload
 
 # Import new fact checking skill
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from skills.fact_checking import FactCheckingSkill, RequestContext
 
 

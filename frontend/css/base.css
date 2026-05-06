@@ -1,0 +1,369 @@
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Red+Hat+Mono:wght@400;500;600&display=swap");
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--surface-base);
+}
+
+/* Skip-to-content link for keyboard/screen-reader users (WCAG 2.4.1) */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--ink-strong);
+  color: var(--surface-raised);
+  padding: 8px 16px;
+  z-index: 10000;
+  border-radius: 0 0 var(--radius-sm) 0;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 0;
+}
+  color: var(--ink-default);
+  font-family: var(--sans);
+  line-height: 1.56;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--accent), white 22%);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+header,
+.state-label {
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.state-item[data-state-tone] .state-label,
+.layout-home .panel-head-home h1 {
+  max-width: 24ch;
+}
+
+h4 {
+  color: var(--ink-strong);
+  font-family: var(--serif);
+  line-height: 1.2;
+  margin: 0;
+  max-width: 30ch;
+}
+
+h1 {
+  font-size: clamp(1.6rem, 1.3rem + 1vw, 2.1rem);
+  margin-top: 6px;
+}
+
+h2 {
+  font-size: 1.44rem;
+  margin-bottom: 8px;
+}
+
+h3 {
+  font-size: 1.15rem;
+  margin-bottom: 10px;
+}
+
+h4 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.lede,
+.kpi .label {
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+  font-size: 0.74rem;
+}
+
+.signal-label {
+  margin: 0;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.action-lane-label {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.snapshot-group h4 {
+  margin: 0;
+}
+
+.snapshot-group > small {
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+
+.table td small {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.layer-panel-head h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.layer-panel-head small {
+  display: block;
+  line-height: 1.45;
+}
+
+.layer-panel-body {
+  padding: 14px 18px 16px;
+}
+
+.side-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.side-label.for {
+  background: color-mix(in oklch, var(--good), white 88%);
+  color: color-mix(in oklch, var(--good), black 20%);
+  border: 1px solid color-mix(in oklch, var(--good), white 74%);
+}
+
+.side-label.against {
+  background: color-mix(in oklch, var(--warn), white 88%);
+  color: color-mix(in oklch, var(--warn), black 24%);
+  border: 1px solid color-mix(in oklch, var(--warn), white 72%);
+}
+
+.dist-header small {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+abbr[title] {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted color-mix(in oklch, var(--accent), white 50%);
+  text-decoration: none;
+}
+
+.help-panel-body {
+  padding: 14px;
+}
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: var(--space-md) var(--space-lg) var(--space-xl);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+small {
+  color: var(--ink-soft);
+  display: block;
+  margin-top: 8px;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink-strong);
+  width: 100%;
+}
+
+select option {
+  background: var(--surface-raised);
+  color: var(--ink-strong);
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-soft);
+}
+
+.form-hint,
+select[aria-invalid="true"] {
+  border-color: color-mix(in oklch, var(--bad), white 55%);
+  background: color-mix(in oklch, var(--bad), white 96%);
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+select {
+  cursor: pointer;
+}
+
+.form-group .row label.pill {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-group .row label.pill:hover {
+  background: color-mix(in oklch, var(--surface-accent), white 44%);
+}
+
+.new-debate-section hr {
+  margin: var(--space-xs) 0;
+}
+
+.moderation-column h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.debates-container > h3 {
+  margin: 0;
+}
+
+.position-choice input[type="radio"] {
+  margin-right: var(--space-xs);
+}
+
+.position-choice .side-label {
+  margin: 0;
+}
+
+.preview-block-body {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  padding: 10px;
+}
+
+.pending-post-body {
+  display: grid;
+  gap: 4px;
+}
+
+.pending-post-body small {
+  margin-top: 0;
+}
+
+.auth-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.7rem;
+}
+
+.auth-header p,
+.step-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.step-label::before,
+.config-section h3::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 78%);
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  color: var(--ink-default);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  margin: 0;
+}
+
+.checkbox-group label:hover {
+  background: color-mix(in oklch, var(--surface-accent), white 46%);
+}
+
+.admin-flow,
+.admin-sidebar-list,
+.topic-meta-item .label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Verdict — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -69,7 +69,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -85,7 +84,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -102,10 +101,10 @@
     <span class="pill warn" id="verdict-pill">Current state: <strong>NO VERDICT</strong></span>
   </div>
 
-  <div class="callout soft" id="verdict-empty" style="display:none;"></div>
+  <div class="callout soft hidden" id="verdict-empty"></div>
 
-  <div id="verdict-content" style="display:none;">
-    <div class="callout soft" id="plain-readout" style="font-size:1.05rem;"><strong>Summary:</strong> Loading...</div>
+  <div id="verdict-content" class="hidden">
+    <div class="callout soft text-105" id="plain-readout"><strong>Summary:</strong> <span class="skeleton skeleton-text-md"></span></div>
 
     <hr />
     <h3>What drives this result</h3>
@@ -119,7 +118,7 @@
           </tr>
         </thead>
         <tbody id="drivers-tbody">
-          <tr><td colspan="3" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          <tr><td colspan="3"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -127,7 +126,7 @@
     <hr />
     <details class="trace">
       <summary>Technical details: scores, margin, and confidence interval</summary>
-      <div style="margin-top:16px;">
+      <div class="mt-16">
         <div class="kpis">
           <div class="kpi">
             <div class="label">Overall FOR</div>
@@ -146,8 +145,8 @@
           </div>
         </div>
 
-        <h4 style="margin-top:16px;">Confidence interval of D</h4>
-        <p style="font-size:12px;color:var(--muted);margin-top:0">This interval is live snapshot data, not a schematic placeholder.</p>
+        <h4 class="mt-16">Confidence interval of D</h4>
+        <p class="text-12-muted-mt-0">This interval is live snapshot data, not a schematic placeholder.</p>
         <div class="callout soft">
           <div class="range-track" role="img" aria-label="Confidence interval visualization. Exact values are provided in text nearby.">
             <div class="range-ci" id="ci-band"></div>
@@ -159,19 +158,19 @@
             <span>0</span>
             <span id="axis-max">-</span>
           </div>
-          <div class="row" style="margin-top:16px;">
+          <div class="row mt-16">
             <span class="pill">CI(D): <span class="mono" id="ci-d">-</span></span>
             <span class="pill warn" id="verdict-badge">Verdict: <b>NO VERDICT</b></span>
             <span class="pill">Confidence: <span class="mono" id="confidence-badge">-</span></span>
           </div>
-          <small style="display:block;margin-top:12px" id="dist-explanation">Loading interval explanation...</small>
+          <small class="block-mt-12" id="dist-explanation"><span class="skeleton skeleton-text-md"></span></small>
         </div>
       </div>
     </details>
 
     <hr />
     <h3>Per-topic contributions</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">How each topic contributes to the overall margin D.</p>
+    <p class="text-12-muted-mt-0">How each topic contributes to the overall margin D.</p>
     <div class="table-wrap">
       <table class="table">
         <thead>
@@ -192,64 +191,64 @@
           </tr>
         </thead>
         <tbody id="contributions-tbody">
-          <tr><td colspan="13" style="text-align:center;color:var(--muted)">Loading...</td></tr>
+          <tr><td colspan="13"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
 
     <hr />
     <h3>Factuality Breakdown</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Per topic-side factuality metrics and tier counts.</p>
+    <p class="text-12-muted-mt-0">Per topic-side factuality metrics and tier counts.</p>
     <div class="table-wrap">
       <table class="table">
         <thead>
           <tr><th>Topic-side</th><th>F<sub>t,s</sub></th><th>F_supported_only</th><th>Insufficiency rate</th><th>Tier counts</th></tr>
         </thead>
         <tbody id="factuality-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading factuality breakdown...</td></tr>
+          <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
 
     <hr />
     <h3>Judge Dispersion</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Median and IQR of judge scores per component.</p>
+    <p class="text-12-muted-mt-0">Median and IQR of judge scores per component.</p>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Component</th><th>Median</th><th>IQR</th><th>Interpretation</th></tr></thead>
         <tbody id="dispersion-tbody">
-          <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading dispersion data...</td></tr>
+          <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
 
     <hr />
     <h3>Replicate Distribution</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Distribution of replicate margin D values.</p>
+    <p class="text-12-muted-mt-0">Distribution of replicate margin D values.</p>
     <div id="replicate-distribution">
-      <small style="color:var(--muted)">Loading replicate distribution...</small>
+      <span class="skeleton skeleton-text-sm"></span>
     </div>
 
     <hr />
     <h3>Drop-Component Sensitivity</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Diagnostic only. Shows which component most influences the verdict.</p>
+    <p class="text-12-muted-mt-0">Diagnostic only. Shows which component most influences the verdict.</p>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Topic</th><th>D without F</th><th>D without N</th><th>D without Reason</th><th>D without Coverage</th></tr></thead>
         <tbody id="verdict-drop-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted)">Loading drop-component sensitivity...</td></tr>
+          <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
         </tbody>
       </table>
     </div>
 
     <hr />
     <h3>Frame Sensitivity</h3>
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Verdict sensitivity to frame choice (multi-frame mode only).</p>
+    <p class="text-12-muted-mt-0">Verdict sensitivity to frame choice (multi-frame mode only).</p>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Frame</th><th>Overall FOR</th><th>Overall AGAINST</th><th>D</th><th>Verdict</th></tr></thead>
         <tbody id="frame-sensitivity-tbody">
-          <tr><td colspan="5" style="text-align:center;color:var(--muted)">No multi-frame data available.</td></tr>
+          <tr><td colspan="5" class="text-center-muted">No multi-frame data available.</td></tr>
         </tbody>
       </table>
     </div>
@@ -264,7 +263,7 @@
         <span class="pill">Rel formula: <span class="mono" id="verdict-rel-formula">-</span></span>
         <span class="pill">Coverage mode: <span class="mono" id="verdict-coverage-mode">-</span></span>
       </div>
-      <details class="trace" style="margin-top:16px;">
+      <details class="trace mt-16">
         <summary>Show formula metadata</summary>
         <div class="codebox" id="verdict-formula-raw">No formula metadata loaded.</div>
       </details>
@@ -282,12 +281,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -296,7 +295,7 @@
     <button class="close-help" aria-label="Close help">×</button>
   </div>
   <div class="help-panel-body">
-    <p style="font-size:12px;color:var(--muted);margin-top:0">Key terms and metrics used throughout the system.</p>
+    <p class="text-12-muted-mt-0">Key terms and metrics used throughout the system.</p>
 
     <div class="glossary-term">D (Margin)</div>
     <div class="glossary-def">Difference between the overall FOR and AGAINST scores. Positive means FOR leads; negative means AGAINST leads.</div>
@@ -308,7 +307,7 @@
     <div class="glossary-def">How much a topic's quality gap, weighted by relevance, moves the overall margin.</div>
 
     <hr />
-    <p style="font-size:12px;color:var(--muted)">For full specification, see <a href="about.html">About</a> page.</p>
+    <p class="text-12-muted">For full specification, see <a href="about.html">About</a> page.</p>
   </div>
 </div>
 
@@ -401,7 +400,7 @@ function buildIntervalExplanation(ciLow, ciHigh, verdict) {
 function renderHistogram(values, containerId) {
   const container = document.getElementById(containerId);
   if (!values || values.length < 2) {
-    container.innerHTML = '<small style="color:var(--muted)">Not enough replicate values for histogram.</small>';
+    container.innerHTML = '<small class="text-muted">Not enough replicate values for histogram.</small>';
     return;
   }
   const min = Math.min(...values);
@@ -415,25 +414,29 @@ function renderHistogram(values, containerId) {
   });
   const maxCount = Math.max(...counts);
   container.innerHTML = `
-    <div style="display:grid;gap:4px;margin-top:8px;">
+    <div class="grid-gap-4-mt-8">
       ${counts.map((c, i) => {
         const left = BDA.formatNumber(min + (i * span) / buckets, 3);
         const widthPct = maxCount > 0 ? (c / maxCount) * 100 : 0;
-        return `<div style="display:grid;grid-template-columns:80px 1fr auto;gap:8px;align-items:center;font-size:0.78rem;">
+        return `<div class="grid-80-1fr-auto-gap-8-items-center-text-78">
           <span class="mono">${left}</span>
-          <div style="height:14px;background:var(--surface-muted);border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--line);">
-            <div style="height:100%;background:color-mix(in oklch,var(--accent),white 42%);width:${widthPct}%"></div>
+          <div class="bar-track">
+            <div class="bar-fill" data-width="${widthPct}"></div>
           </div>
           <span class="mono">${c}</span>
         </div>`;
       }).join('')}
     </div>
-    <div class="row" style="margin-top:8px;">
+    <div class="row mt-8">
       <span class="pill">n=${values.length}</span>
       <span class="pill">min=${BDA.formatNumber(min, 4)}</span>
       <span class="pill">max=${BDA.formatNumber(max, 4)}</span>
     </div>
   `;
+  container.querySelectorAll('[data-width]').forEach(el => {
+    el.style.width = el.dataset.width + '%';
+    el.removeAttribute('data-width');
+  });
 }
 
 function renderVerdict(snapshot, verdictData) {
@@ -466,7 +469,7 @@ function renderVerdict(snapshot, verdictData) {
   const fbEntries = Object.entries(factuality.topic_breakdown || {});
   const fbTbody = document.getElementById('factuality-tbody');
   if (!fbEntries.length) {
-    fbTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No factuality breakdown available.</td></tr>';
+    fbTbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No factuality breakdown available.</td></tr>';
   } else {
     fbTbody.innerHTML = fbEntries.map(([key, val]) => `
       <tr>
@@ -488,7 +491,7 @@ function renderVerdict(snapshot, verdictData) {
   ].filter(r => r.median !== undefined);
   const dispTbody = document.getElementById('dispersion-tbody');
   if (!dispRows.length) {
-    dispTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No dispersion data available.</td></tr>';
+    dispTbody.innerHTML = '<tr><td colspan="4" class="text-center-muted">No dispersion data available.</td></tr>';
   } else {
     dispTbody.innerHTML = dispRows.map((r) => `
       <tr>
@@ -522,7 +525,7 @@ function renderVerdict(snapshot, verdictData) {
   const dropEntries = Object.entries(drop);
   const dropTbody = document.getElementById('verdict-drop-tbody');
   if (!dropEntries.length) {
-    dropTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No drop-component sensitivity data available.</td></tr>';
+    dropTbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No drop-component sensitivity data available.</td></tr>';
   } else {
     dropTbody.innerHTML = dropEntries.map(([key, val]) => `
       <tr>
@@ -540,7 +543,7 @@ function renderVerdict(snapshot, verdictData) {
   const frames = frameSens.frames || [];
   const fsTbody = document.getElementById('frame-sensitivity-tbody');
   if (!frames.length) {
-    fsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No multi-frame data available.</td></tr>';
+    fsTbody.innerHTML = '<tr><td colspan="5" class="text-center-muted">No multi-frame data available.</td></tr>';
   } else {
     fsTbody.innerHTML = frames.map((f) => `
       <tr>
@@ -571,7 +574,7 @@ function renderVerdictMetadata(verdictData) {
 function renderDrivers(contributions) {
   const tbody = document.getElementById('drivers-tbody');
   if (!contributions.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted)">No driver data available yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center-muted">No driver data available yet.</td></tr>';
     return;
   }
   const rows = contributions
@@ -580,12 +583,12 @@ function renderDrivers(contributions) {
     .slice(0, 5)
     .map((item) => {
       const side = item.contribution_to_d > 0 ? 'FOR' : item.contribution_to_d < 0 ? 'AGAINST' : 'Neutral';
-      const color = item.contribution_to_d > 0 ? 'var(--good)' : item.contribution_to_d < 0 ? 'var(--warn)' : 'var(--muted)';
+      const colorClass = item.contribution_to_d > 0 ? 'text-good' : item.contribution_to_d < 0 ? 'text-warn' : 'text-muted';
       return `
         <tr>
-          <td>${BDA.escapeHtml(item.name || item.topic_id)}</td>
-          <td style="color:${color}">${side}</td>
-          <td class="mono">${BDA.formatNumber(Math.abs(item.contribution_to_d), 4)}</td>
+          <td data-label="Topic">${BDA.escapeHtml(item.name || item.topic_id)}</td>
+          <td class="${colorClass}" data-label="Side push">${side}</td>
+          <td class="mono" data-label="Strength">${BDA.formatNumber(Math.abs(item.contribution_to_d), 4)}</td>
         </tr>
       `;
     });
@@ -595,7 +598,7 @@ function renderDrivers(contributions) {
 function renderContributions(contributions) {
   const tbody = document.getElementById('contributions-tbody');
   if (!contributions.length) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--muted)">No contribution data available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="text-center-muted">No contribution data available.</td></tr>';
     return;
   }
 
@@ -604,25 +607,25 @@ function renderContributions(contributions) {
     .sort((a, b) => Math.abs(b.contribution_to_d) - Math.abs(a.contribution_to_d))
     .map((item) => {
       const style = item.contribution_to_d > 0
-        ? 'style="color:var(--good)"'
+        ? ' class="text-good"'
         : item.contribution_to_d < 0
-          ? 'style="color:var(--warn)"'
+          ? ' class="text-warn"'
           : '';
       return `
         <tr>
-          <td><a href="topic.html?id=${encodeURIComponent(item.topic_id)}">${BDA.escapeHtml(item.topic_id)} ${BDA.escapeHtml(item.name || '')}</a></td>
-          <td class="mono">${BDA.formatNumber(item.relevance, 2)}</td>
-          <td class="mono">${BDA.formatNumber(item.f_for, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.f_against, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.n_for, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.n_against, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.reason_for, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.reason_against, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.cov_for, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.cov_against, 3)}</td>
-          <td class="mono">${BDA.formatNumber(item.q_for, 2)}</td>
-          <td class="mono">${BDA.formatNumber(item.q_against, 2)}</td>
-          <td class="mono" ${style}>${item.contribution_to_d > 0 ? '+' : ''}${BDA.formatNumber(item.contribution_to_d, 4)}</td>
+          <td data-label="Topic"><a href="topic.html?id=${encodeURIComponent(item.topic_id)}">${BDA.escapeHtml(item.topic_id)} ${BDA.escapeHtml(item.name || '')}</a></td>
+          <td class="mono" data-label="Rel">${BDA.formatNumber(item.relevance, 2)}</td>
+          <td class="mono" data-label="F_FOR">${BDA.formatNumber(item.f_for, 3)}</td>
+          <td class="mono" data-label="F_AGAINST">${BDA.formatNumber(item.f_against, 3)}</td>
+          <td class="mono" data-label="N_FOR">${BDA.formatNumber(item.n_for, 3)}</td>
+          <td class="mono" data-label="N_AGAINST">${BDA.formatNumber(item.n_against, 3)}</td>
+          <td class="mono" data-label="Reason_FOR">${BDA.formatNumber(item.reason_for, 3)}</td>
+          <td class="mono" data-label="Reason_AGAINST">${BDA.formatNumber(item.reason_against, 3)}</td>
+          <td class="mono" data-label="Cov_FOR">${BDA.formatNumber(item.cov_for, 3)}</td>
+          <td class="mono" data-label="Cov_AGAINST">${BDA.formatNumber(item.cov_against, 3)}</td>
+          <td class="mono" data-label="Q_FOR">${BDA.formatNumber(item.q_for, 2)}</td>
+          <td class="mono" data-label="Q_AGAINST">${BDA.formatNumber(item.q_against, 2)}</td>
+          <td class="mono" data-label="Contribution" ${style}>${item.contribution_to_d > 0 ? '+' : ''}${BDA.formatNumber(item.contribution_to_d, 4)}</td>
         </tr>
       `;
     });
@@ -662,7 +665,21 @@ async function initVerdictPage() {
     showVerdictContent();
     BDA.setupTableScroll();
   } catch (error) {
-    showVerdictEmpty(`Unable to load live verdict data right now: ${BDA.escapeHtml(error.message)}`);
+    const errorMsg = error?.message || 'Unable to load live verdict data right now.';
+    const requestId = error?.payload?.request_id || '';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function') {
+      const emptyEl = document.getElementById('verdict-empty');
+      if (emptyEl) {
+        BDA.showInlineError(emptyEl, errorMsg, () => {
+          if (requestId) console.error(`[request_id: ${requestId}] Retry loading verdict`);
+          initVerdictPage();
+        });
+      } else {
+        showVerdictEmpty(`Unable to load live verdict data right now: ${BDA.escapeHtml(errorMsg)}`);
+      }
+    } else {
+      showVerdictEmpty(`Unable to load live verdict data right now: ${BDA.escapeHtml(errorMsg)}`);
+    }
   }
 }
 

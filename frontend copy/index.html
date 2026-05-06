@@ -6,7 +6,7 @@
   <title>Blind Debate Adjudicator - Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script defer src="static/js/auth.js"></script>
   <script defer src="static/js/common.js"></script>
   <script defer src="static/js/data_bridge.js"></script>
@@ -115,8 +115,10 @@
         <div class="action-lanes">
           <article class="action-lane action-lane-primary" id="home-cta-primary">
             <p class="action-lane-label">Contribute</p>
-            <a class="action-link prominent" id="home-cta-link" href="new_debate.html">Post an argument</a>
             <p class="action-lane-copy" id="home-cta-copy">Submit FOR or AGAINST argument units with explicit facts and inference.</p>
+            <div class="action-link-list">
+              <a class="action-link prominent" id="home-cta-link" href="new_debate.html">Post an argument</a>
+            </div>
           </article>
           <article class="action-lane">
             <p class="action-lane-label">Inspect</p>
@@ -196,7 +198,7 @@
       <section class="panel">
         <h3>Need help?</h3>
         <p class="lede">Use the glossary for term definitions and the About page for system rules.</p>
-        <div class="row">
+        <div class="row spaced-before">
           <button class="button" type="button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Open Glossary</button>
           <a class="button" href="about.html">Open About</a>
         </div>
@@ -207,7 +209,8 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator - No identity signals shown - <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
+    <div>Blind Debate Adjudicator - No identity signals shown
+          <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
@@ -257,7 +260,8 @@
     <p class="glossary-def">Normalized, deduplicated claim and argument units used for stable scoring.</p>
 
     <hr />
-    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="about.html">About</a>.</p>
+    <p class="help-panel-note help-panel-note-bottom">For the full specification,
+          <a href="about.html">About</a>.</p>
   </div>
 </div>
 

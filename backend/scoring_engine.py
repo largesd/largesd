@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from llm_client import LLMClient
-from lsd_v1_2 import (
+from backend.llm_client import LLMClient
+from backend.lsd_v1_2 import (
     Q_EPSILON,
     component_sensitivity,
     compute_topic_relevance_from_masses,

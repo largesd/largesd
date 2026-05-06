@@ -14,9 +14,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "backend"))
-
 from dataclasses import dataclass
 
 from backend.models import (
@@ -35,6 +32,13 @@ from backend.modulation import ModulationEngine, ModulationTemplate
 from backend.topic_engine import TopicEngine, Topic
 from backend.lsd_v1_2 import merge_sensitivity
 from backend.published_results import PublishedResultsBuilder
+
+
+def _get_csrf_token(client):
+    """Fetch an HTML page to set the CSRF cookie, then return the token value."""
+    client.get("/login.html")
+    cookie = client.get_cookie("csrf_token")
+    return cookie.value if cookie else ""
 
 
 # =============================================================================
@@ -1052,12 +1056,14 @@ def test_api_auth_session_and_admin_access_consistency():
                 "scope": "Evaluate safety, governance, and implementation costs over five years.",
             },
         )
-        assert unauthorized_create.status_code == 401, "Unauthenticated debate creation should be rejected"
-        assert unauthorized_create.get_json().get("code") == "AUTH_REQUIRED"
+        # CSRF check runs before auth for mutating requests without Bearer token
+        assert unauthorized_create.status_code == 403, "Unauthenticated debate creation without CSRF should be rejected"
+        assert unauthorized_create.get_json().get("code") == "CSRF_INVALID"
 
         # Pre-seed a dummy admin so the real test user does NOT get auto-admin
         # (database_v3 auto-promotes the first registered user to admin)
-        dummy_reg = client.post("/api/auth/register", json={
+        csrf_token = _get_csrf_token(client)
+        dummy_reg = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json={
             "email": "dummy.admin@example.com",
             "password": "password123",
             "display_name": "Dummy Admin",
@@ -1069,7 +1075,8 @@ def test_api_auth_session_and_admin_access_consistency():
             "password": "password123",
             "display_name": "Auth Session User",
         }
-        registration = client.post("/api/auth/register", json=registration_payload)
+        csrf_token = _get_csrf_token(client)
+        registration = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json=registration_payload)
         assert registration.status_code == 201, f"Registration failed: {registration.get_data(as_text=True)}"
         auth_data = registration.get_json()
         # Verify the test user is NOT auto-admin (the auto-admin slot was taken by dummy)
@@ -1259,10 +1266,16 @@ def test_rate_limiter_exempts_navigation_and_read_only_requests():
             response = client.get("/api/health")
             assert response.status_code == 200, "Read-only API GETs should not be rate limited"
 
+        # Prime CSRF cookie before the register loop
+        _get_csrf_token(client)
+
         last_response = None
         for idx in range(51):
+            cookie = client.get_cookie("csrf_token")
+            csrf_token = cookie.value if cookie else ""
             last_response = client.post(
                 "/api/auth/register",
+                headers={"X-CSRF-Token": csrf_token},
                 json={
                     "email": f"rate-limit-user-{idx}@example.com",
                     "password": "password123",
@@ -1399,7 +1412,8 @@ def test_accepting_proposal_activates_debate_for_proposer():
         app_module.app.config["TESTING"] = True
         client = app_module.app.test_client()
 
-        admin = client.post("/api/auth/register", json={
+        csrf_token = _get_csrf_token(client)
+        admin = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json={
             "email": "proposal.admin@example.com",
             "password": "password123",
             "display_name": "Proposal Admin",
@@ -1408,7 +1422,8 @@ def test_accepting_proposal_activates_debate_for_proposer():
         admin_token = admin.get_json()["access_token"]
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        proposer = client.post("/api/auth/register", json={
+        csrf_token = _get_csrf_token(client)
+        proposer = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json={
             "email": "proposal.proposer@example.com",
             "password": "password123",
             "display_name": "Proposal Proposer",
@@ -1759,7 +1774,8 @@ def test_sufficiency_checks_return_insufficient_data():
         client = app_module.app.test_client()
 
         # Register and create a debate
-        reg = client.post("/api/auth/register", json={
+        csrf_token = _get_csrf_token(client)
+        reg = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json={
             "email": "sufficiency@example.com",
             "password": "password123",
             "display_name": "Sufficiency Tester",
@@ -1866,7 +1882,8 @@ def test_replicate_composition_metadata_on_sufficient_snapshot():
         client = app_module.app.test_client()
 
         # Register and create a debate
-        reg = client.post("/api/auth/register", json={
+        csrf_token = _get_csrf_token(client)
+        reg = client.post("/api/auth/register", headers={"X-CSRF-Token": csrf_token}, json={
             "email": "replicate@example.com",
             "password": "password123",
             "display_name": "Replicate Tester",

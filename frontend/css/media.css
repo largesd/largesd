@@ -1,0 +1,378 @@
+@media (min-width: 760px) {
+  .template-picker {
+    grid-template-columns: minmax(0, 1.6fr) minmax(160px, 0.7fr) auto;
+  }
+}
+
+@media (min-width: 900px) {
+  .grid.cols2 {
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+
+  .grid.cols3,
+  .audit-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .topic-shell {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .moderation-columns,
+  .post-meta-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .layout-home .action-lanes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto auto 1fr;
+    grid-auto-rows: auto auto 1fr;
+    align-items: stretch;
+  }
+
+  .layout-home .action-lane {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 3;
+    height: auto;
+  }
+
+  .layout-home .action-lane-primary {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 980px) {
+  .admin-shell {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 96px;
+  }
+
+  .guardrail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1121px) {
+  .layout-home .secondary-stack {
+    position: sticky;
+    top: 138px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .secondary-stack {
+    order: -1;
+  }
+
+  .layout-home .secondary-stack {
+    order: 0;
+    position: static;
+  }
+}
+
+@media (max-width: 899px) {
+  .topic-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .subnav {
+    position: static;
+  }
+
+  .state-wrap {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .layout-home .signal-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .layout-home .signal-note {
+    grid-column: 1 / -1;
+  }
+
+  .snapshot-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .nav {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .navlinks a,
+  .help-btn,
+  .nav-more > summary,
+  .auth-menu-btn,
+  .button,
+  .refresh-btn,
+  .submit-btn,
+  .admin-quicklink,
+  .action-link {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .close-help,
+  .back-to-top {
+    width: 44px;
+    height: 44px;
+  }
+
+  .state-wrap {
+    padding: var(--space-xs) var(--space-md);
+  }
+
+  main,
+  .home-main {
+    padding: var(--space-lg) var(--space-md) var(--space-xl);
+  }
+
+  .card,
+  .panel {
+    padding: var(--space-md);
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+  }
+
+  .table {
+    min-width: 0;
+  }
+
+  .new-debate-main {
+    gap: var(--space-lg);
+  }
+
+  .post-action-row {
+    align-items: flex-start;
+  }
+
+  .pending-actions-row {
+    align-items: flex-start;
+  }
+
+  .layout-home .signal-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .layout-home .action-lanes {
+    grid-template-columns: 1fr;
+  }
+
+  .formula-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .formula-reference dt {
+    padding-top: 0;
+  }
+
+  .formula-expression {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .brand {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .brand-subtitle {
+    letter-spacing: 0.035em;
+  }
+
+  .brand .nowrap {
+    white-space: normal;
+  }
+
+  .navlinks {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+    gap: var(--space-xs);
+  }
+
+  .nav-more {
+    margin-left: auto;
+  }
+
+  .layout-home .panel-head-home {
+    margin-bottom: var(--space-md);
+  }
+
+  .layout-home .panel-head-home h1 {
+    max-width: 100%;
+  }
+
+  .api-status {
+    width: fit-content;
+  }
+
+  .snapshot-essentials-panel .panel-head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .snapshot-essentials-panel .panel-head .refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .state-wrap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .state-item:nth-child(3) {
+    display: none;
+  }
+
+  .state-compact {
+    font-size: 0.8rem;
+  }
+
+  .table {
+    min-width: 560px;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .help-panel {
+    width: 100%;
+  }
+
+  .layout-home .secondary-stack .row .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .login-required-row,
+  .post-action-row,
+  .pending-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .login-required-actions,
+  .post-submit-actions {
+    width: 100%;
+  }
+
+  .login-required-actions .button,
+  .post-submit-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .snapshot-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Responsive table card layout (Task 5.4) */
+  .table-responsive,
+  .table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .table-responsive thead,
+  .table thead {
+    display: none;
+  }
+
+  .table-responsive tbody th,
+  .table tbody th {
+    display: none;
+  }
+
+  .table-responsive tr,
+  .table tr {
+    display: block;
+    margin-bottom: var(--space-md);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm);
+    background: var(--surface-raised);
+  }
+
+  .table-responsive td,
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid var(--line);
+    text-align: right;
+  }
+
+  .table-responsive td::before,
+  .table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    margin-right: var(--space-sm);
+    text-align: left;
+    color: var(--ink-soft);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .table-responsive td:last-child,
+  .table td:last-child {
+    border-bottom: none;
+  }
+
+  /* Remove sticky first column on mobile */
+  .table-responsive th:first-child,
+  .table-responsive td:first-child,
+  .table th:first-child,
+  .table td:first-child {
+    position: static;
+    background: transparent;
+    z-index: auto;
+  }
+
+  /* Disable table-wrap scroll on mobile */
+  .table-wrap {
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+
+  .table-wrap.scrollable::after {
+    display: none;
+  }
+}

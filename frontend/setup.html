@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Setup — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/data_bridge.js"></script>
   <style>
     .setup-main { max-width: 640px; margin: 48px auto; padding: 0 24px; }
@@ -42,7 +42,8 @@
     <h1>Operator Setup</h1>
     <p class="lede">Observers can <a href="index.html">browse debates</a>, <a href="snapshot.html">snapshots</a>, and <a href="verdict.html">verdicts</a> without configuration. Use this page only if you are an operator who wants to configure a GitHub data source or enable email posting.</p>
 
-    <form id="setup-form" onsubmit="return false;">
+    <form id="setup-form" id="setup-form">
+      <input type="hidden" name="csrf_token" id="csrf_token" />
       <div class="form-group">
         <label for="github-url">GitHub Results URL</label>
         <input type="url" id="github-url" placeholder="https://raw.githubusercontent.com/owner/repo/main/data/consolidated_results.json" required />
@@ -56,8 +57,8 @@
       </div>
 
       <div class="setup-actions">
-        <button type="button" class="btn-primary" id="save-btn" onclick="handleSave()">Save &amp; Continue</button>
-        <button type="button" class="btn-secondary" id="test-btn" onclick="handleTest()">Test Fetch</button>
+        <button type="button" class="btn-primary" id="save-btn" data-action="handle-save">Save &amp; Continue</button>
+        <button type="button" class="btn-secondary" id="test-btn" data-action="handle-test">Test Fetch</button>
       </div>
 
       <div id="status-msg" class="status-msg" role="status" aria-live="polite"></div>
@@ -66,6 +67,15 @@
 </main>
 
 <script>
+  // Populate CSRF token from cookie into hidden form field
+  (function() {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    if (match) {
+      const input = document.getElementById('csrf_token');
+      if (input) input.value = decodeURIComponent(match[1]);
+    }
+  })();
+
   (function() {
     DataBridge.loadConfig();
     if (DataBridge.isConfigured() && !window.location.search.includes('force=true')) {
@@ -84,6 +94,10 @@
     el.textContent = '';
   }
 
+  document.getElementById('setup-form').addEventListener('submit', (e) => e.preventDefault());
+  BDA.registerAction('handle-save', handleSave);
+  BDA.registerAction('handle-test', handleTest);
+
   async function handleTest() {
     clearStatus();
     const url = document.getElementById('github-url').value.trim();
@@ -91,7 +105,12 @@
     showStatus('Testing connection…', 'info');
     const saveBtn = document.getElementById('save-btn');
     const testBtn = document.getElementById('test-btn');
-    saveBtn.disabled = true; testBtn.disabled = true;
+    if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+      BDA.setButtonBusy(saveBtn, true, 'Testing...');
+      BDA.setButtonBusy(testBtn, true, 'Testing...');
+    } else {
+      saveBtn.disabled = true; testBtn.disabled = true;
+    }
     try {
       const response = await fetch(url, { method: 'GET', cache: 'no-store' });
       if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -101,7 +120,12 @@
     } catch (err) {
       showStatus('Test failed: ' + err.message, 'error');
     } finally {
-      saveBtn.disabled = false; testBtn.disabled = false;
+      if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+        BDA.setButtonBusy(saveBtn, false);
+        BDA.setButtonBusy(testBtn, false);
+      } else {
+        saveBtn.disabled = false; testBtn.disabled = false;
+      }
     }
   }
 
@@ -115,7 +139,12 @@
 
     const saveBtn = document.getElementById('save-btn');
     const testBtn = document.getElementById('test-btn');
-    saveBtn.disabled = true; testBtn.disabled = true;
+    if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+      BDA.setButtonBusy(saveBtn, true, 'Saving...');
+      BDA.setButtonBusy(testBtn, true, 'Saving...');
+    } else {
+      saveBtn.disabled = true; testBtn.disabled = true;
+    }
 
     try {
       const response = await fetch(url, { method: 'GET', cache: 'no-store' });
@@ -127,7 +156,12 @@
       setTimeout(() => { window.location.href = 'index.html'; }, 800);
     } catch (err) {
       showStatus('Could not save: ' + err.message + '. Make sure the URL is correct and publicly accessible.', 'error');
-      saveBtn.disabled = false; testBtn.disabled = false;
+      if (typeof BDA !== 'undefined' && typeof BDA.setButtonBusy === 'function') {
+        BDA.setButtonBusy(saveBtn, false);
+        BDA.setButtonBusy(testBtn, false);
+      } else {
+        saveBtn.disabled = false; testBtn.disabled = false;
+      }
     }
   }
 </script>

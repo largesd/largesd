@@ -6,7 +6,7 @@
   <title>Blind Debate Adjudicator - Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script defer src="static/js/auth.js"></script>
   <script defer src="static/js/common.js"></script>
   <script defer src="static/js/data_bridge.js"></script>
@@ -34,7 +34,6 @@
           <a href="audits.html">Audits</a>
           <a href="evidence.html">Evidence</a>
           <a href="admin.html">Admin</a>
-          <a href="human-review.html">Human Review</a>
           <a href="about.html">About</a>
         </div>
       </details>
@@ -48,7 +47,7 @@
   <div class="state-wrap" id="state-wrap-desktop" aria-live="polite" aria-atomic="true">
     <div class="state-item" data-state-tone="warn"><span class="state-label">Verdict</span><strong class="state-value verdict-neutral" id="verdict-display">NO VERDICT</strong></div>
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="confidence-display">-</strong></div>
-    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title="">Loading...</strong></div>
+    <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="snapshot-display" title=""><span class="skeleton skeleton-text-sm"></span></strong></div>
   </div>
   <div class="state-wrap" id="state-wrap-mobile" hidden aria-live="polite" aria-atomic="true">
     <div class="state-compact" data-state-tone="warn"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
@@ -64,7 +63,7 @@
         <h1>Understand the current state in one screen</h1>
         <p class="intro-copy">This view highlights what is being debated, where the verdict stands, and the clearest next steps for participating or auditing.</p>
       </div>
-      <span class="api-status" id="api-status" role="status" aria-live="polite">Loading...</span>
+      <span class="api-status" id="api-status" role="status" aria-live="polite"><span class="spinner" aria-label="Loading" role="status"></span> Loading...</span>
     </div>
 
     <div class="resolution-block resolution-block-home" id="debate-prompt-content">
@@ -105,7 +104,7 @@
         <h2>What changed in the latest snapshot</h2>
         <p class="lede">Use this summary before opening detailed scoring pages.</p>
         <ul class="compact-list update-list" id="changes-list" aria-live="polite" aria-busy="true">
-          <li>Loading snapshot changes...</li>
+          <li><span class="spinner" aria-label="Loading" role="status"></span> Loading snapshot changes...</li>
         </ul>
       </section>
 
@@ -186,9 +185,9 @@
           <div class="table-wrap">
             <table class="table table-compact">
               <tbody>
-                <tr><th scope="row">Allowed</th><td class="mono" id="allowed-count">84</td></tr>
-                <tr><th scope="row">Blocked</th><td class="mono" id="blocked-count">11</td></tr>
-                <tr><th scope="row">Top block reasons</th><td id="block-reasons" class="pill-cluster"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
+                <tr><th scope="row">Allowed</th><td class="mono" id="allowed-count" data-label="Allowed">84</td></tr>
+                <tr><th scope="row">Blocked</th><td class="mono" id="blocked-count" data-label="Blocked">11</td></tr>
+                <tr><th scope="row">Top block reasons</th><td id="block-reasons" class="pill-cluster" data-label="Top block reasons"><span class="pill warn">Off-topic</span> <span class="pill bad">PII</span> <span class="pill">Spam</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -210,7 +209,7 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator - No identity signals shown - <a href="human-review.html">Human Review</a>
+    <div>Blind Debate Adjudicator - No identity signals shown
           <a href="about.html">About</a> - <button type="button" class="footer-link-button" data-help-toggle="true" aria-controls="helpPanel" aria-expanded="false">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
@@ -261,7 +260,7 @@
     <p class="glossary-def">Normalized, deduplicated claim and argument units used for stable scoring.</p>
 
     <hr />
-    <p class="help-panel-note help-panel-note-bottom">For the full specification, open <a href="human-review.html">Human Review</a>
+    <p class="help-panel-note help-panel-note-bottom">For the full specification,
           <a href="about.html">About</a>.</p>
   </div>
 </div>

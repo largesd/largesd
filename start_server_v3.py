@@ -8,7 +8,6 @@ Features:
 - Multi-debate support per user
 """
 import os
-import sys
 import argparse
 
 
@@ -73,8 +72,7 @@ def main():
     print("=" * 70)
     
     # Import and run the v3 app
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
-    from app_v3 import app
+    from backend.app_v3 import app
     
     app.run(host=args.host, port=args.port, debug=args.debug)
 

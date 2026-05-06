@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Topics — Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <style>
     .topics-page {
       --topics-label-size: 0.79rem;
@@ -328,7 +328,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -343,7 +342,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -399,13 +398,13 @@
       <label class="pill topics-filter-chip" data-flag="needs_review">
         <input type="checkbox" value="needs_review" /><span>Needs review</span>
       </label>
-      <button type="button" class="pill" id="topics-clear-btn" style="display:none;">Clear filters</button>
+      <button type="button" class="pill hidden" id="topics-clear-btn">Clear filters</button>
     </div>
     <div class="topics-results-summary" id="topics-results-summary"></div>
   </div>
 
   <!-- Review first panel -->
-  <div class="callout soft topics-panel" id="review-first-panel" style="display:none;">
+  <div class="callout soft topics-panel hidden" id="review-first-panel">
     <div class="review-first-grid" id="review-first-grid"></div>
   </div>
 
@@ -431,7 +430,7 @@
         </tr>
       </thead>
       <tbody id="topics-tbody" data-testid="topics-tbody">
-        <tr><td colspan="5" class="topics-status-row">Loading topics...</td></tr>
+        <tr><td colspan="5"><span class="skeleton skeleton-table-row"></span></td></tr>
       </tbody>
     </table>
   </div>
@@ -445,12 +444,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div class="help-overlay"></div>
 <div class="help-panel" id="helpPanel" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="help-panel-title">
@@ -775,7 +774,7 @@ function renderTopicsTable() {
       <tr>
         <td colspan="5" class="topics-status-row">
           No topics match your search or filters.
-          <br><button type="button" class="pill topics-status-action" onclick="clearTopicFilters()">Clear filters</button>
+          <br><button type="button" class="pill topics-status-action" data-action="clear-topic-filters">Clear filters</button>
         </td>
       </tr>
     `;
@@ -791,7 +790,7 @@ function renderTopicsTable() {
 
     return `
       <tr data-testid="topic-row-${t.topic_id}">
-        <td class="topic-name-cell">
+        <td class="topic-name-cell" data-label="Name & scope">
           <a href="topic.html?id=${encodeURIComponent(t.topic_id)}">${BDA.escapeHtml(t.name || 'Untitled')}</a>
           ${t.scope ? `<p class="topic-scope">${BDA.escapeHtml(t.scope)}</p>` : ''}
           <div class="topic-meta-line">
@@ -804,14 +803,16 @@ function renderTopicsTable() {
             <a class="pill" href="audits.html?tab=audits&topic=${encodeURIComponent(t.topic_id)}#topic-geometry">Open audit</a>
           </div>
         </td>
-        <td class="mono">${toFiniteNumber(t.relevance, 0).toFixed(2)}</td>
-        <td class="mono">${toFiniteNumber(t.drift_score, 0).toFixed(2)}</td>
-        <td class="mono">${toFiniteNumber(t.coherence, 0).toFixed(2)}</td>
-        <td class="mono">${toFiniteNumber(t.distinctness, 0).toFixed(2)}</td>
+        <td class="mono" data-label="Rel_t">${toFiniteNumber(t.relevance, 0).toFixed(2)}</td>
+        <td class="mono" data-label="Drift">${toFiniteNumber(t.drift_score, 0).toFixed(2)}</td>
+        <td class="mono" data-label="Coherence">${toFiniteNumber(t.coherence, 0).toFixed(2)}</td>
+        <td class="mono" data-label="Distinctness">${toFiniteNumber(t.distinctness, 0).toFixed(2)}</td>
       </tr>
     `;
   }).join('');
 }
+
+BDA.registerAction('clear-topic-filters', clearTopicFilters);
 
 function clearTopicFilters() {
   TOPICS_STATE.query = '';
@@ -895,7 +896,17 @@ async function loadData() {
     }
   } catch (error) {
     console.error('Error loading data:', error);
-    document.getElementById('topics-tbody').innerHTML = '<tr><td colspan="5" class="topics-status-row is-error">Error loading topics.</td></tr>';
+    const tbody = document.getElementById('topics-tbody');
+    const errorMsg = error?.message || 'Error loading topics.';
+    const requestId = error?.payload?.request_id || '';
+    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function' && tbody) {
+      BDA.showInlineError(tbody, errorMsg, () => {
+        if (requestId) console.error(`[request_id: ${requestId}] Retry loading topics`);
+        loadData();
+      });
+    } else if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" class="topics-status-row is-error">Error loading topics.</td></tr>';
+    }
   }
 }
 

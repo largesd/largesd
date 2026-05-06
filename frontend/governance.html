@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Governance - Blind Debate Adjudicator</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="static/js/auth.js"></script>
   <script src="static/js/common.js"></script>
   <script src="static/js/data_bridge.js"></script>
@@ -31,7 +31,6 @@
           <a href="audits.html" role="menuitem">Audits</a>
           <a href="evidence.html" role="menuitem">Evidence</a>
           <a href="admin.html" role="menuitem">Admin</a>
-          <a href="human-review.html" role="menuitem">Human Review</a>
           <a href="about.html" role="menuitem">About</a>
         </div>
       </details>
@@ -47,7 +46,7 @@
     <div class="state-item"><span class="state-label">Confidence</span><strong class="state-value mono" id="header-confidence">-</strong></div>
     <div class="state-item"><span class="state-label">Snapshot</span><strong class="state-value mono" id="header-snapshot">-</strong></div>
   </div>
-  <div class="state-wrap" style="display:none;">
+  <div class="state-wrap hidden">
     <div class="state-compact"><strong>Verdict:</strong> <span id="verdict-mobile">NO VERDICT</span></div>
     <div class="state-compact"><strong>Confidence:</strong> <span id="confidence-mobile">-</span></div>
   </div>
@@ -63,9 +62,9 @@
       <button class="button secondary" type="button" id="governance-refresh-btn">Refresh</button>
     </div>
 
-    <div class="callout soft" id="governance-empty" style="display:none;"></div>
+    <div class="callout soft hidden" id="governance-empty"></div>
 
-    <div id="governance-content" style="display:none;">
+    <div id="governance-content" class="hidden">
       <div class="row">
         <span class="pill">Frame: <span class="mono" id="gov-frame-id">-</span></span>
         <span class="pill">Frame version: <span class="mono" id="gov-frame-version">-</span></span>
@@ -78,9 +77,9 @@
       <hr />
       <h3>Frame Context</h3>
       <div class="callout soft">
-        <p style="margin-top:0;margin-bottom:8px" id="gov-frame-statement">No active frame statement available.</p>
+        <p class="mt-0-mb-8" id="gov-frame-statement">No active frame statement available.</p>
         <small id="gov-frame-scope">Frame scope unavailable.</small>
-        <div class="row" style="margin-top:12px;">
+        <div class="row mt-12">
           <a class="pill" href="frame-dossier.html">Open frame dossier</a>
           <span class="pill">Cadence: <span class="mono" id="gov-frame-cadence">6 months</span></span>
         </div>
@@ -92,7 +91,7 @@
         <table class="table">
           <thead><tr><th>Petition</th><th>Status</th><th>Submitted</th><th>Decision</th></tr></thead>
           <tbody id="gov-frame-petitions-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading frame petitions...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -105,31 +104,31 @@
             <tr><th>Metric</th><th>Value</th><th>Notes</th></tr>
           </thead>
           <tbody id="gov-health-tbody">
-            <tr><td colspan="3" style="text-align:center;color:var(--muted)">Loading governance health metrics...</td></tr>
+            <tr><td colspan="3"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
 
-      <div class="callout soft" style="margin-top:16px;">
-        <h4 style="margin-top:0;font-size:0.88rem;">Judge Pool Governance Details</h4>
+      <div class="callout soft mt-16">
+        <h4 class="mt-0-text-88">Judge Pool Governance Details</h4>
         <div id="judge-pool-details">
-          <small style="color:var(--muted)">Loading judge pool details...</small>
+          <span class="skeleton skeleton-text-sm"></span>
         </div>
       </div>
 
-      <div class="callout soft" style="margin-top:16px;">
-        <h4 style="margin-top:0;font-size:0.88rem;">Independent Fairness Audits</h4>
-        <p style="margin:0;font-size:0.84rem;">Independent audits of sampling/selection fairness are conducted on a published cadence.</p>
-        <div class="row" style="margin-top:8px;">
+      <div class="callout soft mt-16">
+        <h4 class="mt-0-text-88">Independent Fairness Audits</h4>
+        <p class="m-0-text-84">Independent audits of sampling/selection fairness are conducted on a published cadence.</p>
+        <div class="row mt-8">
           <span class="pill">Last audit: <span class="mono" id="fairness-last">-</span></span>
           <span class="pill">Next audit: <span class="mono" id="fairness-next">-</span></span>
         </div>
       </div>
 
-      <div class="callout soft" style="margin-top:16px;">
-        <h4 style="margin-top:0;font-size:0.88rem;">Unselected Tail Summaries</h4>
-        <p style="margin:0;font-size:0.84rem;">View unselected tail summaries by topic-side.</p>
-        <div class="row" style="margin-top:8px;">
+      <div class="callout soft mt-16">
+        <h4 class="mt-0-text-88">Unselected Tail Summaries</h4>
+        <p class="m-0-text-84">View unselected tail summaries by topic-side.</p>
+        <div class="row mt-8">
           <a class="pill" href="dossier.html">Open dossier →</a>
         </div>
       </div>
@@ -142,7 +141,7 @@
             <tr><th>Incident</th><th>Status</th><th>Severity</th><th>Updated</th></tr>
           </thead>
           <tbody id="gov-incidents-tbody">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted)">Loading incidents...</td></tr>
+            <tr><td colspan="4"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -155,7 +154,7 @@
             <tr><th>Type</th><th>Change</th><th>Timestamp</th></tr>
           </thead>
           <tbody id="gov-changelog-tbody">
-            <tr><td colspan="3" style="text-align:center;color:var(--muted)">Loading changelog...</td></tr>
+            <tr><td colspan="3"><span class="skeleton skeleton-table-row"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -165,12 +164,12 @@
 
 <footer>
   <div class="footer-simple">
-    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" onclick="BDA.toggleHelp(); return false;">Glossary</button></div>
+    <div>Blind Debate Adjudicator • No identity signals shown • <a href="about.html">About</a> • <button type="button" class="footer-link-button" data-action="toggle-help">Glossary</button></div>
     <div class="mono">v3.0</div>
   </div>
 </footer>
 
-<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+<button class="back-to-top" data-action="scroll-top" aria-label="Back to top">↑</button>
 
 <div id="shared-help-panel" data-panel="help-panel"></div>
 
@@ -230,27 +229,27 @@ function renderHealthRows(summary, judgePool, fairness) {
   // Judge pool details
   const details = [];
   if (judgePool?.composition) {
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>Composition:</strong> ${BDA.escapeHtml(JSON.stringify(judgePool.composition))}</p>`);
+    details.push(`<p class="my-4-text-82"><strong>Composition:</strong> ${BDA.escapeHtml(JSON.stringify(judgePool.composition))}</p>`);
   }
   if (judgePool?.qualification_rubric_summary) {
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>Qualification rubric:</strong> ${BDA.escapeHtml(judgePool.qualification_rubric_summary)}</p>`);
+    details.push(`<p class="my-4-text-82"><strong>Qualification rubric:</strong> ${BDA.escapeHtml(judgePool.qualification_rubric_summary)}</p>`);
   }
   if (judgePool?.randomized_assignment_recipe) {
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>Assignment recipe:</strong> ${BDA.escapeHtml(judgePool.randomized_assignment_recipe)} (seed: ${BDA.escapeHtml(judgePool.assignment_seed || '-')})</p>`);
+    details.push(`<p class="my-4-text-82"><strong>Assignment recipe:</strong> ${BDA.escapeHtml(judgePool.randomized_assignment_recipe)} (seed: ${BDA.escapeHtml(judgePool.assignment_seed || '-')})</p>`);
   }
   if (judgePool?.rotation_policy) {
     const rp = judgePool.rotation_policy;
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>Rotation:</strong> max consecutive=${rp.max_consecutive_snapshots || '-'}, cooldown=${rp.cooldown_snapshots || '-'}</p>`);
+    details.push(`<p class="my-4-text-82"><strong>Rotation:</strong> max consecutive=${rp.max_consecutive_snapshots || '-'}, cooldown=${rp.cooldown_snapshots || '-'}</p>`);
   }
   if (judgePool?.aggregate_coi_stats) {
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>COI stats:</strong> ${BDA.escapeHtml(JSON.stringify(judgePool.aggregate_coi_stats))}</p>`);
+    details.push(`<p class="my-4-text-82"><strong>COI stats:</strong> ${BDA.escapeHtml(JSON.stringify(judgePool.aggregate_coi_stats))}</p>`);
   }
   if (judgePool?.calibration_protocol_status) {
-    details.push(`<p style="margin:4px 0;font-size:0.82rem;"><strong>Calibration:</strong> ${BDA.escapeHtml(judgePool.calibration_protocol_status)}</p>`);
+    details.push(`<p class="my-4-text-82"><strong>Calibration:</strong> ${BDA.escapeHtml(judgePool.calibration_protocol_status)}</p>`);
   }
   document.getElementById('judge-pool-details').innerHTML = details.length
     ? details.join('')
-    : '<small style="color:var(--muted)">No detailed judge pool data available.</small>';
+    : '<small class="text-muted">No detailed judge pool data available.</small>';
 
   // Fairness audit dates
   const audits = fairness?.audits || [];
@@ -263,16 +262,16 @@ function renderIncidents(incidents) {
   const rows = Array.isArray(incidents) ? incidents : [];
   const tbody = document.getElementById('gov-incidents-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No incidents recorded.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center-muted">No incidents recorded.</td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map((incident) => `
     <tr>
-      <td>${BDA.escapeHtml(incident.title || incident.incident_id || 'Incident')}</td>
-      <td>${BDA.escapeHtml(incident.status || 'unknown')}</td>
-      <td>${BDA.escapeHtml(incident.severity || 'unknown')}</td>
-      <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(incident.updated_at || incident.created_at))}</td>
+      <td data-label="Title">${BDA.escapeHtml(incident.title || incident.incident_id || 'Incident')}</td>
+      <td data-label="Status">${BDA.escapeHtml(incident.status || 'unknown')}</td>
+      <td data-label="Severity">${BDA.escapeHtml(incident.severity || 'unknown')}</td>
+      <td class="mono" data-label="Updated">${BDA.escapeHtml(BDA.formatDateTime(incident.updated_at || incident.created_at))}</td>
     </tr>
   `).join('');
 }
@@ -281,15 +280,15 @@ function renderChangelog(entries) {
   const rows = Array.isArray(entries) ? entries : [];
   const tbody = document.getElementById('gov-changelog-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted)">No changelog entries available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center-muted">No changelog entries available.</td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map((entry) => `
     <tr>
-      <td>${BDA.escapeHtml(entry.change_type || 'change')}</td>
-      <td>${BDA.escapeHtml(entry.description || entry.summary || '-')}</td>
-      <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(entry.timestamp || entry.created_at))}</td>
+      <td data-label="Type">${BDA.escapeHtml(entry.change_type || 'change')}</td>
+      <td data-label="Description">${BDA.escapeHtml(entry.description || entry.summary || '-')}</td>
+      <td class="mono" data-label="Timestamp">${BDA.escapeHtml(BDA.formatDateTime(entry.timestamp || entry.created_at))}</td>
     </tr>
   `).join('');
 }
@@ -298,15 +297,15 @@ function renderFramePetitions(petitions) {
   const rows = Array.isArray(petitions) ? petitions : [];
   const tbody = document.getElementById('gov-frame-petitions-tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No frame petitions submitted.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center-muted">No frame petitions submitted.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((petition) => `
     <tr>
-      <td class="mono">${BDA.escapeHtml(petition.petition_id || '-')}</td>
-      <td>${BDA.escapeHtml(petition.status || 'pending')}</td>
-      <td class="mono">${BDA.escapeHtml(BDA.formatDateTime(petition.created_at))}</td>
-      <td>${BDA.escapeHtml(petition.governance_decision?.reason || '-')}</td>
+      <td class="mono" data-label="Petition ID">${BDA.escapeHtml(petition.petition_id || '-')}</td>
+      <td data-label="Status">${BDA.escapeHtml(petition.status || 'pending')}</td>
+      <td class="mono" data-label="Created">${BDA.escapeHtml(BDA.formatDateTime(petition.created_at))}</td>
+      <td data-label="Decision">${BDA.escapeHtml(petition.governance_decision?.reason || '-')}</td>
     </tr>
   `).join('');
 }

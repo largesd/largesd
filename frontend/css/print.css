@@ -1,0 +1,11 @@
+/* Print styles — reserved for future use */
+@media print {
+  .nav,
+  .subnav,
+  .back-to-top,
+  .help-btn,
+  .help-panel,
+  .help-overlay {
+    display: none !important;
+  }
+}

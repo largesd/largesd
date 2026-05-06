@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from lsd_v1_2 import (
+from backend.lsd_v1_2 import (
     SELECTION_FORMULA_VERSION,
     SELECTION_WEIGHTS,
     compute_selection_score,

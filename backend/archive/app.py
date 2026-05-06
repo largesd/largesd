@@ -11,13 +11,10 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from debate_engine import DebateEngine
-from database import DebateDatabase
-from debate_proposal import parse_debate_proposal_payload
-from models import Side
+from backend.debate_engine import DebateEngine
+from backend.database import DebateDatabase
+from backend.debate_proposal import parse_debate_proposal_payload
+from backend.models import Side
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
