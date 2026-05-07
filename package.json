@@ -1,0 +1,9 @@
+{
+  "name": "debate-system-dev",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Development tooling dependencies for the Blind Debate Adjudicator",
+  "devDependencies": {
+    "axe-core": "^4.10.3"
+  }
+}
