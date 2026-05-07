@@ -156,6 +156,48 @@ In alignment with the MSD specification §2.A:
 - The frontend displays no usernames, avatars, or reputation signals
 - Auth is only required for administrative or personal-history actions
 
+# Authentication Policy
+
+## Viewing vs Writing
+- Viewing public debate content does not require authentication.
+- All write-intent actions require authentication:
+  - debate proposals
+  - direct API posts
+  - email-mode posts
+  - frame petitions
+  - appeals
+  - snapshot/admin mutations where applicable
+
+## Email-mode Submissions
+- Email-mode submissions require a signed, payload-bound token generated
+  after login via POST /api/debate/email-submission-draft.
+- The token is embedded in the BDA Submission v3 body as `Auth-Token`.
+- Direct emails without a valid token are rejected by the processor.
+- Tokens are bound to debate_id, submission_id, side, topic_id, and
+  payload_hash. Editing the email body invalidates the token.
+- Token TTL defaults to 24 hours and is configurable.
+
+## Debate Proposals
+- Debate proposals are submitted exclusively via the authenticated API.
+- There is no email-mode proposal submission. Proposals follow the same
+  login-gated flow as direct API posts.
+
+## Identity-Blind Surfaces
+- Authentication is for abuse reduction and auditability.
+- Public debate surfaces (posts, results, dossiers) do not expose author
+  identity or user_id.
+
+## Legacy Mode
+- Legacy v1/v2 email submissions are rejected by default.
+- Do not enable legacy mode (EMAIL_SUBMISSION_AUTH_ALLOW_LEGACY) in
+  public deployments.
+
+## Secret Rotation
+- Rotating SECRET_KEY (or EMAIL_SUBMISSION_SECRET) invalidates all
+  in-flight email submission tokens immediately.
+- Because the default TTL is short (24h), this is usually acceptable.
+- Operators should rotate secrets during low-activity windows.
+
 ## Testing
 
 Run auth integration tests:

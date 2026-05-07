@@ -1,0 +1,131 @@
+Task 01: Add CSRF-Aware Direct API Auth Helpers
+===============================================
+
+Primary file:
+  acceptance/run_ui_acceptance.py
+
+Related backend files for verification only:
+  backend/routes/api_bp.py
+  backend/utils/middleware.py
+  backend/routes/auth_bp.py
+
+
+Goal
+----
+Fix the direct Playwright API setup path so it can register or log in through
+/api/auth/register and /api/auth/login without weakening backend CSRF
+protection.
+
+
+Current Problem
+---------------
+authenticate_browser_user(page, base_url) currently posts directly to
+/api/auth/register with only:
+
+  headers={"Content-Type": "application/json"}
+
+The backend CSRF middleware requires both:
+
+  - csrf_token cookie
+  - matching X-CSRF-Token header
+
+Because the direct API setup path has neither, the backend correctly returns:
+
+  403 {"code": "CSRF_INVALID", ...}
+
+
+Required Implementation
+-----------------------
+Add a helper that primes the current Playwright browser context by loading an
+HTML page, then reads the csrf_token cookie from that same context:
+
+  def get_csrf_token(page: Page, base_url: str) -> str:
+      page.goto(f"{base_url}/login.html", wait_until="networkidle")
+      cookies = page.context.cookies(base_url)
+      token = next((c["value"] for c in cookies if c["name"] == "csrf_token"), "")
+      if not token:
+          raise AssertionError("Could not obtain csrf_token cookie from login.html.")
+      return token
+
+Before relying on login.html, verify backend/routes/api_bp.py still sets the
+csrf_token cookie on HTML responses. Current code does this in serve_static()
+when response.content_type starts with text/html.
+
+Add a small response debug helper:
+
+  def response_debug(response) -> object:
+      try:
+          return response.json()
+      except Exception:
+          return response.text()
+
+Use the CSRF token in direct unauthenticated API auth calls:
+
+  csrf = get_csrf_token(page, base_url)
+  headers = {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": csrf,
+  }
+
+  register_response = page.request.post(
+      f"{base_url}/api/auth/register",
+      headers=headers,
+      data=json.dumps(register_payload),
+  )
+
+If registration returns 409 and the helper falls back to login, use the same
+Playwright page/context and include X-CSRF-Token there too:
+
+  login_response = page.request.post(
+      f"{base_url}/api/auth/login",
+      headers=headers,
+      data=json.dumps({"email": email, "password": password}),
+  )
+
+
+Critical Details
+----------------
+Use page.request.post(...) from the same Page/context that obtained the cookie.
+Do not create a separate playwright.request.new_context() unless you explicitly
+copy the csrf_token cookie into it.
+
+Sending only the X-CSRF-Token header is not enough. The backend validates that
+the csrf_token cookie and X-CSRF-Token header both exist and match.
+
+Do not exempt /api/auth/register or /api/auth/login from CSRF. The fix belongs
+in the acceptance client.
+
+When auth fails, include status and body:
+
+  raise AssertionError(
+      f"Failed to register acceptance user: HTTP {register_response.status}: "
+      f"{response_debug(register_response)}"
+  )
+
+For login fallback failures:
+
+  raise AssertionError(
+      "Failed to log in acceptance user after register conflict: "
+      f"HTTP {login_response.status}: {response_debug(login_response)}"
+  )
+
+
+Expected Behavior
+-----------------
+After this task, a direct API register/login from acceptance should show either:
+
+  - success with an access_token, or
+  - a precise failure body such as CSRF_INVALID, RATE_LIMITED, EMAIL_EXISTS, or
+    INVALID_CREDENTIALS.
+
+It should no longer fail with a bare "HTTP 403" that hides the response body.
+
+
+Regression Signals
+------------------
+Existing CSRF/auth tests should still pass:
+
+  python -m pytest tests/integration/test_csrf.py tests/integration/api/test_auth.py -q
+
+The full acceptance run will still need Task 02, because direct setup users must
+also be admin-capable for admin criteria.

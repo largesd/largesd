@@ -1,0 +1,323 @@
+TASK 02: Backend Draft Endpoint and Shared Auth Helper
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Create a Flask-independent auth helper for email submission tokens, and add a
+new authenticated POST endpoint that generates a signed BDA Submission v3 email
+body with a bound payload hash.
+
+Why this matters:
+This is the foundation for the entire auth-hardening effort. The auth helper
+must work both inside Flask (draft endpoint) and outside Flask (email processor
+daemon). The endpoint must validate inputs, rate-limit per user, and return a
+complete v3 submission body including a signed JWT.
+
+Files to read before editing:
+- backend/routes/debate_bp.py
+- backend/utils/validators.py
+- backend/utils/decorators.py (for login_required and jwt patterns)
+- backend/app_v3.py (or wherever Flask config is loaded)
+- backend/debate_engine_v2.py (confirm submit_post signature)
+
+Write scope:
+- backend/email_submission_auth.py (NEW)
+- backend/routes/debate_bp.py
+- backend/app_v3.py (or equivalent config loader)
+- requirements.txt (only if a new dependency is needed; none expected)
+
+Implementation steps:
+
+1. Add PROCESSOR_DEST_EMAIL to Flask config
+   Open the file where Flask app config is initialized (likely
+   backend/app_v3.py near line 58). Add:
+
+     app.config["PROCESSOR_DEST_EMAIL"] = os.getenv(
+         "PROCESSOR_DEST_EMAIL", ""
+     )
+
+   Also add:
+
+     app.config["EMAIL_SUBMISSION_TOKEN_TTL_MINUTES"] = int(
+         os.getenv("EMAIL_SUBMISSION_TOKEN_TTL_MINUTES", "1440")
+     )
+     app.config["EMAIL_SUBMISSION_SECRET"] = os.getenv(
+         "EMAIL_SUBMISSION_SECRET", app.config["SECRET_KEY"]
+     )
+
+2. Create backend/email_submission_auth.py (Flask-independent)
+   This module must NOT import flask, current_app, g, or request.
+   The email processor will import it directly.
+
+   import base64
+   import hashlib
+   import json
+   import uuid
+   from dataclasses import dataclass
+   from datetime import UTC, datetime
+   from typing import Any
+
+   import jwt
+
+   @dataclass(frozen=True)
+   class EmailSubmissionAuthConfig:
+       secret: str
+       algorithm: str = "HS256"
+       ttl_minutes: int = 1440
+       require_verified_email: bool = False
+
+   def compute_payload_hash(payload: dict[str, str]) -> str:
+       """Canonical JSON -> SHA-256 -> base64url nopad."""
+       canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+       digest = hashlib.sha256(canonical.encode("utf-8")).digest()
+       return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+   def generate_email_submission_token(
+       config: EmailSubmissionAuthConfig,
+       claims: dict[str, Any],
+       now: datetime | None = None,
+   ) -> str:
+       if now is None:
+           now = datetime.now(UTC)
+       exp = now.timestamp() + (config.ttl_minutes * 60)
+       payload = {**claims, "exp": int(exp), "iat": int(now.timestamp())}
+       return jwt.encode(payload, config.secret, algorithm=config.algorithm)
+
+   def decode_email_submission_token(
+       config: EmailSubmissionAuthConfig,
+       token: str,
+       now: datetime | None = None,
+   ) -> dict:
+       if now is None:
+           now = datetime.now(UTC)
+       return jwt.decode(
+           token,
+           config.secret,
+           algorithms=[config.algorithm],
+           options={"require": ["exp", "iat", "type"]},
+           clock_skew=60,
+       )
+
+   def verify_email_submission_claims(
+       config: EmailSubmissionAuthConfig,
+       token: str,
+       submission: Any,  # EmailSubmission dataclass from parser
+       sender_email: str,
+       user_lookup: callable,
+       now: datetime | None = None,
+   ) -> dict:
+       """Decode and verify a token against the parsed submission.
+       Returns the verified user dict on success, or raises ValueError.
+       """
+       decoded = decode_email_submission_token(config, token, now)
+
+       if decoded.get("type") != "email_submission":
+           raise ValueError("wrong_token_type")
+
+       # Cross-debate / cross-submission reuse prevention
+       if decoded.get("debate_id") != submission.debate_id:
+           raise ValueError("debate_mismatch")
+       if decoded.get("submission_id") != submission.submission_id:
+           raise ValueError("submission_mismatch")
+       if decoded.get("side") != submission.side:
+           raise ValueError("side_mismatch")
+       if decoded.get("topic_id") != submission.topic_id:
+           raise ValueError("topic_mismatch")
+
+       # Email / forwarding attack prevention
+       normalized_from = sender_email.lower().strip()
+       normalized_claim = (decoded.get("email") or "").lower().strip()
+       if normalized_from != normalized_claim:
+           raise ValueError("email_mismatch")
+
+       # Payload edit prevention
+       expected_hash = decoded.get("payload_hash")
+       expected_alg = decoded.get("payload_hash_alg")
+       if expected_alg != "sha256":
+           raise ValueError("unsupported_hash_alg")
+       if submission.payload_hash != expected_hash:
+           raise ValueError("payload_mismatch")
+
+       user = user_lookup(decoded.get("user_id"))
+       if not user:
+           raise ValueError("unknown_user")
+       if not user.get("is_active", True):
+           raise ValueError("inactive_user")
+       if config.require_verified_email and not user.get("is_verified", False):
+           raise ValueError("unverified_email")
+
+       return user
+
+3. Add POST /api/debate/email-submission-draft to debate_bp.py
+   Open backend/routes/debate_bp.py.
+   Add imports at the top:
+
+     from backend.email_submission_auth import (
+         EmailSubmissionAuthConfig,
+         compute_payload_hash,
+         generate_email_submission_token,
+     )
+     from backend.utils.validators import (
+         ValidationError,
+         validate_side,
+         validate_string,
+         validate_topic_id,
+     )
+
+   If Flask-Limiter is not already imported, add:
+
+     from backend import limiter  # or however limiter is exposed in this app
+
+   If the app does not expose limiter centrally, look for where `limiter =
+   Limiter(app)` is defined and import from there.
+
+   Add the route:
+
+     @debate_bp.route("/api/debate/email-submission-draft", methods=["POST"])
+     @login_required
+     @limiter.limit("5 per hour", key_func=lambda: g.user["user_id"])
+     def create_email_submission_draft() -> Any:
+         data = request.get_json()
+         if not data:
+             raise ValidationError("Request body required")
+
+         debate_id = data.get("debate_id")
+         if not debate_id or not re.match(r"^[a-zA-Z0-9_-]+$", debate_id):
+             raise ValidationError("Invalid debate ID")
+
+         debate = extensions.db.get_debate(debate_id)
+         if not debate:
+             return jsonify({
+                 "error": "Debate not available for posting",
+                 "code": "DEBATE_NOT_AVAILABLE_FOR_POSTING"
+             }), 404
+
+         # Access check consistent with get_debate_by_id
+         if debate.get("is_private") and debate.get("user_id") != g.user["user_id"]:
+             return jsonify({"error": "Access denied", "code": "ACCESS_DENIED"}), 403
+
+         side = validate_side(data.get("side"))
+         topic_id = validate_topic_id(data.get("topic_id"))
+         facts = validate_string(data.get("facts"), "Facts", min_length=5, max_length=5000)
+         inference = validate_string(data.get("inference"), "Inference", min_length=5, max_length=2000)
+         counter_arguments = validate_string(
+             data.get("counter_arguments", ""), "Counter-arguments", required=False, max_length=2000
+         ) or ""
+
+         # Resolution from DB, not request
+         resolution = debate.get("resolution", "")
+
+         dest_email = current_app.config.get("PROCESSOR_DEST_EMAIL", "")
+         if not dest_email:
+             return jsonify({
+                 "error": "Email posting is not configured on this server",
+                 "code": "EMAIL_DEST_MISSING"
+             }), 400
+
+         # Build canonical payload for hashing (NO resolution, timestamps, token, mailto)
+         canonical_payload = {
+             "debate_id": debate_id,
+             "side": side,
+             "topic_id": topic_id or "",
+             "facts": facts,
+             "inference": inference,
+             "counter_arguments": counter_arguments,
+         }
+         payload_hash = compute_payload_hash(canonical_payload)
+
+         submission_id = str(uuid.uuid4())
+         now = datetime.now(UTC)
+         expires_at = now.timestamp() + (current_app.config["EMAIL_SUBMISSION_TOKEN_TTL_MINUTES"] * 60)
+
+         config = EmailSubmissionAuthConfig(
+             secret=current_app.config["EMAIL_SUBMISSION_SECRET"],
+             ttl_minutes=current_app.config["EMAIL_SUBMISSION_TOKEN_TTL_MINUTES"],
+         )
+
+         token = generate_email_submission_token(
+             config,
+             {
+                 "type": "email_submission",
+                 "user_id": g.user["user_id"],
+                 "email": g.user.get("email", ""),
+                 "debate_id": debate_id,
+                 "submission_id": submission_id,
+                 "side": side,
+                 "topic_id": topic_id or "",
+                 "payload_hash": payload_hash,
+                 "payload_hash_alg": "sha256",
+             },
+             now=now,
+         )
+
+         # Build v3 body
+         submitted_at = now.isoformat().replace("+00:00", "Z")
+         expires_at_iso = datetime.fromtimestamp(expires_at, UTC).isoformat().replace("+00:00", "Z")
+         body_lines = [
+             "BDA Submission v3",
+             f"Debate-ID: {debate_id}",
+             f"Resolution: {resolution}",
+             f"Submission-ID: {submission_id}",
+             f"Submitted-At: {submitted_at}",
+             f"Expires-At: {expires_at_iso}",
+             f"Submitter-Email: {g.user.get('email', '')}",
+             f"Position: {side}",
+             f"Topic-Area: {topic_id or ''}",
+             f"Payload-Hash-Alg: sha256",
+             f"Payload-Hash: {payload_hash}",
+             f"Auth-Token: {token}",
+             "",
+             "Facts:",
+             facts,
+             "",
+             "Inference:",
+             inference,
+         ]
+         if counter_arguments:
+             body_lines.extend(["", "Counter-Arguments:", counter_arguments])
+         body = "\n".join(body_lines)
+
+         subject = f"BDA Submission - {side} - {debate_id}"
+         encoded_subject = encodeURIComponent(subject)  # Python: urllib.parse.quote
+         encoded_body = encodeURIComponent(body)
+         mailto = f"mailto:{dest_email}?subject={encoded_subject}&body={encoded_body}"
+
+         return jsonify({
+             "version": "BDA Submission v3",
+             "submission_id": submission_id,
+             "submitted_at": submitted_at,
+             "expires_at": expires_at_iso,
+             "payload_hash_alg": "sha256",
+             "payload_hash": payload_hash,
+             "body": body,
+             "subject": subject,
+             "mailto": mailto,
+         })
+
+   Note: use urllib.parse.quote for the mailto encoding in Python, not JS
+   encodeURIComponent.
+
+4. Register the new env vars
+   Ensure backend/app_v3.py (or equivalent) loads the env vars listed in step 1.
+
+Acceptance criteria:
+- Logged-out POST to /api/debate/email-submission-draft returns 401.
+- Logged-in POST returns a v3 body containing Auth-Token.
+- The token decodes with jwt.decode using the configured secret.
+- The token contains type=email_submission, user_id, email, debate_id,
+  submission_id, side, topic_id, payload_hash, payload_hash_alg, exp, iat.
+- The body Payload-Hash matches the token's payload_hash claim.
+- Recomputing canonical_email_submission_payload from the response body's
+  sanitized fields yields the same payload_hash.
+- Missing PROCESSOR_DEST_EMAIL returns 400 with code EMAIL_DEST_MISSING.
+- Nonexistent debate_id returns 404 with code DEBATE_NOT_AVAILABLE_FOR_POSTING.
+- Sixth draft request within one hour returns 429.
+- backend/email_submission_auth.py has zero Flask imports.
+
+Guardrails:
+- Do NOT HTML-sanitize facts/inference/counter_arguments for the email body.
+  Only validate_string length checks and strip are applied before hashing.
+- Do NOT put resolution, timestamps, or mailto into the canonical payload hash.
+- Do NOT change existing /api/debate/posts behavior.
+- Keep the auth helper Flask-independent. Test it without an app context.

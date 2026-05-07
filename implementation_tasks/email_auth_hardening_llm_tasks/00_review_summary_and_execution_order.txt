@@ -1,0 +1,63 @@
+EMAIL AUTH HARDENING TASK SET: Review Summary and Execution Order
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Source plan reviewed:
+email_submission_auth_hardening_plan.txt
+
+Purpose:
+This folder contains an improved, paste-ready split of the email-submission
+auth-hardening plan. Each numbered file is designed to be pasted into a separate
+LLM implementation conversation.
+
+Important review corrections made to the original plan:
+1. The posts table already has a user_id column (database.py line 361). No
+   migration is needed. DebateEngineV2.submit_post already accepts user_id.
+2. Flask-Limiter (4.1.1) is already in requirements.txt. Use it for rate
+   limiting; do not invent an in-memory dict.
+3. PyJWT is available via the existing flask-jwt-extended dependency. The shared
+   auth helper should use `import jwt` (not flask_jwt_extended imports) because
+   the email processor runs outside Flask.
+4. PROCESSOR_DEST_EMAIL is currently only read by the standalone email
+   processor. The Flask backend must also load it to build mailto links.
+5. The auth probe for "static deployments" in the original plan referenced
+   non-existent endpoints (/api/me, /api/health). Task 01 replaces this with a
+   concrete fallback using existing BDA.api calls.
+6. The original plan's risk note contradicted Phase 3 on Auth-Token line
+   wrapping. All tasks now consistently require safe continuation/unwrapping.
+7. data_bridge.js has no named `autoRedirect()` function; it is an anonymous
+   IIFE at the bottom of the file. Task 01 references it by location.
+8. The existing /api/email-submission-template endpoint should return 410 Gone,
+   not a soft deprecation.
+9. Proposals are API-only (no email mode). Task 08 confirms this and skips the
+   phase rather than leaving it as open research.
+10. The existing test file is tests/unit/test_email_processor.py. Extend it;
+    do not create a duplicate.
+
+Recommended execution order:
+1. 01_frontend_login_gate.txt
+2. 02_backend_draft_endpoint_and_auth_helper.txt
+3. 03_email_parser_v3.txt
+4. 04_frontend_draft_integration.txt
+5. 05_processor_token_verification.txt
+6. 06_test_coverage.txt
+7. 07_docs_config_deprecation.txt
+8. 08_proposal_verification.txt
+
+Parallelism guidance:
+- Tasks 01, 02, and 03 are mostly independent and can be done in parallel.
+- Task 04 depends on Task 02 (the endpoint must exist).
+- Task 05 depends on Tasks 02 and 03 (auth helper + parser v3).
+- Task 06 depends on Tasks 02, 03, 04, and 05.
+- Task 07 can be done in parallel with Task 06, but after implementation is
+  stable.
+- Task 08 is tiny and can be done at any time.
+
+General instructions for every task:
+1. Start with git status --short and do not revert unrelated user changes.
+2. Read the named files before editing.
+3. Keep the task's write scope tight. Do not implement other task files.
+4. Preserve existing public API URLs unless the task explicitly says otherwise.
+5. Run the task-specific tests listed in the file.
+6. In the final response, list changed files and exact tests run.

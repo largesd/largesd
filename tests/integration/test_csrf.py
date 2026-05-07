@@ -10,8 +10,13 @@ Acceptance criteria:
 import importlib
 import os
 import shutil
+import socket
+import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+from dev_workflow import DEFAULT_HOST, assert_port_available
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -358,3 +363,20 @@ def test_auth_endpoints_set_csrf_cookie():
         print("✓ Auth endpoints set CSRF cookie")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_assert_port_available_raises_when_port_in_use():
+    """assert_port_available must raise RuntimeError when the port is bound."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((DEFAULT_HOST, 0))
+        _, port = sock.getsockname()
+        try:
+            assert_port_available(DEFAULT_HOST, port)
+        except RuntimeError as exc:
+            message = str(exc)
+            assert str(port) in message
+            assert "--port" in message
+            print(f"✓ assert_port_available raises RuntimeError for occupied port {port}")
+        else:
+            raise AssertionError("Expected RuntimeError when port is in use")

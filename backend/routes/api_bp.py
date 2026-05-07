@@ -7,7 +7,6 @@ from typing import Any
 from flask import Blueprint, jsonify, send_from_directory
 
 from backend import extensions
-from backend.email_submission_parser import EmailSubmissionParser
 
 api_bp = Blueprint("api", __name__)
 
@@ -63,47 +62,23 @@ def get_email_submission_template() -> Any:
     tags:
       - system
     responses:
-      200:
-        description: Email submission template
+      410:
+        description: Unsigned email submission templates are deprecated
         schema:
           type: object
           properties:
-            version:
+            error:
               type: string
-            required_headers:
-              type: array
-              items:
-                type: string
-            body_sections:
-              type: array
-              items:
-                type: string
-            example:
+            code:
               type: string
     """
     return jsonify(
         {
-            "version": "BDA Submission v1",
-            "required_headers": [
-                "Debate-ID",
-                "Resolution",
-                "Submission-ID",
-                "Submitted-At",
-                "Position",
-                "Topic-Area",
-            ],
-            "body_sections": ["Facts", "Inference", "Counter-Arguments"],
-            "example": EmailSubmissionParser().build_email_body(
-                debate_id="DEBATE_ID",
-                resolution="RESOLUTION_TEXT",
-                side="FOR",
-                topic_id="t1",
-                facts="Your facts here.",
-                inference="Your inference here.",
-                counter_arguments="Optional counter-arguments.",
-            ),
+            "error": "Unsigned email submission templates are deprecated. "
+            "Use POST /api/debate/email-submission-draft after logging in.",
+            "code": "DEPRECATED",
         }
-    )
+    ), 410
 
 
 @api_bp.route("/metrics", methods=["GET"])

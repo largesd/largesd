@@ -1,0 +1,137 @@
+Task 04: Make AC-7 Report Real Register/Login API Errors
+========================================================
+
+Primary file:
+  acceptance/run_ui_acceptance.py
+
+Related frontend files for behavior verification:
+  frontend/static/js/register.js
+  frontend/static/js/login.js
+
+
+Goal
+----
+Keep AC-7 as a real browser UI registration/login flow, but make it fail fast
+with the actual /api/auth/register or /api/auth/login response when those calls
+fail.
+
+
+Current Problem
+---------------
+register_user_via_ui() clicks submit and waits for:
+
+  #success-alert contains "Account created"
+
+login_user_via_ui() clicks submit and waits for:
+
+  #success-alert contains "Login successful"
+
+If the API returns 403, 429, 401, or another error, the frontend may populate
+#error-alert while #success-alert stays empty. The test then times out and hides
+the real API status/body.
+
+
+Required Register Flow
+----------------------
+In register_user_via_ui(), after filling the form and before clicking submit,
+wrap the click in a response wait:
+
+  expect(page.locator("#submit-btn")).to_be_enabled(timeout=SNAPSHOT_TIMEOUT_MS)
+
+  with page.expect_response(
+      lambda r: "/api/auth/register" in r.url and r.request.method == "POST"
+  ) as response_info:
+      page.locator("#submit-btn").click()
+  response = response_info.value
+
+Then:
+
+  - If response.status is not 200 or 201:
+      - Read response_debug(response).
+      - Read #error-alert text if available.
+      - Raise AssertionError immediately with status, body, and alert text.
+
+  - Only after a successful network response:
+      - Assert #success-alert contains "Account created".
+      - Wait for redirect to index.html.
+      - Verify access_token and user payload in localStorage as before.
+
+Suggested failure shape:
+
+  error_text = (page.locator("#error-alert").text_content(timeout=1000) or "").strip()
+  raise AssertionError(
+      f"UI registration failed: HTTP {response.status}: "
+      f"{response_debug(response)}; error alert={error_text!r}"
+  )
+
+If Locator.text_content(timeout=...) is not convenient in the current Playwright
+version, use a tiny helper that catches PlaywrightTimeoutError and returns "".
+
+
+Required Login Flow
+-------------------
+Apply the same pattern to login_user_via_ui() for /api/auth/login:
+
+  expect(page.locator("#submit-btn")).to_be_enabled(timeout=SNAPSHOT_TIMEOUT_MS)
+
+  with page.expect_response(
+      lambda r: "/api/auth/login" in r.url and r.request.method == "POST"
+  ) as response_info:
+      page.locator("#submit-btn").click()
+  response = response_info.value
+
+Then:
+
+  - If response.status is not 200:
+      - Read response_debug(response).
+      - Read #error-alert text if available.
+      - Raise AssertionError immediately with status, body, and alert text.
+
+  - Only after a successful network response:
+      - Assert #success-alert contains "Login successful".
+      - Wait for redirect to new_debate.html.
+      - Verify access_token in localStorage as before.
+
+
+Important Details
+-----------------
+Set up expect_response before clicking the submit button. Otherwise a fast
+request can be missed.
+
+Ensure the form is visible and the submit button is enabled before clicking.
+
+Do not replace AC-7 with the seeded admin user from Task 02. AC-7 is valuable
+because it exercises real register.html and login.html behavior.
+
+response_debug(response) should come from Task 01 so direct API and UI helpers
+share the same diagnostic body-reading behavior.
+
+
+Expected Behavior
+-----------------
+If registration or login fails, AC-7 should report something like:
+
+  UI registration failed: HTTP 403: {'code': 'CSRF_INVALID', ...};
+  error alert='CSRF token missing or invalid'
+
+or:
+
+  UI login failed: HTTP 429: {'code': 'RATE_LIMITED', ...};
+  error alert='Rate limit exceeded...'
+
+It should no longer spend 45 seconds waiting on an empty #success-alert.
+
+
+Regression Signals
+------------------
+The success path should still pass:
+
+  - AC-7 registers via register.html.
+  - AC-7 clears localStorage.
+  - AC-7 logs in via login.html?next=%2Fnew_debate.html.
+  - AC-7 sees generic "Account" nav text.
+  - AC-7 logout clears local auth/session state.
+
+The full acceptance run validates this:
+
+  python scripts/dev_workflow.py acceptance --port 5080 --timeout 60

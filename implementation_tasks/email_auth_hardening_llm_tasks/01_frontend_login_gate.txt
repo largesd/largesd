@@ -1,0 +1,154 @@
+TASK 01: Frontend Login Gate for Posting Pages
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Require login before any posting UI is usable on new_debate.html, including both
+email mode and GitHub direct-post mode. Unauthenticated visitors must be
+redirected to login.html with a return URL.
+
+Why this matters:
+The product policy requires authentication for all write-intent actions. The
+current new_debate.js init() allows unauthenticated users to reach the posting
+UI when DataBridge (GitHub cache) is configured.
+
+Files to read before editing:
+- frontend/static/js/new_debate.js
+- frontend/static/js/data_bridge.js
+- frontend/static/js/auth.js (to confirm Auth.isLoggedIn and redirectToLogin)
+
+Write scope:
+- frontend/static/js/new_debate.js
+- frontend/static/js/data_bridge.js
+- frontend/new_debate.html (copy change only if needed for the notice text)
+
+Implementation steps:
+
+1. Update new_debate.js init() to require login first
+   Open frontend/static/js/new_debate.js. The current init() starts with:
+
+     function canUseLiveApiMode() {
+       return typeof Auth !== 'undefined' && Auth.isLoggedIn();
+     }
+
+     async function init() {
+       DataBridge.loadConfig();
+       if (!hasGithubPostingConfig() && !canUseLiveApiMode()) {
+         window.location.href = 'setup.html';
+         return;
+       }
+       ...
+     }
+
+   Replace with:
+
+     async function init() {
+       // Layer 1: auth gate for all write-intent pages
+       if (!Auth.isLoggedIn()) {
+         Auth.redirectToLogin('posting-auth-required');
+         return;
+       }
+       DataBridge.loadConfig();
+       if (!hasGithubPostingConfig() && !canUseLiveApiMode()) {
+         window.location.href = 'setup.html';
+         return;
+       }
+       ...
+     }
+
+   Keep the rest of init() unchanged.
+
+2. Update data_bridge.js anonymous auto-redirect IIFE
+   Open frontend/static/js/data_bridge.js. Near line 612 there is an IIFE:
+
+     (function autoRedirect() {
+       const path = window.location.pathname;
+       const publicPages = ['setup.html', 'login.html', 'register.html', ...];
+       if (publicPages.some(p => path.endsWith(p))) return;
+       DataBridge.loadConfig();
+       const hasAuthToken = !!localStorage.getItem('access_token');
+       if (!DataBridge.isConfigured() && !hasAuthToken) {
+         window.location.href = 'setup.html';
+       }
+     })();
+
+   Replace the IIFE body with:
+
+     (function autoRedirect() {
+       const path = window.location.pathname;
+       const publicPages = ['setup.html', 'login.html', 'register.html', 'about.html', 'index.html', 'snapshot.html', 'verdict.html', 'audits.html', 'dossier.html', 'topics.html', 'evidence.html', 'governance.html', 'appeals.html'];
+       const authRequiredPages = ['new_debate.html', 'propose.html'];
+
+       if (publicPages.some(p => path.endsWith(p))) return;
+
+       // Auth-required pages redirect to login, not setup
+       if (authRequiredPages.some(p => path.endsWith(p))) {
+         if (!Auth.isLoggedIn()) {
+           Auth.redirectToLogin('posting-auth-required');
+         }
+         return;
+       }
+
+       // Fallback: unconfigured non-auth pages go to setup
+       DataBridge.loadConfig();
+       const hasAuthToken = !!localStorage.getItem('access_token');
+       if (!DataBridge.isConfigured() && !hasAuthToken) {
+         window.location.href = 'setup.html';
+       }
+     })();
+
+3. Add a defensive auth check inside submitPost()
+   In new_debate.js, at the top of submitPost() (currently line 287), add:
+
+     function submitPost() {
+       if (!Auth.isLoggedIn()) {
+         Auth.redirectToLogin('posting-auth-required');
+         return;
+       }
+       // existing checks follow...
+     }
+
+4. Update the email-mode notice copy
+   In new_debate.js, find updateSubmissionModeUI() (currently line 205). The
+   notice text is not set there directly; the notice element is shown/hidden.
+   Look at new_debate.html for the default notice text. Find the element with
+   id="email-mode-notice" and update its copy to:
+
+     "Email submission mode active. Your logged-in session will generate a
+      signed email submission for this debate."
+
+5. Handle the static-deployment / no-live-backend case
+   In new_debate.js, when the user is logged in but the live backend is
+   unreachable, the draft endpoint call (added in Task 04) will fail with a
+   network error. For now, in this task, add a helper that the draft call can
+   use later. Add near the top of new_debate.js:
+
+     function showStaticDeploymentMessage() {
+       BDA.showStatus(
+         'Posting requires a live backend with authentication. '
+         + 'Please contact the administrator to enable login and posting.',
+         true
+       );
+     }
+
+   This function will be called by Task 04 when the draft endpoint network
+   request fails.
+
+6. Preserve anonymous viewing on all read-only pages
+   Do NOT add new_debate.html to the publicPages list. It is auth-required.
+   Do NOT change index.html, about.html, or any other read-only page behavior.
+
+Acceptance criteria:
+- Visiting new_debate.html while logged out redirects to login.html.
+- The login redirect includes reason=posting-auth-required.
+- After login, the user can return to new_debate.html.
+- No logged-out path can reveal the posting form or generate a mailto link.
+- The email-mode notice copy reflects the signed-submission language.
+- data_bridge.js does not redirect auth-required pages to setup.html.
+
+Guardrails:
+- Do not change the GitHub/DataBridge read-path logic (loadDebate, loadTopics).
+- Do not remove DataBridge.loadConfig() calls; just move the auth check before
+  them where needed.
+- Do not add unsafe-inline or modify CSP in this task.

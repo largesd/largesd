@@ -1,0 +1,150 @@
+Task 03: Harden Acceptance Server Env and Add Port Guard
+========================================================
+
+Primary file:
+  scripts/dev_workflow.py
+
+Related files for behavior verification:
+  backend/app_v3.py
+  backend/utils/decorators.py
+
+
+Goal
+----
+Make the temporary acceptance server deterministic and fail fast if the selected
+port is already occupied by a stale server.
+
+
+Part A: Stale-Server Port Guard
+-------------------------------
+Before starting the temporary server in run_acceptance(), check whether the
+selected host/port can be bound by the new server.
+
+Add an import:
+
+  import socket
+
+Add a helper near wait_for_health():
+
+  def assert_port_available(host: str, port: int) -> None:
+      with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+          sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          try:
+              sock.bind((host, port))
+          except OSError as exc:
+              raise RuntimeError(
+                  f"Port {port} is already in use on {host}. Stop the existing "
+                  "server or choose a different port with --port. If a previous "
+                  "run just exited, wait a moment for the OS to release the port."
+              ) from exc
+
+Required call site:
+
+  def run_acceptance(args):
+      base_url = f"http://{DEFAULT_HOST}:{args.port}"
+      ...
+      assert_port_available(DEFAULT_HOST, args.port)
+      if temp_db_path.exists():
+          temp_db_path.unlink()
+      ...
+
+The port check must run before deleting:
+
+  debate_system_acceptance_<port>.db
+
+Why: if a stale acceptance server is still running on the same port and using
+that temp DB path, deleting the DB first can disturb the stale process before
+the workflow reports the real issue.
+
+Implementation details:
+
+  - Use socket.AF_INET because DEFAULT_HOST is currently 127.0.0.1.
+  - Use the same host interface the server will bind to.
+  - Use a context manager so the socket closes immediately.
+  - Set SO_REUSEADDR before bind to avoid false positives from recently closed
+    listeners on platforms where that matters.
+  - Prefer bind over connect. Connect only tells you whether something accepts
+    connections; bind tests whether the new Flask process can bind the port.
+  - Keep wait_for_health(base_url, args.timeout, process) checking
+    process.poll(). The bind check is useful but race-prone by nature; the
+    process can still exit after Popen if something changes between check and
+    real server bind.
+
+Optional but useful:
+
+  - Reuse assert_port_available(DEFAULT_HOST, args.port) in run_smoke().
+
+
+Part B: Acceptance Environment
+------------------------------
+In run_acceptance(), keep:
+
+  ENABLE_RATE_LIMITER=false
+
+Also explicitly set:
+
+  ENV=development
+  ALLOWED_ORIGINS=
+  ADMIN_ACCESS_MODE=authenticated
+  ADMIN_USER_EMAILS=
+  ADMIN_USER_IDS=
+
+Important: do not run acceptance with DISABLE_JOB_WORKER=1. Snapshot criteria
+exercise /api/debate/snapshot, which enqueues background jobs that must be
+processed before the UI can report completion.
+
+If project_env() could inherit DISABLE_JOB_WORKER=1 from a developer's .env or
+shell, explicitly override it to an empty string or remove it from the env dict
+before subprocess.Popen(). The server code only disables the worker when:
+
+  os.environ.get("DISABLE_JOB_WORKER") == "1"
+
+So an empty string is acceptable.
+
+Suggested run_acceptance env shape:
+
+  env = project_env({
+      "PYTHONUNBUFFERED": "1",
+      "ENABLE_RATE_LIMITER": "false",
+      "ENV": "development",
+      "ALLOWED_ORIGINS": "",
+      "ADMIN_ACCESS_MODE": "authenticated",
+      "ADMIN_USER_EMAILS": "",
+      "ADMIN_USER_IDS": "",
+      "DISABLE_JOB_WORKER": "",
+  })
+
+Current backend/app_v3.py filters empty ALLOWED_ORIGINS entries and disables
+CORS when ALLOWED_ORIGINS is explicitly blank. That is safe here because the
+acceptance browser and API are same-origin.
+
+ADMIN_ACCESS_MODE=authenticated is necessary but not sufficient. Task 02 must
+still seed and reuse the first registered admin user so JWT/localStorage include
+is_admin=True.
+
+
+Expected Behavior
+-----------------
+If port 5080 is occupied:
+
+  Error: Port 5080 is already in use on 127.0.0.1. Stop the existing server or
+  choose a different port with --port...
+
+The workflow should fail before deleting the temp DB or starting a subprocess.
+
+If the port is available, the acceptance server should start with deterministic
+local test settings and with the JobWorker enabled.
+
+
+Regression Signals
+------------------
+Add or update a small test around scripts/dev_workflow.py:
+
+  - Open a socket bound to DEFAULT_HOST and a temporary port.
+  - Assert assert_port_available(DEFAULT_HOST, port) raises RuntimeError.
+  - Assert the message mentions the port and --port.
+
+Then run:
+
+  python -m pytest tests/integration/test_csrf.py tests/integration/api/test_auth.py -q
+  python scripts/dev_workflow.py acceptance --port 5080 --timeout 60

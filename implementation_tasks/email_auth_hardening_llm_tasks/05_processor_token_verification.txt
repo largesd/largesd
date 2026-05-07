@@ -1,0 +1,256 @@
+TASK 05: Processor Token Verification
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Update the email processor to verify signed submission tokens before accepting
+posts, classify parse results for safe ack behavior, and pass the verified
+user_id into DebateEngineV2.submit_post.
+
+Why this matters:
+Frontend-only enforcement is insufficient because users can email the processor
+directly. The processor must be the final authority on token validity, payload
+integrity, and sender identity.
+
+Files to read before editing:
+- backend/email_processor.py
+- backend/email_submission_parser.py (after Task 03)
+- backend/email_submission_auth.py (after Task 02)
+- backend/debate_engine_v2.py (confirm submit_post signature)
+
+Write scope:
+- backend/email_processor.py
+- backend/email_submission_parser.py (minor integration if parse_for_processor needs tweaks)
+
+Implementation steps:
+
+1. Update EmailProcessorConfig with new env vars
+   In backend/email_processor.py, add to EmailProcessorConfig.__init__:
+
+     self.email_submission_require_auth = os.getenv(
+         "EMAIL_SUBMISSION_REQUIRE_AUTH", "true"
+     ).lower() in ("1", "true", "yes")
+     self.email_submission_token_ttl_minutes = int(
+         os.getenv("EMAIL_SUBMISSION_TOKEN_TTL_MINUTES", "1440")
+     )
+     self.email_submission_auth_allow_legacy = os.getenv(
+         "EMAIL_SUBMISSION_AUTH_ALLOW_LEGACY", "false"
+     ).lower() in ("1", "true", "yes")
+     self.email_submission_ack_unsigned_rejections = os.getenv(
+         "EMAIL_SUBMISSION_ACK_UNSIGNED_REJECTIONS", "false"
+     ).lower() in ("1", "true", "yes")
+     self.email_submission_secret = os.getenv(
+         "EMAIL_SUBMISSION_SECRET", os.getenv("SECRET_KEY", "")
+     )
+
+   Also add a validity check: if require_auth is true and no secret is
+   configured, print a warning at startup.
+
+2. Refactor _process_message to use parse_for_processor
+   Replace the existing try/except around parse_body with parse_for_processor.
+   The current flow is:
+
+     try:
+         submission = self.parser.parse_body(body, submitter_email, subject)
+     except EmailSubmissionError as exc:
+         self._send_ack(...)
+         return
+
+   Replace with:
+
+     from backend.email_submission_auth import (
+         EmailSubmissionAuthConfig,
+         verify_email_submission_claims,
+     )
+
+     parse_result = self.parser.parse_for_processor(
+         body,
+         submitter_email,
+         subject,
+         require_auth=self.config.email_submission_require_auth,
+         allow_legacy=self.config.email_submission_auth_allow_legacy,
+     )
+
+     if parse_result.decision == "drop":
+         print(f"[EmailProcessor] Dropping: {parse_result.reason_code}")
+         if self.config.mark_processed:
+             mail.store(msg_id, "+FLAGS", "\\Seen")
+         return
+
+     if parse_result.decision == "reject":
+         print(f"[EmailProcessor] Rejecting: {parse_result.reason_code}")
+         should_ack = (
+             parse_result.ack_safe
+             or (
+                 self.config.email_submission_ack_unsigned_rejections
+                 and parse_result.reason_code in ("legacy_disabled", "missing_token", "missing_required_field")
+             )
+         )
+         if should_ack and self.config.smtp_host:
+             self._send_ack(
+                 submitter_email,
+                 subject,
+                 False,
+                 f"Email submission rejected: {parse_result.reason_code}. "
+                 "Please log in and regenerate the email submission.",
+             )
+         if self.config.mark_processed:
+             mail.store(msg_id, "+FLAGS", "\\Seen")
+         return
+
+     submission = parse_result.submission
+
+3. Add token verification after parse acceptance
+   After extracting submission, add:
+
+     if self.config.email_submission_require_auth:
+         if not submission.auth_token:
+             # This should have been caught by parse_for_processor, but guard anyway
+             self._handle_rejection(
+                 mail, msg_id, submitter_email, subject,
+                 "missing_token", ack_safe=False
+             )
+             return
+
+         config = EmailSubmissionAuthConfig(
+             secret=self.config.email_submission_secret,
+             ttl_minutes=self.config.email_submission_token_ttl_minutes,
+         )
+
+         try:
+             verified_user = verify_email_submission_claims(
+                 config,
+                 submission.auth_token,
+                 submission,
+                 submitter_email,
+                 user_lookup=self.debate_engine.db.get_user_by_id,
+             )
+         except ValueError as exc:
+             reason = str(exc)
+             # Map ValueError reasons to ack_safe decisions
+             ack_safe_reasons = {
+                 "expired", "wrong_token_type", "debate_mismatch",
+                 "submission_mismatch", "side_mismatch", "topic_mismatch",
+                 "payload_mismatch", "email_mismatch", "unknown_user",
+                 "inactive_user", "unverified_email",
+             }
+             ack_safe = reason in ack_safe_reasons
+             self._handle_rejection(
+                 mail, msg_id, submitter_email, subject,
+                 reason, ack_safe=ack_safe
+             )
+             return
+         except Exception as exc:
+             # Malformed JWT, invalid signature, etc.
+             print(f"[EmailProcessor] Token verification error: {exc}")
+             self._handle_rejection(
+                 mail, msg_id, submitter_email, subject,
+                 "invalid_signature", ack_safe=False
+             )
+             return
+
+         user_id = verified_user["user_id"]
+     else:
+         user_id = None
+
+4. Add _handle_rejection helper
+   Add a private method to centralize rejection handling:
+
+     def _handle_rejection(
+         self,
+         mail: imaplib.IMAP4,
+         msg_id: bytes,
+         to_email: str,
+         original_subject: str,
+         reason: str,
+         ack_safe: bool,
+     ) -> None:
+         print(f"[EmailProcessor] Rejection: {reason} from {to_email}")
+         should_ack = ack_safe or (
+             self.config.email_submission_ack_unsigned_rejections
+             and reason in ("legacy_disabled", "missing_token", "missing_required_field")
+         )
+         if should_ack and self.config.smtp_host:
+             self._send_ack(
+                 to_email,
+                 original_subject,
+                 False,
+                 "Email submission rejected: authentication token is missing, expired, invalid, or "
+                 "does not match the submitted content. Please log in and regenerate the email submission.",
+             )
+         if self.config.mark_processed:
+             mail.store(msg_id, "+FLAGS", "\\Seen")
+
+5. Pass user_id to submit_post and update logging
+   Find the existing call:
+
+     post = self.debate_engine.submit_post(
+         debate_id=submission.debate_id,
+         side=submission.side,
+         topic_id=submission.topic_id,
+         facts=submission.facts,
+         inference=submission.inference,
+         counter_arguments=submission.counter_arguments or "",
+         submission_id=submission.submission_id,
+     )
+
+   Replace with:
+
+     post = self.debate_engine.submit_post(
+         debate_id=submission.debate_id,
+         side=submission.side,
+         topic_id=submission.topic_id,
+         facts=submission.facts,
+         inference=submission.inference,
+         counter_arguments=submission.counter_arguments or "",
+         submission_id=submission.submission_id,
+         user_id=user_id,
+     )
+
+   Add structured logging for every decision. After each decision point, log:
+
+     print(
+         f"[EmailProcessor] decision=accepted version=v3 "
+         f"submission_id={submission.submission_id} "
+         f"debate_id={submission.debate_id} "
+         f"sender={submitter_email} user_id={user_id}"
+     )
+
+   And for rejections:
+
+     print(
+         f"[EmailProcessor] decision=rejected version={version_hint} "
+         f"reason={reason_code} sender={submitter_email}"
+     )
+
+6. Mark rejected structured submissions as seen
+   The _handle_rejection method already does this. Ensure ALL rejection paths
+   in _process_message flow through _handle_rejection or explicitly call
+   mail.store(msg_id, "+FLAGS", "\\Seen") before returning.
+
+   Specifically, after deduplication and debate-existence checks that currently
+   send acks and return, also ensure they mark as seen. The existing code
+   already does this for some paths; verify consistency.
+
+Acceptance criteria:
+- v3 email with valid token is processed and saved with user_id.
+- v3 email with missing token is rejected without ack by default.
+- v3 email with expired token is rejected with ack.
+- v3 email whose token debate_id does not match body is rejected.
+- v3 email whose token submission_id does not match body is rejected.
+- v3 email whose side/topic was edited is rejected.
+- v3 email whose facts/inference/counter_arguments were edited is rejected
+  (payload_mismatch).
+- v1/v2 email is rejected when require_auth=true and allow_legacy=false.
+- Forwarded email (different From header) is rejected (email_mismatch).
+- Cross-debate token reuse is rejected.
+- Unparseable spam is silently dropped (no outbound reply).
+- Metrics/logs capture every decision with version_hint, reason_code, sender.
+
+Guardrails:
+- Do not send outbound acks for unparseable mail, malformed JWTs, or invalid
+  signatures.
+- Do not import Flask in the processor. Use the standalone auth helper.
+- Keep SENDER_WHITELIST support as a secondary defense; do not remove it.
+- Ensure user_id is passed to submit_post only after successful verification.

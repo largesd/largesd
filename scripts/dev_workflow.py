@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -141,6 +142,19 @@ def wait_for_health(base_url: str, timeout_seconds: int, process: subprocess.Pop
         time.sleep(1)
 
     raise RuntimeError(f"Timed out waiting for {health_url}: {last_error}")
+
+
+def assert_port_available(host: str, port: int) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+        except OSError as exc:
+            raise RuntimeError(
+                f"Port {port} is already in use on {host}. Stop the existing "
+                "server or choose a different port with --port. If a previous "
+                "run just exited, wait a moment for the OS to release the port."
+            ) from exc
 
 
 def stop_process(process: subprocess.Popen) -> None:
@@ -273,6 +287,7 @@ def run_server(args: argparse.Namespace) -> None:
 def run_smoke(args: argparse.Namespace) -> None:
     """Start a temporary v3 server and run a lightweight API scenario."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
+    assert_port_available(DEFAULT_HOST, args.port)
     env = project_env({"PYTHONUNBUFFERED": "1", "ENABLE_RATE_LIMITER": "false"})
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_smoke_{args.port}.db"
 
@@ -318,7 +333,19 @@ def run_smoke(args: argparse.Namespace) -> None:
 def run_acceptance(args: argparse.Namespace) -> None:
     """Start a temporary v3 server and run the browser-driven acceptance suite."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
-    env = project_env({"PYTHONUNBUFFERED": "1", "ENABLE_RATE_LIMITER": "false"})
+    assert_port_available(DEFAULT_HOST, args.port)
+    env = project_env(
+        {
+            "PYTHONUNBUFFERED": "1",
+            "ENABLE_RATE_LIMITER": "false",
+            "ENV": "development",
+            "ALLOWED_ORIGINS": "",
+            "ADMIN_ACCESS_MODE": "authenticated",
+            "ADMIN_USER_EMAILS": "",
+            "ADMIN_USER_IDS": "",
+            "DISABLE_JOB_WORKER": "",
+        }
+    )
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_acceptance_{args.port}.db"
 
     if temp_db_path.exists():

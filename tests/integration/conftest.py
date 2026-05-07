@@ -25,6 +25,7 @@ def app():
         "ALLOWED_ORIGINS",
         "ENV",
         "LLM_PROVIDER",
+        "PROCESSOR_DEST_EMAIL",
     ]
     old_env = {k: os.environ.get(k) for k in env_keys}
 
@@ -38,6 +39,7 @@ def app():
     os.environ["ALLOWED_ORIGINS"] = ""
     os.environ["ENV"] = "development"
     os.environ["LLM_PROVIDER"] = "mock"
+    os.environ["PROCESSOR_DEST_EMAIL"] = "processor@example.com"
 
     import backend.app_v3 as app_v3
 

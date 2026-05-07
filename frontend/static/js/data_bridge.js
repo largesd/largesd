@@ -612,7 +612,19 @@ const DataBridge = {
 (function autoRedirect() {
   const path = window.location.pathname;
   const publicPages = ['setup.html', 'login.html', 'register.html', 'about.html', 'index.html', 'snapshot.html', 'verdict.html', 'audits.html', 'dossier.html', 'topics.html', 'evidence.html', 'governance.html', 'appeals.html'];
+  const authRequiredPages = ['new_debate.html', 'propose.html'];
+
   if (publicPages.some(p => path.endsWith(p))) return;
+
+  // Auth-required pages redirect to login, not setup
+  if (authRequiredPages.some(p => path.endsWith(p))) {
+    if (!Auth.isLoggedIn()) {
+      Auth.redirectToLogin('posting-auth-required');
+    }
+    return;
+  }
+
+  // Fallback: unconfigured non-auth pages go to setup
   DataBridge.loadConfig();
   const hasAuthToken = !!localStorage.getItem('access_token');
   if (!DataBridge.isConfigured() && !hasAuthToken) {

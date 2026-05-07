@@ -211,7 +211,7 @@ class TestJSONFormatterRequestId:
     """Tests that JSONFormatter includes request_id in log output."""
 
     def test_formatter_includes_request_id(self):
-        from backend.app_v3 import JSONFormatter
+        from backend.utils.logging import JSONFormatter
 
         formatter = JSONFormatter()
         record = logging.LogRecord(
@@ -229,7 +229,7 @@ class TestJSONFormatterRequestId:
         assert parsed["request_id"] == "req-123"
 
     def test_formatter_omits_request_id_when_missing(self):
-        from backend.app_v3 import JSONFormatter
+        from backend.utils.logging import JSONFormatter
 
         formatter = JSONFormatter()
         record = logging.LogRecord(

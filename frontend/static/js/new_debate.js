@@ -9,6 +9,14 @@ let currentDebateId = null;
 let currentResolution = '';
 let currentDebateSource = null;
 
+function showStaticDeploymentMessage() {
+  BDA.showStatus(
+    'Posting requires a live backend with authentication. '
+    + 'Please contact the administrator to enable login and posting.',
+    true
+  );
+}
+
 function canUseLiveApiMode() {
   return typeof Auth !== 'undefined' && Auth.isLoggedIn();
 }
@@ -19,6 +27,11 @@ function hasGithubPostingConfig() {
 }
 
 async function init() {
+  // Layer 1: auth gate for all write-intent pages
+  if (!Auth.isLoggedIn()) {
+    Auth.redirectToLogin('posting-auth-required');
+    return;
+  }
   DataBridge.loadConfig();
   if (!hasGithubPostingConfig() && !canUseLiveApiMode()) {
     window.location.href = 'setup.html';
@@ -284,7 +297,12 @@ function previewPost() {
   previewPanel.style.display = 'grid';
 }
 
-function submitPost() {
+async function submitPost() {
+  if (!Auth.isLoggedIn()) {
+    Auth.redirectToLogin('posting-auth-required');
+    return;
+  }
+
   if (!hasActiveDebate) {
     BDA.showStatus('No active debate selected. Choose a debate and try again.', true);
     return;
@@ -359,18 +377,57 @@ function submitPost() {
     return;
   }
 
-  const mailto = DataBridge.buildMailtoLink(
-    currentDebateId,
-    currentResolution,
-    side.value,
-    topic.value,
-    facts,
-    inference,
-    counter || undefined
-  );
+  // Email mode: fetch authenticated draft from backend
+  let draft;
+  try {
+    draft = await BDA.api('/api/debate/email-submission-draft', {
+      method: 'POST',
+      body: JSON.stringify({
+        debate_id: currentDebateId,
+        side: side.value,
+        topic_id: topic.value,
+        facts,
+        inference,
+        counter_arguments: counter || ''
+      }),
+      preferLiveApi: true
+    });
+  } catch (error) {
+    if (error.status === 401) {
+      Auth.redirectToLogin('posting-auth-required');
+      return;
+    }
+    if (error.status === 429) {
+      BDA.showStatus('Rate limit exceeded. Please wait before generating another draft.', true);
+      return;
+    }
+    const code = error.payload?.code || error.code;
+    if (code === 'EMAIL_DEST_MISSING') {
+      BDA.showStatus('Email posting is not configured on this server. Please contact an administrator.', true);
+      return;
+    }
+    if (code === 'DEBATE_NOT_AVAILABLE_FOR_POSTING') {
+      BDA.showStatus(
+        'This debate is available from the published cache, but the live posting server '
+        + 'cannot validate it. Please choose a debate from the live server or contact an administrator.',
+        true
+      );
+      return;
+    }
+    // Network / other error
+    if (!error.status && !error.payload) {
+      showStaticDeploymentMessage();
+      return;
+    }
+    BDA.showStatus(error.message || 'Failed to generate email draft.', true);
+    return;
+  }
+
+  const mailto = draft.mailto;
+  const body = draft.body;
 
   if (!mailto) {
-    BDA.showStatus('Could not generate email. Open Setup and add a destination email first.', true);
+    BDA.showStatus('Could not generate email draft.', true);
     return;
   }
 
@@ -380,12 +437,12 @@ function submitPost() {
   const bodyPreview = document.getElementById('email-body-preview');
 
   mailtoLink.href = mailto;
-  bodyPreview.textContent = decodeURIComponent(mailto.split('body=')[1] || '');
+  bodyPreview.textContent = body;
   emailPanel.style.display = 'grid';
 
   // Add to pending
   BDA.addPendingPost({
-    id: 'email-' + Date.now(),
+    id: draft.submission_id || ('email-' + Date.now()),
     side: side.value,
     topic: topic.options[topic.selectedIndex].text,
     facts: facts,
@@ -394,7 +451,7 @@ function submitPost() {
   });
   updatePendingPostsList();
 
-  BDA.showStatus('Email generated. Open your email client to send the submission.');
+  BDA.showStatus('Email draft generated. Open your email client to send the submission.');
 }
 
 function copyEmailBody() {

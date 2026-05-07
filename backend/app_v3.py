@@ -59,6 +59,14 @@ def create_app(config_name="default"):
     app.config["JWT_EXPIRATION_HOURS"] = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
+    app.config["PROCESSOR_DEST_EMAIL"] = os.getenv("PROCESSOR_DEST_EMAIL", "")
+    app.config["EMAIL_SUBMISSION_TOKEN_TTL_MINUTES"] = int(
+        os.getenv("EMAIL_SUBMISSION_TOKEN_TTL_MINUTES", "1440")
+    )
+    app.config["EMAIL_SUBMISSION_SECRET"] = os.getenv(
+        "EMAIL_SUBMISSION_SECRET", app.config["SECRET_KEY"]
+    )
+
     # Rate limiting (disabled in testing mode)
     _enable_limiter = os.getenv("ENABLE_RATE_LIMITER", "true").lower() not in ("0", "false", "no")
     _redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -224,6 +232,15 @@ def create_app(config_name="default"):
 
     # Apply route-specific rate limits
     apply_route_rate_limits(app, limiter)
+
+    # Per-user rate limit for email submission draft
+    _draft_view = app.view_functions.get("debate.create_email_submission_draft")
+    if _draft_view and limiter:
+        from flask import g
+
+        app.view_functions["debate.create_email_submission_draft"] = limiter.limit(
+            "5 per hour", key_func=lambda: g.user["user_id"]
+        )(_draft_view)
 
     # Middleware (CSRF, error handlers, request logging)
     setup_middleware(app)
