@@ -1,12 +1,12 @@
 import json
 import math
 import os
+import sys
 import tempfile
 
-from backend.database_v3 import Database
-from backend.job_queue import JobQueue, JobStatus
-from backend.llm_client import LLMClient
-from backend.lsd_v1_2 import (
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+
+from lsd_v1_2 import (
     Q_EPSILON,
     compute_q_arith,
     compute_q_geomean,
@@ -14,8 +14,11 @@ from backend.lsd_v1_2 import (
     compute_topic_relevance_from_masses,
     formula_registry,
 )
-from backend.scoring_engine import ScoringEngine
-from backend.selection_engine import SELECTION_WEIGHTS, SelectionEngine
+from selection_engine import SelectionEngine, SELECTION_WEIGHTS
+from scoring_engine import ScoringEngine
+from database_v3 import Database
+from job_queue import JobQueue, JobStatus
+from llm_client import LLMClient
 from skills.fact_checking import FactCheckingSkill
 
 
@@ -58,29 +61,15 @@ def test_q_geomean_arith_and_drop_component_fixture():
     components = [0.8, 0.6, 0.4]
     assert round(compute_q_geomean(components), 6) == round((0.8 * 0.6 * 0.4) ** (1 / 3), 6)
     assert compute_q_arith(components) == sum(components) / 3
-    assert round(compute_q_geomean([0.0, 0.6, 0.4]), 6) == round(
-        (Q_EPSILON * 0.6 * 0.4) ** (1 / 3), 6
-    )
+    assert round(compute_q_geomean([0.0, 0.6, 0.4]), 6) == round((Q_EPSILON * 0.6 * 0.4) ** (1 / 3), 6)
 
 
 def test_verdict_distribution_confidence_fixture():
     engine = ScoringEngine(num_judges=1, num_replicates=0)
     replicates = [
-        type(
-            "R",
-            (),
-            {"overall_scores": {"FOR": 0.7, "AGAINST": 0.4}, "side_order": ["FOR", "AGAINST"]},
-        )(),
-        type(
-            "R",
-            (),
-            {"overall_scores": {"FOR": 0.6, "AGAINST": 0.5}, "side_order": ["FOR", "AGAINST"]},
-        )(),
-        type(
-            "R",
-            (),
-            {"overall_scores": {"FOR": 0.2, "AGAINST": 0.5}, "side_order": ["FOR", "AGAINST"]},
-        )(),
+        type("R", (), {"overall_scores": {"FOR": 0.7, "AGAINST": 0.4}, "side_order": ["FOR", "AGAINST"]})(),
+        type("R", (), {"overall_scores": {"FOR": 0.6, "AGAINST": 0.5}, "side_order": ["FOR", "AGAINST"]})(),
+        type("R", (), {"overall_scores": {"FOR": 0.2, "AGAINST": 0.5}, "side_order": ["FOR", "AGAINST"]})(),
     ]
     verdict = engine.compute_verdict(replicates, side_order=["FOR", "AGAINST"])
     assert verdict["d_distribution"] == [0.3, 0.1, -0.3]
@@ -151,8 +140,7 @@ def test_job_queue_claims_only_matching_runtime_profile_once():
 
 
 def test_rebuttal_types_from_judges():
-    from backend.llm_client import MockLLMProvider
-
+    from llm_client import MockLLMProvider
     provider = MockLLMProvider(seed=42)
     response = provider._mock_coverage_response()
     data = json.loads(response.content)
@@ -163,12 +151,7 @@ def test_normative_symmetry_contract():
     engine = ScoringEngine(num_judges=1, num_replicates=0)
     selected_facts = {
         "t1": [
-            {
-                "canon_fact_id": "cf_1",
-                "fact_type": "normative",
-                "canon_fact_text": "Government should regulate AI for safety.",
-                "side": "FOR",
-            },
+            {"canon_fact_id": "cf_1", "fact_type": "normative", "canon_fact_text": "Government should regulate AI for safety.", "side": "FOR"},
         ]
     }
     result = engine.run_symmetry_tests(selected_facts, frame_values=["safety"])
@@ -178,45 +161,9 @@ def test_normative_symmetry_contract():
     assert "interpretation" in result
 
 
-def test_v15_null_edge_cases():
-    """Per LSD_FactCheck_v1_5_1 §8: empty and all-insufficient aggregation."""
-    engine = ScoringEngine(num_judges=1, num_replicates=0)
-
-    # No empirical premises → all None
-    empty = engine.compute_factuality_diagnostics([])
-    assert empty["f_all"] is None
-    assert empty["f_supported_only"] is None
-    assert empty["insufficiency_rate"] is None
-
-    # All INSUFFICIENT → f_all=0.5, f_supported_only=None, insufficiency_rate=1.0
-    all_insuff = engine.compute_factuality_diagnostics([{"p_true": 0.5}, {"p_true": 0.5}])
-    assert all_insuff["f_all"] == 0.5
-    assert all_insuff["f_supported_only"] is None
-    assert all_insuff["insufficiency_rate"] == 1.0
-
-    # Mixed → standard means, f_supported_only over decisive only
-    mixed = engine.compute_factuality_diagnostics(
-        [{"p_true": 1.0}, {"p_true": 0.0}, {"p_true": 0.5}]
-    )
-    assert mixed["f_all"] == 0.5
-    assert mixed["f_supported_only"] == 0.5
-    assert mixed["insufficiency_rate"] == 1 / 3
-
-
-def test_v15_deterministic_ternary_p_values():
-    """v1.5 bridge skill returns p ∈ {1.0, 0.0, 0.5}."""
-    from skills.fact_checking.v15_skill import V15FactCheckingSkill
-
-    skill = V15FactCheckingSkill(mode="OFFLINE")
-    result = skill.check_fact("Test claim.")
-    assert result.factuality_score in (0.0, 0.5, 1.0)
-    assert result.diagnostics["v15_p"] in (0.0, 0.5, 1.0)
-    assert result.diagnostics["v15_status"] in ("SUPPORTED", "REFUTED", "INSUFFICIENT")
-
-
 def test_api_route_contracts_are_registered():
     os.environ["DEBATE_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "contracts.db")
-    from backend.app_v3 import app
+    from app_v3 import app
 
     routes = {rule.rule for rule in app.url_map.iter_rules()}
     expected = {

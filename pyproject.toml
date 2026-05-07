@@ -1,11 +1,8 @@
 [project]
 name = "debate-system"
-version = "0.3.0"
+version = "0.1.0"
 description = "Blind, auditable debate adjudication prototype"
 requires-python = ">=3.11"
-dependencies = [
-    "nh3>=0.2.0",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -22,5 +19,4 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-# E501 disabled: legacy codebase has ~240 long lines; re-enable after incremental cleanup
-ignore = ["E501"]
+ignore = []

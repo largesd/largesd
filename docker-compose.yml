@@ -16,13 +16,10 @@ services:
       - FACT_CHECK_MODE=${FACT_CHECK_MODE:-OFFLINE}
       - ADMIN_ACCESS_MODE=${ADMIN_ACCESS_MODE:-authenticated}
       - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
-      - REDIS_URL=redis://redis:6379/0
-      - PYTHONPATH=backend
     volumes:
       - debate_data:/app/data
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
@@ -36,12 +33,6 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
 
 volumes:
   debate_data:

@@ -8,16 +8,16 @@ Revision ID: 0cc597040424
 Revises:
 Create Date: 2026-04-30
 """
-
-from collections.abc import Sequence
+from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "0cc597040424"
-down_revision: str | None = None
-branch_labels: Sequence[str] | None = None
-depends_on: Sequence[str] | None = None
+down_revision: Union[str, None] = None
+branch_labels: Union[Sequence[str], None] = None
+depends_on: Union[Sequence[str], None] = None
 
 
 def _dialect() -> str:
@@ -29,7 +29,9 @@ def _dialect() -> str:
 def _exec(sql: str) -> None:
     """Execute raw SQL, stripping inline comments for cross-dialect safety."""
     # Remove SQLite-style inline comments
-    cleaned = "\n".join(line.split("--")[0] for line in sql.splitlines())
+    cleaned = "\n".join(
+        line.split("--")[0] for line in sql.splitlines()
+    )
     op.execute(cleaned)
 
 
