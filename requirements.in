@@ -1,0 +1,30 @@
+# Direct runtime dependencies for debate_system
+# Compile with: pip-compile requirements.in -o requirements.txt
+
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-jwt-extended>=4.5.0
+PyJWT>=2.8.0,<3.0.0
+werkzeug>=3.0.0
+numpy>=1.26.0
+scipy>=1.11.0
+python-dateutil>=2.8.0
+pydantic>=2.5.0
+requests>=2.31.0
+# Optional / provider-specific
+openai>=1.0.0
+scikit-learn>=1.3.0
+sentence-transformers>=2.2.0
+
+# Security & middleware
+bcrypt>=4.0.0
+flask-limiter>=4.0.0
+flask-talisman>=1.0.0
+flasgger>=0.9.7
+nh3>=0.2.0
+
+# Database & caching
+redis>=5.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.13.0
+sqlalchemy>=2.0.0
