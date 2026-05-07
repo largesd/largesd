@@ -13,10 +13,10 @@ It does not override a SUPPORTED/REFUTED/INSUFFICIENT verdict.
 """
 
 import re
-from urllib.parse import urlparse
-from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+from urllib.parse import urlparse
 
 
 class ClaimType(Enum):
@@ -32,35 +32,45 @@ class ClaimType(Enum):
 @dataclass
 class ClaimAnalysis:
     claim_type: ClaimType
-    entities: List[str]
-    temporal_refs: List[str]
-    statistical_refs: List[str]
+    entities: list[str]
+    temporal_refs: list[str]
+    statistical_refs: list[str]
 
 
 class ClaimTypeDetector:
     PATTERNS = {
         ClaimType.STATISTICAL: [
-            r'\d+(?:\.\d+)?%\s+of\s+[\w\s]+',
-            r'\$[\d,]+\s+[\w\s]+',
-            r'\d+\s+(million|billion|thousand)\s+[\w\s]+',
-            r'(increased|decreased|grew|fell|rose|dropped)\s+by\s+\d+(?:\.\d+)?%',
+            r"\d+(?:\.\d+)?%\s+of\s+[\w\s]+",
+            r"\$[\d,]+\s+[\w\s]+",
+            r"\d+\s+(million|billion|thousand)\s+[\w\s]+",
+            r"(increased|decreased|grew|fell|rose|dropped)\s+by\s+\d+(?:\.\d+)?%",
         ],
         ClaimType.CAUSAL: [
-            r'\bcaused\b', r'\bleads to\b', r'\bresults in\b',
-            r'\bdue to\b', r'\bbecause of\b',
+            r"\bcaused\b",
+            r"\bleads to\b",
+            r"\bresults in\b",
+            r"\bdue to\b",
+            r"\bbecause of\b",
         ],
         ClaimType.TEMPORAL: [
-            r'\bin \d{4}\b', r'\bsince \d{4}\b',
-            r'\bfrom \d{4} to \d{4}\b',
-            r'\b(as of|currently|now|recently|last year)\b',
+            r"\bin \d{4}\b",
+            r"\bsince \d{4}\b",
+            r"\bfrom \d{4} to \d{4}\b",
+            r"\b(as of|currently|now|recently|last year)\b",
         ],
         ClaimType.COMPARATIVE: [
-            r'\bmore than\b', r'\bless than\b', r'\bhigher\b',
-            r'\blower\b', r'\bcompared to\b', r'\bversus\b',
+            r"\bmore than\b",
+            r"\bless than\b",
+            r"\bhigher\b",
+            r"\blower\b",
+            r"\bcompared to\b",
+            r"\bversus\b",
         ],
         ClaimType.ATTRIBUTION: [
-            r'\baccording to\b', r'\bsaid that\b',
-            r'\breported that\b', r'\bfound that\b',
+            r"\baccording to\b",
+            r"\bsaid that\b",
+            r"\breported that\b",
+            r"\bfound that\b",
         ],
     }
 
@@ -75,9 +85,13 @@ class ClaimTypeDetector:
                 max_hits = hits
                 claim_type = ctype
 
-        entities = list(set(re.findall(r'\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*\b', claim_text)))[:10]
-        temporal_refs = re.findall(r'\b(?:in|since|from|until|before|after)\s+\d{4}\b', claim_text, re.I)
-        statistical_refs = re.findall(r'\d+(?:\.\d+)?%', claim_text)
+        entities = list(set(re.findall(r"\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*\b", claim_text)))[
+            :10
+        ]
+        temporal_refs = re.findall(
+            r"\b(?:in|since|from|until|before|after)\s+\d{4}\b", claim_text, re.I
+        )
+        statistical_refs = re.findall(r"\d+(?:\.\d+)?%", claim_text)
 
         return ClaimAnalysis(
             claim_type=claim_type,
@@ -97,7 +111,7 @@ class SourceCredibilityAnalyzer:
     PEER_REVIEWED_MARKERS = ["doi", "pmid", "arxiv", "journal", "peer-reviewed"]
 
     @classmethod
-    def assess(cls, source_url: str, excerpt: str) -> Tuple[float, bool]:
+    def assess(cls, source_url: str, excerpt: str) -> tuple[float, bool]:
         domain = urlparse(source_url).netloc.lower()
         score = 0.5
         is_primary = False
@@ -118,8 +132,11 @@ class MisinformationScanner:
     """
 
     EMOTIONAL_TRIGGERS = [
-        r"\bshocking\b", r"\boutrageous\b", r"\bunbelievable\b",
-        r"\bthey don't want you to know\b", r"\bwake up\b",
+        r"\bshocking\b",
+        r"\boutrageous\b",
+        r"\bunbelievable\b",
+        r"\bthey don't want you to know\b",
+        r"\bwake up\b",
         r"\bmainstream media won't report\b",
     ]
     STAT_MANIPULATION = [
@@ -128,7 +145,7 @@ class MisinformationScanner:
     ]
 
     @classmethod
-    def scan(cls, claim_text: str) -> Dict[str, Any]:
+    def scan(cls, claim_text: str) -> dict[str, Any]:
         lowered = claim_text.lower()
         flags = []
         for p in cls.EMOTIONAL_TRIGGERS:
@@ -150,7 +167,7 @@ class ConsensusAnalyzer:
     """
 
     @staticmethod
-    def analyze(confirms: int, contradicts: int) -> Tuple[str, float]:
+    def analyze(confirms: int, contradicts: int) -> tuple[str, float]:
         active = confirms + contradicts
         if active == 0:
             return "DISPUTED", 0.0

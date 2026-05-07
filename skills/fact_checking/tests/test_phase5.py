@@ -19,9 +19,6 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
-from typing import Any, Dict, List
-
-import pytest
 
 from skills.fact_checking.decomposition import CanonicalPremise, Decomposer
 from skills.fact_checking.human_review import (
@@ -31,13 +28,10 @@ from skills.fact_checking.human_review import (
 )
 from skills.fact_checking.synthesis import SynthesisEngine
 from skills.fact_checking.v15_audit import (
-    AdditiveInvalidationRecord,
     ArtifactReplayer,
-    AuditRecord,
     AuditStore,
     DisplaySummary,
     FrozenConnectorStorage,
-    ReplayManifest,
     build_audit_record,
     build_replay_manifest,
     compute_authoritative_result_hash,
@@ -46,20 +40,16 @@ from skills.fact_checking.v15_audit import (
     create_additive_invalidation,
 )
 from skills.fact_checking.v15_models import (
-    AtomicSubclaim,
     ClaimExpression,
     Direction,
     EvidenceItem,
     FactCheckResult,
     HumanReviewFlag,
     NodeType,
-    ProvenanceSpan,
     Side,
     SubclaimResult,
     SynthesisLogic,
-    VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,7 +61,7 @@ def _fact_check_result(
     snapshot_id: str = "snap1",
     status: str = "SUPPORTED",
     p: float = 1.0,
-    subclaim_results: List[SubclaimResult] | None = None,
+    subclaim_results: list[SubclaimResult] | None = None,
 ) -> FactCheckResult:
     return FactCheckResult(
         premise_id=premise_id,
@@ -133,7 +123,7 @@ def _evidence_item(
 def test_authoritative_hash_excludes_display_summary():
     """Authoritative hash must not change when display summary changes."""
     result = _fact_check_result()
-    display_summary = DisplaySummary(
+    DisplaySummary(
         summary_text="This is supported.",
         explanation="Because evidence says so.",
     )
@@ -479,7 +469,7 @@ def test_artifact_replay_snapshot_with_manifest():
         results = replayer.replay_snapshot("snap1", manifest)
 
         assert len(results) == 3
-        for premise_id, (result, diag) in results.items():
+        for _premise_id, (result, diag) in results.items():
             assert result is not None
             assert diag["hash_verified"] is True
             assert diag["merkle_valid"] is True
@@ -508,7 +498,7 @@ def test_artifact_replay_snapshot_merkle_mismatch():
         replayer = ArtifactReplayer(store)
         results = replayer.replay_snapshot("snap1", manifest)
 
-        for _, (result, diag) in results.items():
+        for _, (_result, diag) in results.items():
             assert diag["merkle_valid"] is False
 
 
@@ -649,6 +639,7 @@ def test_human_review_queue_assign_and_complete():
         assert len(pending) == 0
 
         from skills.fact_checking.v15_models import ReviewOutcome
+
         assert queue.complete("queue_audit_1", ReviewOutcome.REVIEWED_CORRECTION) is True
 
 
@@ -714,7 +705,13 @@ def test_audited_pipeline_creates_record():
 
         # Simple evidence that should yield SUPPORTED
         ev = _evidence_item()
-        from skills.fact_checking.v15_models import SourceType, DirectionMethod, ResolvedValue, ValueType
+        from skills.fact_checking.v15_models import (
+            DirectionMethod,
+            ResolvedValue,
+            SourceType,
+            ValueType,
+        )
+
         ev.source_type = SourceType.OFFICIAL_STAT
         ev.source_authority = "Bureau of Labor Statistics"
         ev.direction_method = DirectionMethod.DETERMINISTIC_STRUCTURED
@@ -722,6 +719,7 @@ def test_audited_pipeline_creates_record():
         ev.source_value = ResolvedValue(value=4.0, value_type=ValueType.NUMBER, unit="percent")
 
         from skills.fact_checking.decomposition import decompose_synthesize_and_audit
+
         result, audit_record = decompose_synthesize_and_audit(
             premise=premise,
             evidence_items=[ev],

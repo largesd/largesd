@@ -4,8 +4,6 @@ Phase 2 decomposition and validation layer tests for LSD Fact-Checking v1.5.
 
 from __future__ import annotations
 
-import pytest
-
 from skills.fact_checking.decomposition import (
     CanonicalPremise,
     Decomposer,
@@ -25,7 +23,6 @@ from skills.fact_checking.v15_models import (
     ProvenanceSpan,
     Side,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -58,9 +55,7 @@ def _atomic_expr(sid: str) -> ClaimExpression:
     return ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=sid)
 
 
-def _evidence(
-    sid: str, tier: int = 1, direction: Direction = Direction.SUPPORTS
-) -> EvidenceItem:
+def _evidence(sid: str, tier: int = 1, direction: Direction = Direction.SUPPORTS) -> EvidenceItem:
     return EvidenceItem(
         subclaim_id=sid,
         source_tier=tier,
@@ -108,9 +103,7 @@ def test_complex_claim_fallback_invalid():
     decomposer = Decomposer()
     result = decomposer.decompose(premise)
     assert result.validation_result.valid is False
-    assert any(
-        "decomposition_failure" in e for e in result.validation_result.errors
-    )
+    assert any("decomposition_failure" in e for e in result.validation_result.errors)
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +149,7 @@ def test_llm_invalid_depth():
         # Build a tree of depth 5 (root depth 0, leaves depth 4)
         e = _atomic_expr("sc1")
         for _ in range(4):
-            e = ClaimExpression(
-                node_type=NodeType.AND, children=[e, _atomic_expr("sc1")]
-            )
+            e = ClaimExpression(node_type=NodeType.AND, children=[e, _atomic_expr("sc1")])
         sc = AtomicSubclaim(
             subclaim_id="sc1",
             parent_premise_id="p1",
@@ -201,9 +192,7 @@ def test_llm_missing_provenance_span():
     decomposer = Decomposer(llm_backend=backend)
     result = decomposer.decompose(premise)
     assert result.validation_result.valid is False
-    assert any(
-        "provenance" in e.lower() for e in result.validation_result.errors
-    )
+    assert any("provenance" in e.lower() for e in result.validation_result.errors)
 
 
 def test_llm_introduced_claim():
@@ -223,8 +212,7 @@ def test_llm_introduced_claim():
     result = decomposer.decompose(premise)
     assert result.validation_result.valid is False
     assert any(
-        "introduces" in e.lower() or "new" in e.lower()
-        for e in result.validation_result.errors
+        "introduces" in e.lower() or "new" in e.lower() for e in result.validation_result.errors
     )
 
 

@@ -5,29 +5,31 @@ via attribute lookups (e.g., extensions.debate_engine) so that
 module reloads in tests pick up fresh instances.
 """
 
+from typing import Any
+
 # Flask app instance
-app = None
+app: Any = None
 
 # Core engine and database
-debate_engine = None
-db = None
+debate_engine: Any = None
+db: Any = None
 
 # Async job infrastructure
-job_queue = None
-job_worker = None
+job_queue: Any = None
+job_worker: Any = None
 
 # Rate limiter
-limiter = None
+limiter: Any = None
 
 # Redis connectivity status (True/False/None)
-redis_connected = None
+redis_connected: bool | None = None
 
 # Runtime profile snapshot
-current_runtime_profile = None
+current_runtime_profile: Any = None
 
 # Environment
-db_path = "data/debate_system.db"
-env = "development"
+db_path: str = "data/debate_system.db"
+env: str = "development"
 
 # Default moderation settings (populated by app factory)
-default_moderation_settings = None
+default_moderation_settings: Any = None

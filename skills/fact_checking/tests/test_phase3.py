@@ -15,17 +15,18 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from skills.fact_checking.normalizer import (
     EvidenceNormalizer,
-    NormalizationResult,
     _compare_resolved_values,
     _compute_content_hash,
     _standardize_date,
     _truncate_quote,
 )
-from skills.fact_checking.policies import get_default_policy, list_registered_policies, register_policy
+from skills.fact_checking.policies import (
+    get_default_policy,
+    list_registered_policies,
+    register_policy,
+)
 from skills.fact_checking.v15_cache import (
     ImmutableMemoryCache,
     build_cache_key,
@@ -40,7 +41,6 @@ from skills.fact_checking.v15_cache import (
 )
 from skills.fact_checking.v15_models import (
     AtomicSubclaim,
-    CacheKey,
     ClaimType,
     DeterministicComparisonResult,
     Direction,
@@ -54,7 +54,6 @@ from skills.fact_checking.v15_models import (
     ValueType,
     VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -162,6 +161,7 @@ def test_register_policy_override():
     assert fetched.policy_id == "custom_test"
     # Restore default for other tests
     from skills.fact_checking.policies import _DEFAULT_POLICIES, _POLICY_MAP
+
     default = [p for p in _DEFAULT_POLICIES if p.claim_type == ClaimType.NUMERIC_STATISTICAL][0]
     _POLICY_MAP[ClaimType.NUMERIC_STATISTICAL] = default
 
@@ -173,7 +173,9 @@ def test_register_policy_override():
 
 def test_normalizer_accepts_high_confidence_supports():
     normalizer = EvidenceNormalizer()
-    item = _evidence(tier=1, direction=Direction.SUPPORTS, direction_confidence=1.0, relevance_score=1.0)
+    item = _evidence(
+        tier=1, direction=Direction.SUPPORTS, direction_confidence=1.0, relevance_score=1.0
+    )
     result = normalizer.normalize(item)
     assert result.rejected is False
     assert result.item is not None
@@ -279,7 +281,10 @@ def test_normalizer_llm_direction_gating_missing_quote():
     assert result.item.direction == Direction.UNCLEAR
     assert result.item.llm_direction_validation_result is not None
     assert result.item.llm_direction_validation_result.valid is False
-    assert any("missing_decisive_quote_span" in e for e in result.item.llm_direction_validation_result.errors)
+    assert any(
+        "missing_decisive_quote_span" in e
+        for e in result.item.llm_direction_validation_result.errors
+    )
 
 
 def test_normalizer_llm_direction_gating_tier3():
@@ -294,7 +299,9 @@ def test_normalizer_llm_direction_gating_tier3():
     assert result.item is not None
     assert result.item.direction == Direction.UNCLEAR
     assert result.item.llm_direction_validation_result is not None
-    assert any("llm_direction_on_tier3" in e for e in result.item.llm_direction_validation_result.errors)
+    assert any(
+        "llm_direction_on_tier3" in e for e in result.item.llm_direction_validation_result.errors
+    )
 
 
 def test_normalizer_batch_filters_rejected():
@@ -508,9 +515,7 @@ def test_cache_frame_dependency_key_present_when_frame_dependent():
         cross_verification_minimum_sources=1,
         frame_dependent=True,
     )
-    frame_key = FrameDependencyKey(
-        frame_set_version="v2", frame_id="f1", frame_scope_hash="abc123"
-    )
+    frame_key = FrameDependencyKey(frame_set_version="v2", frame_id="f1", frame_scope_hash="abc123")
     key = build_cache_key(
         subclaim=sc,
         resolved_entity_ids=[],
@@ -529,9 +534,7 @@ def test_cache_frame_dependency_key_null_when_not_frame_dependent():
     assert policy is not None
     assert policy.frame_dependent is False
 
-    frame_key = FrameDependencyKey(
-        frame_set_version="v2", frame_id="f1", frame_scope_hash="abc123"
-    )
+    frame_key = FrameDependencyKey(frame_set_version="v2", frame_id="f1", frame_scope_hash="abc123")
     key = build_cache_key(
         subclaim=sc,
         resolved_entity_ids=[],

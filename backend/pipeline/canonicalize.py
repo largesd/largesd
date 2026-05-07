@@ -3,11 +3,10 @@ Pipeline stage: canonicalize facts/arguments, deduplicate, compute mass.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from backend.lsd_v1_2 import compute_completeness_proxy
 from backend.pipeline.context import PipelineContext
-from backend.tokenizer import get_canonical_tokenizer
 
 
 def canonicalize_stage(ctx: PipelineContext) -> PipelineContext:
@@ -26,9 +25,9 @@ def canonicalize_stage(ctx: PipelineContext) -> PipelineContext:
     frame_id = ctx.frame_id
     extracted = ctx.extracted or {}
 
-    canonical_facts: Dict[str, List[Dict[str, Any]]] = {}
-    canonical_args: Dict[str, List[Dict[str, Any]]] = {}
-    topic_content_mass: Dict[str, int] = {}
+    canonical_facts: dict[str, list[dict[str, Any]]] = {}
+    canonical_args: dict[str, list[dict[str, Any]]] = {}
+    topic_content_mass: dict[str, int] = {}
 
     for tid, data in extracted.items():
         topic = data["topic"]
@@ -53,8 +52,7 @@ def canonicalize_stage(ctx: PipelineContext) -> PipelineContext:
                 "normative_provenance": getattr(cf, "normative_provenance", ""),
                 "operationalization": getattr(cf, "operationalization", ""),
                 "provenance_links": [
-                    {"span_id": s.span_id, "text": s.span_text}
-                    for s in cf.provenance_spans
+                    {"span_id": s.span_id, "text": s.span_text} for s in cf.provenance_spans
                 ],
                 "evidence_tier_counts": getattr(cf, "evidence_tier_counts", {}),
                 "referenced_by_au_ids": [],
@@ -69,9 +67,7 @@ def canonicalize_stage(ctx: PipelineContext) -> PipelineContext:
         canonical_facts[tid] = topic_facts
 
         # Canonicalize arguments
-        cargs = engine.extraction_engine.canonicalize_arguments(
-            all_args, cfacts, topic.scope
-        )
+        cargs = engine.extraction_engine.canonicalize_arguments(all_args, cfacts, topic.scope)
         topic_arguments = []
         for ca in cargs:
             arg_data = {
@@ -84,20 +80,20 @@ def canonicalize_stage(ctx: PipelineContext) -> PipelineContext:
                 "supporting_facts": list(ca.supporting_facts),
                 "member_au_ids": ca.member_au_ids,
                 "provenance_links": [
-                    {"span_id": s.span_id, "text": s.span_text}
-                    for s in ca.provenance_spans
+                    {"span_id": s.span_id, "text": s.span_text} for s in ca.provenance_spans
                 ],
                 "reasoning_score": 0.5,
                 "reasoning_iqr": 0.0,
-                "completeness_proxy": compute_completeness_proxy({
-                    "inference_text": ca.inference_text,
-                    "supporting_facts": list(ca.supporting_facts),
-                    "provenance_links": [
-                        {"span_id": s.span_id, "text": s.span_text}
-                        for s in ca.provenance_spans
-                    ],
-                    "member_au_ids": ca.member_au_ids,
-                }),
+                "completeness_proxy": compute_completeness_proxy(
+                    {
+                        "inference_text": ca.inference_text,
+                        "supporting_facts": list(ca.supporting_facts),
+                        "provenance_links": [
+                            {"span_id": s.span_id, "text": s.span_text} for s in ca.provenance_spans
+                        ],
+                        "member_au_ids": ca.member_au_ids,
+                    }
+                ),
                 "created_at": datetime.now().isoformat(),
             }
             engine.db.save_canonical_argument(arg_data)

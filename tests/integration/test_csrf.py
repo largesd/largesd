@@ -6,11 +6,11 @@ Acceptance criteria:
   • Missing/invalid CSRF token returns 403
   • API routes with Bearer auth remain functional without CSRF token
 """
+
+import importlib
 import os
-import sys
 import shutil
 import tempfile
-import importlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +25,7 @@ def _reload_app_v3_with_env(**env_overrides):
             os.environ[key] = value
 
     import backend.app_v3 as app_v3
+
     app_module = importlib.reload(app_v3)
     app_module.app.config["TESTING"] = True
     return app_module
@@ -48,11 +49,13 @@ def _make_temp_db_env(base_env):
 
 def test_html_page_sets_csrf_cookie():
     """Serving an HTML page must set the csrf_token cookie."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -72,20 +75,25 @@ def test_html_page_sets_csrf_cookie():
 
 def test_register_without_csrf_token_returns_403():
     """POST to /api/auth/register without CSRF token must return 403."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
 
-        resp = client.post("/api/auth/register", json={
-            "email": "csrf.test@example.com",
-            "password": "password123",
-            "display_name": "CSRF Test",
-        })
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "csrf.test@example.com",
+                "password": "password123",
+                "display_name": "CSRF Test",
+            },
+        )
         assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
         data = resp.get_json()
         assert data.get("code") == "CSRF_INVALID"
@@ -96,11 +104,13 @@ def test_register_without_csrf_token_returns_403():
 
 def test_register_with_invalid_csrf_token_returns_403():
     """POST to /api/auth/register with mismatched CSRF token must return 403."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -127,11 +137,13 @@ def test_register_with_invalid_csrf_token_returns_403():
 
 def test_register_with_valid_csrf_token_succeeds():
     """POST to /api/auth/register with valid CSRF token must succeed."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -146,7 +158,9 @@ def test_register_with_valid_csrf_token_succeeds():
                 "display_name": "CSRF Valid",
             },
         )
-        assert resp.status_code == 201, f"Expected 201, got {resp.status_code}: {resp.get_data(as_text=True)}"
+        assert (
+            resp.status_code == 201
+        ), f"Expected 201, got {resp.status_code}: {resp.get_data(as_text=True)}"
         data = resp.get_json()
         assert "access_token" in data
         print("✓ Register with valid CSRF token succeeds")
@@ -156,11 +170,13 @@ def test_register_with_valid_csrf_token_succeeds():
 
 def test_login_without_csrf_token_returns_403():
     """POST to /api/auth/login without CSRF token must return 403."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -178,10 +194,13 @@ def test_login_without_csrf_token_returns_403():
         )
 
         # Now attempt login without CSRF token
-        resp = client.post("/api/auth/login", json={
-            "email": "login.csrf@example.com",
-            "password": "password123",
-        })
+        resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "login.csrf@example.com",
+                "password": "password123",
+            },
+        )
         assert resp.status_code == 403, f"Expected 403, got {resp.status_code}"
         data = resp.get_json()
         assert data.get("code") == "CSRF_INVALID"
@@ -192,11 +211,13 @@ def test_login_without_csrf_token_returns_403():
 
 def test_login_with_valid_csrf_token_succeeds():
     """POST to /api/auth/login with valid CSRF token must succeed."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -223,7 +244,9 @@ def test_login_with_valid_csrf_token_succeeds():
                 "password": "password123",
             },
         )
-        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.get_data(as_text=True)}"
+        assert (
+            resp.status_code == 200
+        ), f"Expected 200, got {resp.status_code}: {resp.get_data(as_text=True)}"
         data = resp.get_json()
         assert "access_token" in data
         print("✓ Login with valid CSRF token succeeds")
@@ -233,12 +256,14 @@ def test_login_with_valid_csrf_token_succeeds():
 
 def test_bearer_auth_routes_skip_csrf_validation():
     """Authenticated API routes must work without CSRF token."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-        "ADMIN_ACCESS_MODE": "authenticated",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+            "ADMIN_ACCESS_MODE": "authenticated",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -268,7 +293,9 @@ def test_bearer_auth_routes_skip_csrf_validation():
                 "debate_frame": "Evaluate the motion.",
             },
         )
-        assert resp.status_code == 201, f"Expected 201, got {resp.status_code}: {resp.get_data(as_text=True)}"
+        assert (
+            resp.status_code == 201
+        ), f"Expected 201, got {resp.status_code}: {resp.get_data(as_text=True)}"
         print("✓ Bearer auth routes skip CSRF validation")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -276,11 +303,13 @@ def test_bearer_auth_routes_skip_csrf_validation():
 
 def test_safe_methods_skip_csrf_validation():
     """GET/HEAD/OPTIONS requests must not require CSRF token."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()
@@ -300,11 +329,13 @@ def test_safe_methods_skip_csrf_validation():
 
 def test_auth_endpoints_set_csrf_cookie():
     """Login and register responses must set a fresh csrf_token cookie."""
-    env, temp_dir = _make_temp_db_env({
-        "DISABLE_JOB_WORKER": "1",
-        "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
-        "ALLOWED_ORIGINS": "",
-    })
+    env, temp_dir = _make_temp_db_env(
+        {
+            "DISABLE_JOB_WORKER": "1",
+            "SECRET_KEY": "test-secret-key-auth-session-32-bytes",
+            "ALLOWED_ORIGINS": "",
+        }
+    )
     try:
         app_module = _reload_app_v3_with_env(**env)
         client = app_module.app.test_client()

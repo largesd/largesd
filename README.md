@@ -23,6 +23,86 @@ The system ingests structured arguments, applies visible moderation rules, build
 - **Decision dossier** with frame transparency and audit trail
 - **Rate limiting** and structured metrics (`/metrics`)
 
+## Quick Start
+
+### Docker Compose (Recommended)
+
+```bash
+# 1. Clone and enter the repo
+cd debate_system
+
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Edit .env and set at minimum:
+#    SECRET_KEY=$(openssl rand -hex 32)
+#    ENV=development
+#    LLM_PROVIDER=mock
+
+# 4. Start services
+docker-compose up --build -d
+
+# 5. Verify health
+curl http://localhost:5000/api/health
+```
+
+### Local Development (No Docker)
+
+```bash
+# 1. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env and set at minimum:
+#   SECRET_KEY=your-strong-random-key
+#   LLM_PROVIDER=mock   # or openrouter with OPENROUTER_API_KEY
+
+# 4. Start server
+python start_server.py --host 127.0.0.1 --port 5000
+
+# 5. Verify health
+curl http://127.0.0.1:5000/api/health
+```
+
+**Expected health response:**
+
+```json
+{
+  "status": "healthy",
+  "version": "3.0",
+  "auth_enabled": true,
+  "timestamp": "..."
+}
+```
+
+## Running Tests
+
+```bash
+# Run all checks (lint + unit + integration)
+make test
+
+# Run specific suites
+make unit        # unit tests
+make fact        # fact-checking tests
+make smoke       # API smoke tests
+make acceptance  # browser acceptance tests (requires Playwright)
+
+# Or with pytest directly
+python -m pytest tests/unit/ -v
+python -m pytest tests/integration/ -v
+python -m pytest tests/integration/api/ -v
+```
+
+See [`docs/guides/TESTING.md`](docs/guides/TESTING.md) for the full testing guide.
+
 ## Architecture At A Glance
 
 ```
@@ -36,168 +116,32 @@ Participants -> Post Submission (API or Email)
              -> Frontend reads live API and/or GitHub cache
 ```
 
-## Project Layout
+### Backend Blueprints
 
-### Backend (`backend/`)
+The API is decomposed into Flask blueprints for testability:
 
-- `app.py` — stable Flask API alias (currently wraps `app_v3.py`)
-- `app_v3.py` — Flask API (auth, debates, snapshots, governance, admin, metrics)
-- `debate_engine.py` — stable engine alias (currently wraps `debate_engine_v2.py`)
-- `debate_engine_v2.py` — core orchestration pipeline
-- `database.py` (legacy), `database_v3.py` — active SQLite schema with bcrypt hashing + v3 extensions (async jobs, judge pools)
-- `models.py` — dataclasses (Post, Snapshot, Fact, ArgumentUnit, DebateFrame, User, etc.)
-- `modulation.py` — built-in moderation templates and rule engine
-- `extraction.py` — span extraction, fact/argument canonicalization
-- `topic_engine.py` — topic clustering, drift, coherence
-- `scoring_engine.py` — multi-judge scoring, replicates, verdict logic
-- `scoring.py` — scoring utilities and helpers
-- `selection_engine.py` — argument selection with centrality/rarity logic
-- `fact_checker.py` — thin wrapper around the fact-checking skill
-- `debate_proposal.py` — debate proposal submission and review logic
-- `tokenizer.py` — text tokenization utilities
-- `skills/fact_checking/` — full fact-checking subsystem (at project root):
-  - `skill.py` — main entry point
-  - `connectors.py`, `wikidata_connector.py`, `web_rag_connector.py` — evidence sources
-  - `policy.py`, `template_adapters.py` — rule and template logic
-  - `pii.py`, `normalization.py`, `sources.py` — preprocessing
-  - `decomposer.py`, `planner.py` — claim decomposition and planning
-  - `cache.py`, `fc_queue.py`, `audit.py` — async queue, caching, audit logging
-  - `rate_limiter.py`, `models.py`, `config.py` — rate limiting, internal models, configuration
-- `governance.py` — appeals, changelogs, fairness audits, judge pool governance, incidents
-- `frame_registry.py` — LSD §5 epistemic frame registry with content hashing
-- `lsd_v1_2.py` — formula constants, feature flags, diagnostic helpers, formula registry
-- `job_queue.py` — SQLite-backed async job queue with background worker thread
-- `email_processor.py` — IMAP → parse → snapshot → GitHub publish loop
-- `email_submission_parser.py` — structured email body parser (`BDA Submission v1`)
-- `published_results.py` — consolidated JSON bundle builder
-- `github_publisher.py` — GitHub Contents API publisher
-- `llm_client.py` / `llm_client_openrouter.py` — LLM provider abstraction
-- `snapshot_diff.py` — immutable snapshot comparison
-- `evidence_targets.py` — evidence gap analysis
+| Blueprint | Prefix | Responsibility |
+|-----------|--------|----------------|
+| `auth` | `/api/auth` | JWT registration, login, logout |
+| `api` | `/api` | Health, metrics, modulation info |
+| `debate` | `/api/debate` | Posts, debates, verdicts |
+| `topic` | `/api/debate/topics` | Topic geometry |
+| `snapshot` | `/api/debate/snapshot` | Snapshot generation (sync + async) |
+| `dossier` | `/api/debate/<id>/dossier` | Decision dossier |
+| `proposal` | `/api/debate-proposals` | Debate proposals |
+| `governance` | `/api/governance` | Appeals, changelogs, judge pool |
+| `admin` | `/api/admin` | Moderation templates, system config |
 
-### Frontend (`frontend/`)
+See [`docs/architecture/BLUEPRINT.md`](docs/architecture/BLUEPRINT.md) for the full architecture.
 
-| Page | Purpose |
-|------|---------|
-| `index.html` | Home / debate overview |
-| `new_debate.html` | Create debate + submit posts |
-| `topic.html` / `topics.html` | Dynamic topic detail + listing |
-| `verdict.html` | Scoring verdict display |
-| `audits.html` | Robustness audit distributions |
-| `snapshot.html` | Snapshot history + diff |
-| `evidence.html` | Evidence targets / gaps |
-| `dossier.html` / `frame-dossier.html` | Decision dossier + frame transparency |
-| `governance.html` | Governance summary |
-| `appeals.html` | Appeal submission + status |
-| `admin.html` | Moderation template management |
-| `login.html` / `register.html` | Auth flows |
-| `setup.html` | GitHub DataBridge configuration |
-| `about.html` | About / specification |
-| `propose.html` | Debate proposal submission |
+### Project Layout
 
-**Shared Frontend Infrastructure**
-
-- `static/js/common.js` — Core `BDA` object: API wrapper, state management, shared component injection
-- `static/js/auth.js` — JWT auth, session management, user menu
-- `static/js/data_bridge.js` — GitHub-cached mode: fetches `consolidated_results.json`, localStorage caching, `mailto:` link generation for email submissions
-- `static/js/index.js` — Home page logic and dynamic content loading
-- `assets/styles.css` — Design system with WCAG 2.1 AA compliance
-- `components/` — Reusable HTML components (help panels, footer, back-to-top)
-
-### Other Key Files
-
-- `start_server.py` — primary server entrypoint (delegates to `start_server_v3.py`)
-- `start_server_v3.py` — v3 server implementation with CLI args
-- `Makefile` — 20+ dev targets (`bootstrap`, `acceptance`, `smoke`, `server`, etc.)
-- `Dockerfile` / `docker-compose.yml` — containerized deployment (Flask app + Redis)
-- `alembic.ini` / `alembic/` — database migrations (PostgreSQL + SQLite)
-- `tests/integration/test_debate_system.py`, `tests/unit/test_fact_check_skill.py`, `tests/manual/manual_scenarios.py`, `test_email_processor.py`, `test_lsd_v1_2_contracts.py`, `test_perfect_skill.py`, `test_slice4.py` — test suites
-- `acceptance/run_ui_acceptance.py` — Playwright browser acceptance suite
-- `acceptance/ui_debate_flow.json` — acceptance criteria definitions
-- `scripts/dev_workflow.py` — orchestrated dev commands
-- `scripts/agentic_workflow.py` — agentic workflow orchestration
-- `scripts/generate_lsd_compliance_report.py` — LSD compliance report generator
-- `scripts/cleanup_debates_without_user.py` — data cleanup utility
-- `scripts/run_migrations.sh` — migration runner shell script
-- `setup_openrouter.py` — interactive OpenRouter configuration helper
-- `corrected_implementation_plan.md` — UX & trust hardening plan
-- `.agents/` — agent skill definitions (design system skill)
-- `archive/` — legacy server versions (v1, v2)
-- `workflow_state/` — agentic workflow state tracking
-- `.github/ISSUE_TEMPLATE/` — GitHub issue templates
-
-## Quick Start (Local API Development)
-
-### 1. Install
-
-```bash
-cd debate_system
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m playwright install chromium
-```
-
-### 2. Configure Environment
-
-```bash
-cp .env.example .env
-# Edit .env and set at minimum:
-#   SECRET_KEY=your-strong-random-key
-#   LLM_PROVIDER=mock   # or openrouter with OPENROUTER_API_KEY
-```
-
-### 3. Start Server
-
-```bash
-python start_server.py --host 127.0.0.1 --port 5000
-```
-
-Or with explicit runtime options:
-
-```bash
-python start_server.py \
-  --host 127.0.0.1 \
-  --port 5000 \
-  --fact-mode OFFLINE \
-  --llm-provider mock \
-  --num-judges 5
-```
-
-Or use Make:
-
-```bash
-make server        # default v3 server
-make server-fast   # gunicorn production-like
-```
-
-### Docker Quick Start
-
-```bash
-cp .env.example .env
-# Edit .env with production values
-docker-compose up --build -d
-```
-
-Services: Flask app (port 5000) + Redis.
-
-### 4. Validate Health
-
-```bash
-curl http://127.0.0.1:5000/api/health
-```
-
-Expected shape:
-
-```json
-{
-  "status": "healthy",
-  "version": "3.0",
-  "auth_enabled": true,
-  "timestamp": "..."
-}
-```
+- `backend/` — Flask API, debate engine, scoring, governance, email processing
+- `frontend/` — HTML/JS/CSS frontend pages
+- `skills/fact_checking/` — Fact-checking subsystem
+- `tests/` — Test suites (integration, unit, manual)
+- `scripts/` — Development workflow and utility scripts
+- `docs/` — Architecture, guides, compliance, and security docs
 
 ## Auth + Debate Flow (API)
 
@@ -302,7 +246,7 @@ The system includes a governance layer beyond simple scoring:
 `ADMIN_ACCESS_MODE` controls admin endpoints:
 
 - `open`: no auth checks
-- `authenticated`: any logged-in user
+- `authenticated`: any logged-in user with `is_admin=True`
 - `restricted`: only users in `ADMIN_USER_EMAILS` / `ADMIN_USER_IDS`
 
 ## Rate Limiting and Metrics
@@ -323,59 +267,6 @@ alembic revision --autogenerate -m "description"  # create new migration
 
 Migrations support both PostgreSQL and SQLite backends.
 
-## Testing
-
-### Unit + Fact Check
-
-```bash
-python -m pytest tests/integration/test_debate_system.py
-python -m pytest tests/unit/test_fact_check_skill.py
-python test_lsd_v1_2_contracts.py
-python test_email_processor.py
-python test_perfect_skill.py
-python test_slice4.py
-```
-
-Or via Make:
-
-```bash
-make unit
-make fact
-```
-
-### Manual Scenarios
-
-```bash
-python manual_scenarios.py server-check --base-url http://127.0.0.1:5000
-python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
-```
-
-Or via Make:
-
-```bash
-make manual-ai
-```
-
-### Smoke Tests
-
-```bash
-make smoke
-```
-
-### UI Acceptance
-
-```bash
-python scripts/dev_workflow.py acceptance
-# or
-make acceptance
-```
-
-Artifacts:
-
-- `artifacts/acceptance/ui_acceptance_report.json`
-- `artifacts/acceptance/ui_acceptance_report.md`
-- `artifacts/acceptance/screenshots/`
-
 ## Core Scoring Concepts
 
 Per topic-side:
@@ -390,19 +281,93 @@ Debate-level margin:
 - `D = Overall_FOR - Overall_AGAINST`
 - Verdict is driven by confidence interval behavior and replicate stability.
 
+## Contributing
+
+We welcome contributions! Please follow these guidelines:
+
+### Setup
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+```
+
+### Pre-commit Hooks
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Hooks run automatically on every commit. To check all files manually:
+
+```bash
+pre-commit run --all-files
+```
+
+### Conventional Commits
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages:
+
+```
+feat: add user preference caching
+fix: resolve race condition in job queue
+docs: update deployment guide with SSL examples
+test: add integration tests for proposal blueprint
+refactor: extract validation logic into shared helper
+chore: bump ruff to v0.15.12
+```
+
+Common types:
+- `feat` — new feature
+- `fix` — bug fix
+- `docs` — documentation only
+- `test` — adding or correcting tests
+- `refactor` — code change that neither fixes a bug nor adds a feature
+- `chore` — maintenance tasks (deps, config, etc.)
+
+### Branch Naming
+
+Use prefixes that match the commit type:
+
+- `feat/...`
+- `fix/...`
+- `docs/...`
+- `test/...`
+- `refactor/...`
+- `chore/...`
+
+### Pull Request Checklist
+
+Before opening a PR:
+
+- [ ] All tests pass: `make test`
+- [ ] Lint passes: `pre-commit run --all-files`
+- [ ] Type checks pass: `mypy backend/pipeline/ backend/routes/ backend/utils/`
+- [ ] Security scan passes: `bandit -r backend/`
+- [ ] Documentation updated if behavior changed
+- [ ] Commit messages follow Conventional Commits
+
+### Secrets
+
+Never commit `.env`, API keys, database files, or personal credentials.
+
 ## Documentation
 
-- Full docs index: `docs/README.md`
-- Architecture: `docs/architecture/` — design documents and product spec
-- Workflow: `docs/workflow/` — workflow contracts and development workflows
-- Guides: `docs/guides/` — testing, deployment, database migrations, OpenRouter setup, privacy, WCAG audit
-- Current status: `docs/current/` — implementation status
-- Archive: `docs/archive/` — older implementation plans and handoffs
-- Compliance: `docs/compliance/` — formula traceability matrix, LSD v1.2 compliance reports and changelog
-- Requirements: `docs/requirements/` — LSD requirements and change requests
-- Schema: `docs/schema/` — email submission schema
-- Archive: `docs/archive/` — previous README versions
-- V3 migration guide: `docs/V3_MIGRATION_GUIDE.md`
+- Full docs index: [`docs/README.md`](docs/README.md)
+- Architecture: [`docs/architecture/`](docs/architecture/) — blueprints, design system, product spec
+- Security: [`docs/security/`](docs/security/) — headers, auth, CSRF
+- Workflow: [`docs/workflow/`](docs/workflow/) — workflow contracts and development workflows
+- Guides: [`docs/guides/`](docs/guides/) — testing, deployment, database migrations, OpenRouter setup, privacy, WCAG audit
+- Current status: [`docs/current/`](docs/current/) — implementation status
+- Compliance: [`docs/compliance/`](docs/compliance/) — formula traceability matrix, LSD v1.2 compliance reports and changelog
+- Requirements: [`docs/requirements/`](docs/requirements/) — LSD requirements and change requests
+- Schema: [`docs/schema/`](docs/schema/) — email submission schema
+- Archive: [`docs/archive/`](docs/archive/) — previous README versions
+- V3 migration guide: [`docs/guides/V3_MIGRATION_GUIDE.md`](docs/guides/V3_MIGRATION_GUIDE.md)
 
 ## Notes
 

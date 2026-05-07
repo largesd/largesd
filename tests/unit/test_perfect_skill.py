@@ -11,16 +11,16 @@ Verifies:
 
 import os
 import unittest
+
 from skills.fact_checking import (
+    EvidencePolicy,
     FactCheckingSkill,
     FactCheckVerdict,
     SimulatedSourceConnector,
     WikidataConnector,
-    EvidencePolicy,
     default_policy,
     strict_policy,
 )
-from skills.fact_checking.models import FactCheckStatus
 
 
 class TestPerfectSkillDiscreteOutputs(unittest.TestCase):
@@ -60,7 +60,9 @@ class TestEvidencePolicy(unittest.TestCase):
 
     def test_strict_with_single_tier1_is_insufficient(self):
         """Explicit strict policy can require 2 independent Tier-1 sources."""
-        policy = EvidencePolicy(tier2_can_resolve=False, strict_mode=True, tier1_require_second_source=True)
+        policy = EvidencePolicy(
+            tier2_can_resolve=False, strict_mode=True, tier1_require_second_source=True
+        )
         self.assertTrue(policy.tier1_require_second_source)
 
 
@@ -77,6 +79,7 @@ class TestSimulatedConnectorDisagreement(unittest.TestCase):
         for i in range(200):
             claim = f"disputed claim variant {i}"
             from skills.fact_checking.normalization import ClaimNormalizer
+
             norm = ClaimNormalizer.normalize(claim)
             ch = ClaimNormalizer.compute_hash(norm)
             res_a = conn_a.query(norm, ch)
@@ -170,7 +173,7 @@ class TestGroundTruthSchema(unittest.TestCase):
 
     def test_store_and_lookup(self):
         import tempfile
-        import json
+
         from skills.fact_checking.connectors import GroundTruthDB
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -184,15 +187,17 @@ class TestGroundTruthSchema(unittest.TestCase):
                 p_true=1.0,
                 operationalization="To refute: provide contradictory primary source.",
                 tier_counts={"TIER_1": 1, "TIER_2": 0, "TIER_3": 0},
-                evidence=[{
-                    "source_url": "https://example.gov/data",
-                    "source_id": "gov",
-                    "source_title": "Official Data",
-                    "snippet": "Data shows X.",
-                    "content_hash": "def456",
-                    "retrieved_at": "2024-01-15T10:00:00Z",
-                    "evidence_tier": "TIER_1",
-                }],
+                evidence=[
+                    {
+                        "source_url": "https://example.gov/data",
+                        "source_id": "gov",
+                        "source_title": "Official Data",
+                        "snippet": "Data shows X.",
+                        "content_hash": "def456",
+                        "retrieved_at": "2024-01-15T10:00:00Z",
+                        "evidence_tier": "TIER_1",
+                    }
+                ],
                 reviewed_by="reviewer_1",
                 review_rationale="Verified against primary source.",
             )

@@ -13,31 +13,25 @@ from __future__ import annotations
 
 import pytest
 
-from skills.fact_checking.v15_skill import V15FactCheckingSkill
 from skills.fact_checking.models import (
     FactCheckStatus,
     FactCheckVerdict,
     RequestContext,
 )
 from skills.fact_checking.v15_models import (
-    AtomicSubclaim,
-    ClaimExpression,
-    ClaimType,
     Direction,
     EvidenceItem,
-    NodeType,
-    PremiseDecomposition,
-    Side,
-    VerdictScope,
 )
-
+from skills.fact_checking.v15_skill import V15FactCheckingSkill
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_connector_with_tier_direction(tier: int, direction):
     """Create a mock connector that returns evidence matching the subclaim_id."""
+
     class _MockConn:
         @property
         def connector_id(self):
@@ -63,6 +57,7 @@ def _make_connector_with_tier_direction(tier: int, direction):
 
 def _make_connector_returning(evidence_items):
     """Create a mock connector that returns the given evidence (subclaim_id must match)."""
+
     class _MockConn:
         @property
         def connector_id(self):
@@ -81,6 +76,7 @@ def _make_connector_returning(evidence_items):
 # ---------------------------------------------------------------------------
 # OFFLINE mode
 # ---------------------------------------------------------------------------
+
 
 def test_offline_returns_insufficient():
     skill = V15FactCheckingSkill(mode="OFFLINE")
@@ -106,6 +102,7 @@ def test_offline_with_request_context():
 # ---------------------------------------------------------------------------
 # PERFECT_CHECKER mode with mock evidence
 # ---------------------------------------------------------------------------
+
 
 def test_perfect_checker_supported():
     skill = V15FactCheckingSkill(
@@ -170,6 +167,7 @@ def test_perfect_checker_tier3_only_insufficient():
 # Result mapping diagnostics
 # ---------------------------------------------------------------------------
 
+
 def test_diagnostics_include_synthesis_logic():
     skill = V15FactCheckingSkill(
         mode="PERFECT_CHECKER",
@@ -201,6 +199,7 @@ def test_diagnostics_include_subclaim_summaries():
 # Async interface
 # ---------------------------------------------------------------------------
 
+
 def test_async_disabled_raises():
     skill = V15FactCheckingSkill(mode="OFFLINE", enable_async=False)
     with pytest.raises(RuntimeError):
@@ -229,6 +228,7 @@ def test_get_job_status_returns_none():
 # Mode aliases
 # ---------------------------------------------------------------------------
 
+
 def test_mode_aliases():
     skill = V15FactCheckingSkill(mode="simulated")
     assert skill.mode == "OFFLINE"
@@ -244,8 +244,10 @@ def test_mode_aliases():
 # Claim truncation
 # ---------------------------------------------------------------------------
 
+
 def test_long_claim_truncated():
     from skills.fact_checking.config import FactCheckConfig
+
     cfg = FactCheckConfig(max_claim_length=500)
     skill = V15FactCheckingSkill(mode="OFFLINE", config=cfg)
     long_claim = "A" * 600

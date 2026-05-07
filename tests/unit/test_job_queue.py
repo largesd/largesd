@@ -1,11 +1,10 @@
 """Unit tests for job queue row-level locking and stuck-job reclaim."""
+
 import os
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone, timedelta
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from backend.database_v3 import Database
 from backend.job_queue import JobQueue, JobStatus, JobWorker
@@ -57,10 +56,7 @@ class TestJobQueueAtomicClaim:
                 except Exception as e:
                     errors.append(e)
 
-        threads = [
-            threading.Thread(target=worker, args=(f"worker-{i}",))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=worker, args=(f"worker-{i}",)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -104,7 +100,7 @@ class TestJobQueueStuckReclaim:
         job_id = queue.create_job("snapshot", {"debate_id": "d1"})
 
         # Manually set job to running with a very old started_at
-        old_started = (datetime.now(timezone.utc) - timedelta(seconds=1000)).replace(tzinfo=None).isoformat()
+        old_started = (datetime.now(UTC) - timedelta(seconds=1000)).replace(tzinfo=None).isoformat()
         conn = db._get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -218,7 +214,7 @@ class TestJobWorkerIntegration:
 
         # Seed a stuck job
         job_id = queue.create_job("snapshot", {"debate_id": "d1"}, runtime_profile_id="runtime-x")
-        old_started = (datetime.now(timezone.utc) - timedelta(seconds=1000)).replace(tzinfo=None).isoformat()
+        old_started = (datetime.now(UTC) - timedelta(seconds=1000)).replace(tzinfo=None).isoformat()
         conn = db._get_connection()
         cursor = conn.cursor()
         cursor.execute(

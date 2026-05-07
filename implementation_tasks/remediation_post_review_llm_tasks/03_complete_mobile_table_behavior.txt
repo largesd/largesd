@@ -1,0 +1,70 @@
+TASK 03: Complete Mobile Table Behavior
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Make mobile table rendering actually usable at <= 767px by ensuring table cells
+have labels and by verifying the current responsive CSS behavior.
+
+Important correction to the original plan:
+frontend/css/media.css already targets both .table-responsive and .table inside
+the mobile media query. Do not blindly replace selectors. The main remaining
+risk is that many static or dynamically generated <td> cells may not have
+data-label attributes, so card-stacked rows can lose their column labels.
+
+Write scope:
+- frontend/*.html files with tables
+- frontend/static/js/*.js if dynamic table rows are generated there after Task 02
+- frontend/css/media.css only if visual verification exposes a CSS defect
+
+Files to audit:
+- frontend/admin.html
+- frontend/appeals.html
+- frontend/audits.html
+- frontend/dossier.html
+- frontend/governance.html
+- frontend/index.html
+- frontend/snapshot.html
+- frontend/topic.html
+- frontend/topics.html
+- frontend/verdict.html
+
+Implementation steps:
+1. Inspect current mobile table CSS:
+   - sed -n '300,380p' frontend/css/media.css
+2. Audit all table cells:
+   - rg -n '<table|<th|<td|data-label=' frontend/*.html
+   - rg -n '<td|data-label=' frontend/static/js
+3. For every table that stacks on mobile, ensure each data cell has a
+   meaningful data-label matching the column heading or row meaning.
+   Examples:
+   - <td data-label="Status">...</td>
+   - <td class="mono" data-label="Updated">...</td>
+4. For tables that use <th scope="row"> in tbody, verify the mobile CSS does
+   not hide the only row label. If it does, either:
+   - add an equivalent data-label to the adjacent value cell, or
+   - adjust CSS for that table so row headers remain readable.
+5. Keep desktop layout unchanged.
+6. Verify in a narrow browser viewport around 375px width:
+   - admin.html
+   - audits.html
+   - dossier.html
+   - governance.html
+   - verdict.html
+   - snapshot.html
+7. Run UI acceptance:
+   - python scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+
+Acceptance criteria:
+- On <= 767px viewports, table rows stack vertically with visible labels.
+- No mobile horizontal scrollbar appears because of table width.
+- Desktop table layout above 767px remains unchanged.
+- No unrelated HTML restructuring is introduced.
+
+Guardrails:
+- Prefer adding data-label attributes over heavy CSS rewrites.
+- Do not rename classes used by existing CSS or JS.
+- If Task 02 has not run yet, dynamic row templates may still live in inline
+  scripts inside HTML. It is okay to update those templates in place for this
+  task, but do not do the full script extraction here.

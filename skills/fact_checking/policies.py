@@ -5,16 +5,13 @@ Registers default policies per claim type and provides lookup helpers.
 Per 01_DATA_MODELS.md and 02_SYNTHESIS_ENGINE.md.
 """
 
-from typing import Dict, List, Optional
-
 from .v15_models import ClaimType, EvidencePolicy, SourceType
-
 
 # ---------------------------------------------------------------------------
 # Default policies (01_DATA_MODELS.md §7)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_POLICIES: List[EvidencePolicy] = [
+_DEFAULT_POLICIES: list[EvidencePolicy] = [
     EvidencePolicy(
         policy_id="default_numeric_statistical",
         claim_type=ClaimType.NUMERIC_STATISTICAL,
@@ -80,10 +77,10 @@ _DEFAULT_POLICIES: List[EvidencePolicy] = [
     ),
 ]
 
-_POLICY_MAP: Dict[ClaimType, EvidencePolicy] = {p.claim_type: p for p in _DEFAULT_POLICIES}
+_POLICY_MAP: dict[ClaimType, EvidencePolicy] = {p.claim_type: p for p in _DEFAULT_POLICIES}
 
 
-def get_default_policy(claim_type: ClaimType) -> Optional[EvidencePolicy]:
+def get_default_policy(claim_type: ClaimType) -> EvidencePolicy | None:
     """Return the default EvidencePolicy for a claim type, or None if not defined."""
     return _POLICY_MAP.get(claim_type)
 
@@ -93,6 +90,6 @@ def register_policy(policy: EvidencePolicy) -> None:
     _POLICY_MAP[policy.claim_type] = policy
 
 
-def list_registered_policies() -> List[EvidencePolicy]:
+def list_registered_policies() -> list[EvidencePolicy]:
     """Return all registered policies."""
     return list(_POLICY_MAP.values())

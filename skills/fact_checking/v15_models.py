@@ -7,16 +7,15 @@ Kept in a separate module to avoid shadowing legacy v1 models in models.py.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional
 import uuid
-
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class NodeType(Enum):
     ATOMIC = "ATOMIC"
@@ -128,46 +127,47 @@ class Side(Enum):
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ProvenanceSpan:
     span_id: str
     post_id: str
-    offsets: Dict[str, int] = field(default_factory=dict)
+    offsets: dict[str, int] = field(default_factory=dict)
     span_text: str = ""
 
 
 @dataclass
 class VerdictScope:
-    temporal_scope: Optional[str] = None
-    geographic_scope: Optional[str] = None
-    population_scope: Optional[str] = None
-    measurement_definition: Optional[str] = None
-    source_basis: Optional[str] = None
-    rounding_tolerance: Optional[str] = None
+    temporal_scope: str | None = None
+    geographic_scope: str | None = None
+    population_scope: str | None = None
+    measurement_definition: str | None = None
+    source_basis: str | None = None
+    rounding_tolerance: str | None = None
 
 
 @dataclass
 class ResolvedValue:
     value: Any = None
-    unit: Optional[str] = None
+    unit: str | None = None
     value_type: ValueType = ValueType.UNKNOWN
-    lower_bound: Optional[float] = None
-    upper_bound: Optional[float] = None
-    measurement_definition: Optional[str] = None
-    source_basis: Optional[str] = None
+    lower_bound: float | None = None
+    upper_bound: float | None = None
+    measurement_definition: str | None = None
+    source_basis: str | None = None
     verdict_scope: VerdictScope = field(default_factory=VerdictScope)
-    rounding_tolerance: Optional[str] = None
+    rounding_tolerance: str | None = None
 
 
 @dataclass
 class ClaimExpression:
     node_type: NodeType
-    children: List[ClaimExpression] = field(default_factory=list)
-    subclaim_id: Optional[str] = None
-    operator: Optional[str] = None
-    quantifier: Optional[str] = None
+    children: list[ClaimExpression] = field(default_factory=list)
+    subclaim_id: str | None = None
+    operator: str | None = None
+    quantifier: str | None = None
     quantifier_parameter: Any = None
-    comparison_target: Optional[str] = None
+    comparison_target: str | None = None
 
     def __post_init__(self):
         # Basic structural validation
@@ -199,17 +199,17 @@ class AtomicSubclaim:
     parent_premise_id: str
     text: str
     claim_type: ClaimType
-    secondary_claim_types: List[ClaimType] = field(default_factory=list)
+    secondary_claim_types: list[ClaimType] = field(default_factory=list)
     operationalization_hint: str = ""
     verdict_scope_hint: VerdictScope = field(default_factory=VerdictScope)
-    provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
+    provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
     decomposition_rationale: str = ""
 
 
 @dataclass
 class ValidationResult:
     valid: bool = True
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -220,9 +220,9 @@ class PremiseDecomposition:
     topic_id: str
     side: Side
     root_claim_expression: ClaimExpression
-    atomic_subclaims: List[AtomicSubclaim] = field(default_factory=list)
-    provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
-    decomposition_model_metadata: Dict[str, Any] = field(default_factory=dict)
+    atomic_subclaims: list[AtomicSubclaim] = field(default_factory=list)
+    provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
+    decomposition_model_metadata: dict[str, Any] = field(default_factory=dict)
     decomposition_prompt_hash: str = ""
     validation_result: ValidationResult = field(default_factory=ValidationResult)
 
@@ -231,15 +231,15 @@ class PremiseDecomposition:
 class EvidencePolicy:
     policy_id: str
     claim_type: ClaimType
-    required_source_types: List[SourceType] = field(default_factory=list)
-    preferred_source_types: List[SourceType] = field(default_factory=list)
+    required_source_types: list[SourceType] = field(default_factory=list)
+    preferred_source_types: list[SourceType] = field(default_factory=list)
     minimum_acceptable_tier: int = 3  # Tier N or stronger. 1 and 2 both satisfy 2.
     cross_verification_required: bool = False
     cross_verification_minimum_sources: int = 1
-    temporal_constraint: Optional[Dict[str, Any]] = None
-    verdict_scope_requirements: List[str] = field(default_factory=list)
+    temporal_constraint: dict[str, Any] | None = None
+    verdict_scope_requirements: list[str] = field(default_factory=list)
     frame_dependent: bool = False
-    special_rules: List[str] = field(default_factory=list)
+    special_rules: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -251,7 +251,7 @@ class EvidenceItem:
     retrieval_path: RetrievalPath = RetrievalPath.DIRECT_CONNECTOR
     source_url: str = ""
     source_title: str = ""
-    source_date: Optional[str] = None
+    source_date: str | None = None
     source_authority: str = ""
     quote_or_span: str = ""
     quote_context: str = ""
@@ -260,32 +260,34 @@ class EvidenceItem:
     direction: Direction = Direction.UNCLEAR
     direction_confidence: float = 0.0
     direction_method: DirectionMethod = DirectionMethod.DETERMINISTIC_STRUCTURED
-    retrieval_timestamp: Optional[str] = None
+    retrieval_timestamp: str | None = None
     connector_version: str = ""
     connector_query_hash: str = ""
-    source_snapshot_id: Optional[str] = None
+    source_snapshot_id: str | None = None
     raw_response_hash: str = ""
     # v1.5 additions
-    claimed_value: Optional[ResolvedValue] = None
-    source_value: Optional[ResolvedValue] = None
-    deterministic_comparison_result: DeterministicComparisonResult = DeterministicComparisonResult.NOT_RUN
+    claimed_value: ResolvedValue | None = None
+    source_value: ResolvedValue | None = None
+    deterministic_comparison_result: DeterministicComparisonResult = (
+        DeterministicComparisonResult.NOT_RUN
+    )
     decisive_quote_required: bool = False
-    decisive_quote_span: Optional[str] = None
-    source_independence_group_id: Optional[str] = None
+    decisive_quote_span: str | None = None
+    source_independence_group_id: str | None = None
     llm_direction_allowed: bool = False
-    llm_direction_validation_result: Optional[ValidationResult] = None
+    llm_direction_validation_result: ValidationResult | None = None
 
 
 @dataclass
 class SynthesisLogic:
     status_rule_applied: str = ""
     policy_rule_id: str = ""
-    decisive_evidence: List[str] = field(default_factory=list)
-    contradictory_evidence: List[str] = field(default_factory=list)
-    subclaim_results: List[Any] = field(default_factory=list)
+    decisive_evidence: list[str] = field(default_factory=list)
+    contradictory_evidence: list[str] = field(default_factory=list)
+    subclaim_results: list[Any] = field(default_factory=list)
     verdict_scope_applied: VerdictScope = field(default_factory=VerdictScope)
-    insufficiency_trigger: Optional[str] = None
-    human_review_flags: List[HumanReviewFlag] = field(default_factory=list)
+    insufficiency_trigger: str | None = None
+    human_review_flags: list[HumanReviewFlag] = field(default_factory=list)
     authority_ranking_applied: bool = False
     claim_expression_node_type: NodeType = NodeType.ATOMIC
 
@@ -296,18 +298,18 @@ class SubclaimResult:
     status: str  # SUPPORTED, REFUTED, INSUFFICIENT
     p: float
     confidence: float = 0.0
-    best_evidence_tier: Optional[int] = None
-    limiting_evidence_tier: Optional[int] = None
-    decisive_evidence_tier: Optional[int] = None
-    citations: List[str] = field(default_factory=list)
+    best_evidence_tier: int | None = None
+    limiting_evidence_tier: int | None = None
+    decisive_evidence_tier: int | None = None
+    citations: list[str] = field(default_factory=list)
     operationalization: str = ""
     verdict_scope: VerdictScope = field(default_factory=VerdictScope)
-    insufficiency_reason: Optional[str] = None
-    human_review_flags: List[HumanReviewFlag] = field(default_factory=list)
-    provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
+    insufficiency_reason: str | None = None
+    human_review_flags: list[HumanReviewFlag] = field(default_factory=list)
+    provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
     synthesis_logic: SynthesisLogic = field(default_factory=SynthesisLogic)
     synthesis_rule_engine_version: str = "v1.5"
-    resolved_value: Optional[ResolvedValue] = None
+    resolved_value: ResolvedValue | None = None
 
     def __post_init__(self):
         if self.p not in (1.0, 0.0, 0.5):
@@ -325,19 +327,19 @@ class FactCheckResult:
     status: str  # SUPPORTED, REFUTED, INSUFFICIENT
     p: float
     confidence: float = 0.0
-    best_evidence_tier: Optional[int] = None
-    limiting_evidence_tier: Optional[int] = None
-    decisive_evidence_tier: Optional[int] = None
-    citations: List[str] = field(default_factory=list)
+    best_evidence_tier: int | None = None
+    limiting_evidence_tier: int | None = None
+    decisive_evidence_tier: int | None = None
+    citations: list[str] = field(default_factory=list)
     operationalization: str = ""
     verdict_scope: VerdictScope = field(default_factory=VerdictScope)
-    insufficiency_reason: Optional[str] = None
-    human_review_flags: List[HumanReviewFlag] = field(default_factory=list)
-    provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
-    insufficiency_sensitivity: Dict[str, Any] = field(default_factory=dict)
-    decisive_premise_rank: Optional[int] = None
-    subclaim_results: List[SubclaimResult] = field(default_factory=list)
-    audit_metadata: Dict[str, Any] = field(default_factory=dict)
+    insufficiency_reason: str | None = None
+    human_review_flags: list[HumanReviewFlag] = field(default_factory=list)
+    provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
+    insufficiency_sensitivity: dict[str, Any] = field(default_factory=dict)
+    decisive_premise_rank: int | None = None
+    subclaim_results: list[SubclaimResult] = field(default_factory=list)
+    audit_metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.p not in (1.0, 0.0, 0.5):
@@ -377,4 +379,4 @@ class CacheKey:
     evidence_policy_version: str
     connector_snapshot_versions_hash: str
     fact_mode: FactMode
-    frame_dependency_key: Optional[FrameDependencyKey] = None
+    frame_dependency_key: FrameDependencyKey | None = None

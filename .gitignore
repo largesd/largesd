@@ -12,6 +12,9 @@ __pycache__/
 htmlcov/
 coverage.xml
 
+# Node.js
+node_modules/
+
 # Virtual environments
 venv/
 .venv/

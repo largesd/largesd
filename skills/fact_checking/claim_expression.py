@@ -13,9 +13,6 @@ Per 01_DATA_MODELS.md and 02_SYNTHESIS_ENGINE.md.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-
 from .v15_models import (
     ClaimExpression,
     HumanReviewFlag,
@@ -25,25 +22,24 @@ from .v15_models import (
     SubclaimResult,
     SynthesisLogic,
     ValueType,
-    VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _mean_float(values: List[float]) -> float:
+
+def _mean_float(values: list[float]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)
 
 
-def _safe_min(tiers: List[int]) -> Optional[int]:
+def _safe_min(tiers: list[int]) -> int | None:
     return min(tiers) if tiers else None
 
 
-def _safe_max(tiers: List[int]) -> Optional[int]:
+def _safe_max(tiers: list[int]) -> int | None:
     return max(tiers) if tiers else None
 
 
@@ -123,9 +119,9 @@ def _compare_resolved_values(operator: str, a: ResolvedValue, b: ResolvedValue) 
     raise ValueError(f"Unsupported value type for comparison: {a.value_type}")
 
 
-def _merge_citations(children: List[SubclaimResult]) -> List[str]:
+def _merge_citations(children: list[SubclaimResult]) -> list[str]:
     seen: set = set()
-    out: List[str] = []
+    out: list[str] = []
     for c in children:
         for cid in c.citations:
             if cid not in seen:
@@ -134,9 +130,9 @@ def _merge_citations(children: List[SubclaimResult]) -> List[str]:
     return out
 
 
-def _merge_provenance(children: List[SubclaimResult]) -> List[ProvenanceSpan]:
+def _merge_provenance(children: list[SubclaimResult]) -> list[ProvenanceSpan]:
     seen: set = set()
-    out: List[ProvenanceSpan] = []
+    out: list[ProvenanceSpan] = []
     for c in children:
         for span in c.provenance_spans:
             key = (span.span_id, span.post_id)
@@ -146,9 +142,9 @@ def _merge_provenance(children: List[SubclaimResult]) -> List[ProvenanceSpan]:
     return out
 
 
-def _merge_flags(children: List[SubclaimResult]) -> List[HumanReviewFlag]:
+def _merge_flags(children: list[SubclaimResult]) -> list[HumanReviewFlag]:
     seen: set = set()
-    out: List[HumanReviewFlag] = []
+    out: list[HumanReviewFlag] = []
     for c in children:
         for f in c.human_review_flags:
             if f not in seen:
@@ -161,9 +157,10 @@ def _merge_flags(children: List[SubclaimResult]) -> List[HumanReviewFlag]:
 # Evaluator
 # ---------------------------------------------------------------------------
 
+
 def evaluate_expression(
     node: ClaimExpression,
-    subclaim_map: Dict[str, SubclaimResult],
+    subclaim_map: dict[str, SubclaimResult],
     depth: int = 0,
 ) -> SubclaimResult:
     """Recursively evaluate a ClaimExpression and return a synthetic SubclaimResult."""
@@ -213,7 +210,7 @@ def evaluate_expression(
         child = evaluate_expression(node.children[0], subclaim_map, depth + 1)
         if child.status == "SUPPORTED":
             return SubclaimResult(
-                subclaim_id=f"expr:NOT",
+                subclaim_id="expr:NOT",
                 status="REFUTED",
                 p=0.0,
                 confidence=child.confidence,
@@ -231,7 +228,7 @@ def evaluate_expression(
             )
         if child.status == "REFUTED":
             return SubclaimResult(
-                subclaim_id=f"expr:NOT",
+                subclaim_id="expr:NOT",
                 status="SUPPORTED",
                 p=1.0,
                 confidence=child.confidence,
@@ -249,7 +246,7 @@ def evaluate_expression(
             )
         # INSUFFICIENT
         return SubclaimResult(
-            subclaim_id=f"expr:NOT",
+            subclaim_id="expr:NOT",
             status="INSUFFICIENT",
             p=0.5,
             confidence=child.confidence,
@@ -274,7 +271,7 @@ def evaluate_expression(
     provenance_spans = _merge_provenance(child_results)
     flags = _merge_flags(child_results)
 
-    def _tiers(attr: str) -> List[int]:
+    def _tiers(attr: str) -> list[int]:
         return [getattr(c, attr) for c in child_results if getattr(c, attr) is not None]
 
     if node.node_type == NodeType.AND:
@@ -338,7 +335,9 @@ def evaluate_expression(
         supported = [c for c in child_results if c.status == "SUPPORTED"]
         refuted = [c for c in child_results if c.status == "REFUTED"]
         if supported:
-            decisive_tiers = [c.decisive_evidence_tier for c in supported if c.decisive_evidence_tier is not None]
+            decisive_tiers = [
+                c.decisive_evidence_tier for c in supported if c.decisive_evidence_tier is not None
+            ]
             return SubclaimResult(
                 subclaim_id="expr:OR",
                 status="SUPPORTED",
@@ -402,7 +401,11 @@ def evaluate_expression(
                 confidence=confidence,
                 best_evidence_tier=None,
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=None,
                 citations=citations,
@@ -443,10 +446,18 @@ def evaluate_expression(
                     [t for t in [ant.best_evidence_tier, con.best_evidence_tier] if t is not None]
                 ),
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=_safe_min(
-                    [t for t in [ant.decisive_evidence_tier, con.decisive_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [ant.decisive_evidence_tier, con.decisive_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 citations=citations,
                 provenance_spans=provenance_spans,
@@ -466,10 +477,18 @@ def evaluate_expression(
                     [t for t in [ant.best_evidence_tier, con.best_evidence_tier] if t is not None]
                 ),
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=_safe_min(
-                    [t for t in [ant.decisive_evidence_tier, con.decisive_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [ant.decisive_evidence_tier, con.decisive_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 citations=citations,
                 provenance_spans=provenance_spans,
@@ -487,7 +506,11 @@ def evaluate_expression(
             confidence=confidence,
             best_evidence_tier=None,
             limiting_evidence_tier=_safe_max(
-                [t for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier] if t is not None]
+                [
+                    t
+                    for t in [ant.limiting_evidence_tier, con.limiting_evidence_tier]
+                    if t is not None
+                ]
             ),
             decisive_evidence_tier=None,
             citations=citations,
@@ -512,7 +535,11 @@ def evaluate_expression(
                 confidence=confidence,
                 best_evidence_tier=None,
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [left.limiting_evidence_tier, right.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [left.limiting_evidence_tier, right.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=None,
                 citations=citations,
@@ -532,7 +559,11 @@ def evaluate_expression(
                 confidence=confidence,
                 best_evidence_tier=None,
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [left.limiting_evidence_tier, right.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [left.limiting_evidence_tier, right.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=None,
                 citations=citations,
@@ -545,7 +576,9 @@ def evaluate_expression(
                 ),
             )
         try:
-            holds = _compare_resolved_values(node.operator, left.resolved_value, right.resolved_value)
+            holds = _compare_resolved_values(
+                node.operator, left.resolved_value, right.resolved_value
+            )
         except Exception:
             return SubclaimResult(
                 subclaim_id="expr:COMPARISON",
@@ -554,7 +587,11 @@ def evaluate_expression(
                 confidence=confidence,
                 best_evidence_tier=None,
                 limiting_evidence_tier=_safe_max(
-                    [t for t in [left.limiting_evidence_tier, right.limiting_evidence_tier] if t is not None]
+                    [
+                        t
+                        for t in [left.limiting_evidence_tier, right.limiting_evidence_tier]
+                        if t is not None
+                    ]
                 ),
                 decisive_evidence_tier=None,
                 citations=citations,
@@ -567,7 +604,11 @@ def evaluate_expression(
                 ),
             )
         if holds:
-            decisive_tiers = [t for t in [left.decisive_evidence_tier, right.decisive_evidence_tier] if t is not None]
+            decisive_tiers = [
+                t
+                for t in [left.decisive_evidence_tier, right.decisive_evidence_tier]
+                if t is not None
+            ]
             return SubclaimResult(
                 subclaim_id="expr:COMPARISON",
                 status="SUPPORTED",
@@ -586,7 +627,11 @@ def evaluate_expression(
                 resolved_value=left.resolved_value,  # copy source value up
             )
         else:
-            decisive_tiers = [t for t in [left.decisive_evidence_tier, right.decisive_evidence_tier] if t is not None]
+            decisive_tiers = [
+                t
+                for t in [left.decisive_evidence_tier, right.decisive_evidence_tier]
+                if t is not None
+            ]
             return SubclaimResult(
                 subclaim_id="expr:COMPARISON",
                 status="REFUTED",
@@ -693,7 +738,11 @@ def evaluate_expression(
 
         if quantifier == "EXISTS":
             if supported_count > 0:
-                decisive_tiers = [c.decisive_evidence_tier for c in supported if c.decisive_evidence_tier is not None]
+                decisive_tiers = [
+                    c.decisive_evidence_tier
+                    for c in supported
+                    if c.decisive_evidence_tier is not None
+                ]
                 return SubclaimResult(
                     subclaim_id="expr:QUANTIFIER",
                     status="SUPPORTED",
@@ -748,7 +797,11 @@ def evaluate_expression(
 
         if quantifier == "AT_LEAST" and isinstance(param, int):
             if supported_count >= param:
-                decisive_tiers = [c.decisive_evidence_tier for c in supported if c.decisive_evidence_tier is not None]
+                decisive_tiers = [
+                    c.decisive_evidence_tier
+                    for c in supported
+                    if c.decisive_evidence_tier is not None
+                ]
                 return SubclaimResult(
                     subclaim_id="expr:QUANTIFIER",
                     status="SUPPORTED",

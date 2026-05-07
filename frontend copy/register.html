@@ -76,22 +76,22 @@
         <h1>Create your account</h1>
         <p>Join the debate community</p>
       </div>
-      
+
       <div class="alert alert-error" id="error-alert"></div>
       <div class="alert alert-success" id="success-alert"></div>
-      
+
       <form id="register-form">
         <input type="hidden" name="csrf_token" id="csrf_token" />
         <div class="form-group">
           <label for="display_name">Display Name</label>
           <input type="text" id="display_name" name="display_name" placeholder="How you'll appear in debates" required autocomplete="name" aria-describedby="error-alert" aria-invalid="false">
         </div>
-        
+
         <div class="form-group">
           <label for="email">Email Address</label>
           <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" aria-describedby="error-alert" aria-invalid="false">
         </div>
-        
+
         <div class="form-group">
           <label for="password">Password</label>
           <input type="password" id="password" name="password" placeholder="Create a strong password" required autocomplete="new-password" aria-describedby="password-requirements error-alert" aria-invalid="false">
@@ -104,17 +104,17 @@
             </ul>
           </div>
         </div>
-        
+
         <div class="form-group">
           <label for="confirm_password">Confirm Password</label>
           <input type="password" id="confirm_password" name="confirm_password" placeholder="Re-enter your password" required autocomplete="new-password" aria-describedby="error-alert" aria-invalid="false">
         </div>
-        
+
         <button type="submit" class="submit-btn" id="submit-btn">
           Create Account
         </button>
       </form>
-      
+
       <div class="auth-footer">
         Already have an account? <a href="login.html">Sign in</a>
       </div>
@@ -184,13 +184,13 @@ confirmInput.addEventListener('input', validatePassword);
 function validatePassword() {
   const password = passwordInput.value;
   const confirm = confirmInput.value;
-  
+
   // Check requirements
   document.getElementById('req-length').className = password.length >= 8 ? 'met' : 'unmet';
   document.getElementById('req-upper').className = /[A-Z]/.test(password) ? 'met' : 'unmet';
   document.getElementById('req-lower').className = /[a-z]/.test(password) ? 'met' : 'unmet';
   document.getElementById('req-number').className = /\d/.test(password) ? 'met' : 'unmet';
-  
+
   // Check match
   if (confirm && password !== confirm) {
     confirmInput.classList.add('error');
@@ -202,21 +202,21 @@ function validatePassword() {
 // Handle form submission
 document.getElementById('register-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+
   const submitBtn = document.getElementById('submit-btn');
   const errorAlert = document.getElementById('error-alert');
   const successAlert = document.getElementById('success-alert');
-  
+
   // Clear previous alerts
   errorAlert.classList.remove('visible');
   successAlert.classList.remove('visible');
-  
+
   // Get values
   const display_name = document.getElementById('display_name').value.trim();
   const email = document.getElementById('email').value.trim();
   const password = passwordInput.value;
   const confirm_password = confirmInput.value;
-  
+
   function markInvalid() {
     document.getElementById('display_name').setAttribute('aria-invalid', 'true');
     document.getElementById('email').setAttribute('aria-invalid', 'true');
@@ -232,25 +232,25 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     markInvalid();
     return;
   }
-  
+
   if (password.length < 8) {
     errorAlert.textContent = 'Password must be at least 8 characters long.';
     errorAlert.classList.add('visible');
     markInvalid();
     return;
   }
-  
+
   if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
     errorAlert.textContent = 'Password does not meet all requirements.';
     errorAlert.classList.add('visible');
     markInvalid();
     return;
   }
-  
+
   // Show loading state
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<span class="loading-spinner"></span>Creating account...';
-  
+
   try {
     const csrfToken = document.getElementById('csrf_token')?.value || '';
     const response = await fetch(`${API_BASE}/api/auth/register`, {
@@ -261,9 +261,9 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
       },
       body: JSON.stringify({ display_name, email, password })
     });
-    
+
     const data = await response.json();
-    
+
     if (response.ok) {
       // Save token and user info
       localStorage.setItem('access_token', data.access_token);
@@ -273,11 +273,11 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         display_name: data.display_name,
         is_admin: data.is_admin
       }));
-      
+
       // Show success message
       successAlert.textContent = 'Account created successfully! Redirecting...';
       successAlert.classList.add('visible');
-      
+
       // Redirect to requested page if available
       setTimeout(() => {
         window.location.href = getSafeNextPath();

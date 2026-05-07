@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 @dataclass
@@ -21,7 +21,7 @@ class EntityLink:
     canonical_label: str
     linking_confidence: float
     ambiguity_flag: bool
-    ambiguity_candidates: List[str]
+    ambiguity_candidates: list[str]
 
 
 class WikidataEntityConnector:
@@ -30,22 +30,28 @@ class WikidataEntityConnector:
     def __init__(self, timeout_seconds: float = 10.0):
         self._timeout = timeout_seconds
 
-    def search_candidates(self, mention: str, language: str = "en", limit: int = 5) -> List[Dict[str, Any]]:
+    def search_candidates(
+        self, mention: str, language: str = "en", limit: int = 5
+    ) -> list[dict[str, Any]]:
         """Query Wikidata wbsearchentities for candidate QIDs."""
         import json
         import urllib.parse
         import urllib.request
 
-        qs = urllib.parse.urlencode({
-            "action": "wbsearchentities",
-            "format": "json",
-            "search": mention,
-            "language": language,
-            "limit": limit,
-        })
+        qs = urllib.parse.urlencode(
+            {
+                "action": "wbsearchentities",
+                "format": "json",
+                "search": mention,
+                "language": language,
+                "limit": limit,
+            }
+        )
         url = f"https://www.wikidata.org/w/api.php?{qs}"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "LSD-FactCheck/1.5 (entity-linker)"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "LSD-FactCheck/1.5 (entity-linker)"}
+            )
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
         except Exception:
@@ -53,13 +59,15 @@ class WikidataEntityConnector:
 
         candidates = []
         for result in data.get("search", []):
-            candidates.append({
-                "qid": result.get("id", ""),
-                "label": result.get("label", ""),
-                "description": result.get("description", ""),
-                "score": result.get("score", 0.0),
-                "type": result.get("match", {}).get("type", "UNKNOWN"),
-            })
+            candidates.append(
+                {
+                    "qid": result.get("id", ""),
+                    "label": result.get("label", ""),
+                    "description": result.get("description", ""),
+                    "score": result.get("score", 0.0),
+                    "type": result.get("match", {}).get("type", "UNKNOWN"),
+                }
+            )
         return candidates
 
 
@@ -68,18 +76,18 @@ class EntityLinker:
 
     def __init__(
         self,
-        wikidata_connector: Optional[WikidataEntityConnector] = None,
-        llm_client: Optional[Any] = None,
+        wikidata_connector: WikidataEntityConnector | None = None,
+        llm_client: Any | None = None,
         confidence_threshold: float = 0.7,
     ):
         self.wikidata = wikidata_connector or WikidataEntityConnector()
         self.llm_client = llm_client
         self.confidence_threshold = confidence_threshold
         # --- new caching fields ---
-        self._nlp: Optional[Any] = None
+        self._nlp: Any | None = None
         self._nlp_failed: bool = False
 
-    def _get_spacy_nlp(self) -> Optional[Any]:
+    def _get_spacy_nlp(self) -> Any | None:
         """Return cached spaCy nlp object, or None if unavailable."""
         if self._nlp is not None:
             return self._nlp
@@ -87,13 +95,14 @@ class EntityLinker:
             return None
         try:
             import spacy
+
             self._nlp = spacy.load("en_core_web_sm")
             return self._nlp
         except Exception:
             self._nlp_failed = True
             return None
 
-    def link(self, subclaim_text: str) -> List[EntityLink]:
+    def link(self, subclaim_text: str) -> list[EntityLink]:
         """Extract mentions and link each to a canonical Wikidata entity."""
         mentions = self._extract_mentions(subclaim_text)
         links = []
@@ -105,7 +114,7 @@ class EntityLinker:
             links.append(link)
         return links
 
-    def _extract_mentions(self, text: str) -> List[str]:
+    def _extract_mentions(self, text: str) -> list[str]:
         """
         Strategy 1 (preferred): spaCy NER (PERSON, ORG, GPE, PRODUCT, EVENT)
         Strategy 2 (fallback): Capitalized phrase regex
@@ -116,9 +125,12 @@ class EntityLinker:
         if nlp is not None:
             try:
                 doc = nlp(text)
-                ents = [ent.text for ent in doc.ents
-                        if ent.label_ in ("PERSON", "ORG", "GPE", "PRODUCT",
-                                          "EVENT", "WORK_OF_ART", "LAW")]
+                ents = [
+                    ent.text
+                    for ent in doc.ents
+                    if ent.label_
+                    in ("PERSON", "ORG", "GPE", "PRODUCT", "EVENT", "WORK_OF_ART", "LAW")
+                ]
                 if ents:
                     return ents
             except Exception:
@@ -139,7 +151,7 @@ class EntityLinker:
         return list(dict.fromkeys(matches + single_word_ents))  # preserve order, dedup
 
     def _disambiguate(
-        self, mention: str, context: str, candidates: List[Dict[str, Any]]
+        self, mention: str, context: str, candidates: list[dict[str, Any]]
     ) -> EntityLink:
         """
         If only one candidate → high confidence direct link.
@@ -211,18 +223,18 @@ class EntityLinker:
         )
 
     def _llm_disambiguate(
-        self, mention: str, context: str, candidates: List[Dict[str, Any]]
-    ) -> Optional[Tuple[str, float]]:
+        self, mention: str, context: str, candidates: list[dict[str, Any]]
+    ) -> tuple[str, float] | None:
         """Use LLM to pick the best candidate QID."""
         import json
 
-        prompt = f'''Given the claim: "{context}"
+        prompt = f"""Given the claim: "{context}"
 The mention "{mention}" could refer to:
 {chr(10).join(f"{i+1}. QID={c['qid']}, Label={c['label']}, Description={c.get('description', 'N/A')}" for i, c in enumerate(candidates))}
 
 Which candidate best matches the mention in this context?
 Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
-{{"qid": "Q...", "confidence": 0.92}}'''
+{{"qid": "Q...", "confidence": 0.92}}"""
 
         try:
             response = self.llm_client.complete(prompt)

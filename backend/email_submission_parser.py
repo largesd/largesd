@@ -23,15 +23,16 @@ Counter-Arguments:
 <optional counter-arguments text>
 ----------------------------------------
 """
+
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
 class EmailSubmissionError(ValueError):
     """Raised when an email submission is malformed."""
+
     pass
 
 
@@ -41,11 +42,11 @@ class EmailSubmission:
     resolution: str
     submission_id: str
     submitted_at: str
-    side: str          # 'FOR' or 'AGAINST'
+    side: str  # 'FOR' or 'AGAINST'
     topic_id: str
     facts: str
     inference: str
-    counter_arguments: Optional[str]
+    counter_arguments: str | None
     submitter_email: str
     subject: str
 
@@ -93,9 +94,7 @@ class EmailSubmissionParser:
 
         # Must start with a recognized magic header
         if not lines:
-            raise EmailSubmissionError(
-                "Email body is empty."
-            )
+            raise EmailSubmissionError("Email body is empty.")
         stripped_first = lines[0].strip()
         if self.HEADER_RE.match(stripped_first):
             return self._parse_v1(lines, body, submitter_email, subject)
@@ -106,8 +105,9 @@ class EmailSubmissionParser:
                 "Email body must start with 'BDA Submission v1' or 'BDA Submission v2'"
             )
 
-    def _parse_v1(self, lines: list[str], body: str, submitter_email: str,
-                  subject: str) -> EmailSubmission:
+    def _parse_v1(
+        self, lines: list[str], body: str, submitter_email: str, subject: str
+    ) -> EmailSubmission:
         """Parse a BDA Submission v1 format."""
         # Parse headers
         headers: dict[str, str] = {}
@@ -171,9 +171,7 @@ class EmailSubmissionParser:
         """Parse a BDA Submission v2 format (YAML frontmatter)."""
         lines = body.replace("\r\n", "\n").split("\n")
         if len(lines) < 3 or lines[1].strip() != self.FRONTMATTER_DELIM:
-            raise EmailSubmissionError(
-                "v2 format must have '---' delimiter on the second line."
-            )
+            raise EmailSubmissionError("v2 format must have '---' delimiter on the second line.")
 
         # Extract frontmatter between --- delimiters
         frontmatter_lines: list[str] = []
@@ -185,9 +183,7 @@ class EmailSubmissionParser:
             frontmatter_lines.append(lines[i])
             i += 1
         else:
-            raise EmailSubmissionError(
-                "v2 format frontmatter not closed with '---'."
-            )
+            raise EmailSubmissionError("v2 format frontmatter not closed with '---'.")
 
         headers: dict[str, str] = {}
         for line in frontmatter_lines:
@@ -237,7 +233,7 @@ class EmailSubmissionParser:
             subject=subject,
         )
 
-    def _extract_section(self, text: str, section_name: str) -> Optional[str]:
+    def _extract_section(self, text: str, section_name: str) -> str | None:
         """Extract text after a section header like 'Facts:'."""
         # PASS 1: tolerant regex allowing single or double newlines
         pattern = (
@@ -274,7 +270,7 @@ class EmailSubmissionParser:
         topic_id: str,
         facts: str,
         inference: str,
-        counter_arguments: Optional[str] = None,
+        counter_arguments: str | None = None,
     ) -> str:
         """
         Build a structured email body for frontend mailto: generation.
@@ -292,7 +288,7 @@ class EmailSubmissionParser:
             A formatted plain-text email body.
         """
         submission_id = str(uuid.uuid4())
-        submitted_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        submitted_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         lines = [
             "BDA Submission v1",
             f"Debate-ID: {debate_id}",
@@ -309,9 +305,11 @@ class EmailSubmissionParser:
             inference,
         ]
         if counter_arguments:
-            lines.extend([
-                "",
-                "Counter-Arguments:",
-                counter_arguments,
-            ])
+            lines.extend(
+                [
+                    "",
+                    "Counter-Arguments:",
+                    counter_arguments,
+                ]
+            )
         return "\n".join(lines)

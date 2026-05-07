@@ -4,10 +4,9 @@ Implements the Frame Registry dossier (§5.1) for declaring epistemic and ethica
 """
 
 import hashlib
-import json
-from dataclasses import dataclass, asdict
-from typing import Dict, Optional, Any
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
@@ -16,10 +15,11 @@ class Frame:
     LSD §5.1 Frame Dossier
     Declares the normative framework governing debate conclusions.
     """
+
     frame_id: str
     version: str
     statement: str  # 1) What is being decided and what is at stake?
-    scope: str      # 2) Scope and limits
+    scope: str  # 2) Scope and limits
     grounding_rationale: str  # 3) Grounding/rationale
     inclusion_justification: str  # 4) Inclusion of factors
     exclusion_note: str  # 5) Exclusion note
@@ -29,13 +29,13 @@ class Frame:
     next_review_date: str = ""
     review_cadence_months: int = 6
     emergency_override_path: str = ""
-    
+
     def compute_content_hash(self) -> str:
         """Compute tamper-evident hash of frame content."""
         content = f"{self.statement}|{self.scope}|{self.grounding_rationale}|{self.inclusion_justification}|{self.exclusion_note}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
-    
-    def to_dossier(self) -> Dict[str, Any]:
+
+    def to_dossier(self) -> dict[str, Any]:
         """Return public dossier for transparency."""
         return {
             "frame_id": self.frame_id,
@@ -53,7 +53,7 @@ class Frame:
                 "review_cadence_months": self.review_cadence_months,
                 "emergency_override_path": self.emergency_override_path,
             },
-            "created_at": self.created_at
+            "created_at": self.created_at,
         }
 
 
@@ -61,16 +61,16 @@ class FrameRegistry:
     """
     Registry for active and historical frames.
     """
-    
+
     def __init__(self):
-        self.frames: Dict[str, Frame] = {}
-        self.active_frame_id: Optional[str] = None
-    
+        self.frames: dict[str, Frame] = {}
+        self.active_frame_id: str | None = None
+
     @classmethod
-    def load_default(cls) -> 'FrameRegistry':
+    def load_default(cls) -> "FrameRegistry":
         """Load the default LSD v1.2 frame."""
         registry = cls()
-        
+
         # LSD §5.1 Default Frame for Epistemic Debate
         default_frame = Frame(
             frame_id="lsd_v1_2_default",
@@ -107,44 +107,44 @@ class FrameRegistry:
                 "Speed vs thoroughness: faster debates may miss nuanced evidence",
                 "Popularity vs quality: widely-shared claims may not be most reliable",
                 "Coherence vs diversity: consensus may reflect echo chambers",
-                "Transparency vs privacy: full source disclosure may risk harm"
+                "Transparency vs privacy: full source disclosure may risk harm",
             ],
             prioritized_values=[
                 "Epistemic accuracy (calibrated confidence over time)",
                 "Procedural fairness (equal opportunity for evidence submission)",
                 "Transparency (auditability of reasoning)",
-                "Accountability (attribution of claims to sources)"
+                "Accountability (attribution of claims to sources)",
             ],
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            created_at=datetime.now(UTC).replace(tzinfo=None).isoformat(),
             next_review_date="2026-10-28",
             review_cadence_months=6,
-            emergency_override_path="Admin emergency override must publish a reason, affected outputs, and a remediation plan before any superseding snapshot."
+            emergency_override_path="Admin emergency override must publish a reason, affected outputs, and a remediation plan before any superseding snapshot.",
         )
-        
+
         registry.frames[default_frame.frame_id] = default_frame
         registry.active_frame_id = default_frame.frame_id
-        
+
         return registry
-    
-    def get_active_frame(self) -> Optional[Frame]:
+
+    def get_active_frame(self) -> Frame | None:
         """Get the currently active frame."""
         if self.active_frame_id and self.active_frame_id in self.frames:
             return self.frames[self.active_frame_id]
         return None
-    
-    def get_snapshot_metadata(self) -> Dict[str, Any]:
+
+    def get_snapshot_metadata(self) -> dict[str, Any]:
         """Get frame metadata for snapshot (§9.4.1)."""
         frame = self.get_active_frame()
         if not frame:
             return {}
-        
+
         return {
             "frame_id": frame.frame_id,
             "frame_version": frame.version,
-            "frame_hash": frame.compute_content_hash()
+            "frame_hash": frame.compute_content_hash(),
         }
-    
-    def get_public_dossier(self) -> Optional[Dict[str, Any]]:
+
+    def get_public_dossier(self) -> dict[str, Any] | None:
         """Get the public dossier for the active frame."""
         frame = self.get_active_frame()
         if not frame:
@@ -153,7 +153,7 @@ class FrameRegistry:
 
 
 # Global singleton
-_public_registry: Optional[FrameRegistry] = None
+_public_registry: FrameRegistry | None = None
 
 
 def get_public_frame_registry() -> FrameRegistry:

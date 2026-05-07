@@ -15,13 +15,8 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any, Dict, List
-
-import pytest
 
 from skills.fact_checking.display_summary import (
-    ConsistencyCheckResult,
-    DisplaySummaryGenerator,
     _check_insufficiency_reason_in_text,
     _check_p_in_text,
     _check_status_in_text,
@@ -33,7 +28,6 @@ from skills.fact_checking.display_summary import (
 )
 from skills.fact_checking.human_review import (
     HumanReviewQueue,
-    QueuedReviewItem,
     compute_aggregate_counts,
 )
 from skills.fact_checking.v15_audit import DisplaySummary
@@ -41,12 +35,10 @@ from skills.fact_checking.v15_models import (
     FactCheckResult,
     HumanReviewFlag,
     NodeType,
-    ProvenanceSpan,
     Side,
     SubclaimResult,
     SynthesisLogic,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,9 +52,9 @@ def _result(
     confidence: float = 1.0,
     best_evidence_tier: int | None = 1,
     insufficiency_reason: str | None = None,
-    human_review_flags: List[HumanReviewFlag] | None = None,
-    subclaim_results: List[SubclaimResult] | None = None,
-    citations: List[str] | None = None,
+    human_review_flags: list[HumanReviewFlag] | None = None,
+    subclaim_results: list[SubclaimResult] | None = None,
+    citations: list[str] | None = None,
 ) -> FactCheckResult:
     return FactCheckResult(
         premise_id=premise_id,
@@ -431,6 +423,7 @@ def test_review_queue_assign_and_complete():
 
         # Complete
         from skills.fact_checking.v15_models import ReviewOutcome
+
         assert queue.complete("queue_audit_1", ReviewOutcome.REVIEWED_NO_CHANGE) is True
 
 

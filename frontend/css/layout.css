@@ -20,7 +20,7 @@
   gap: var(--space-sm);
 }
 
-.state-item,
+main,
 .home-main {
   max-width: 1180px;
   margin: 0 auto;
@@ -81,8 +81,13 @@
 .config-section,
 .auth-card,
 .topic-meta-item,
-.card + .card {
-  margin-top: var(--space-lg);
+.debate-item {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .grid > .panel + .panel,
@@ -117,9 +122,6 @@
   font-weight: 600;
 }
 
-h1,
-h2,
-h3,
 .resolution-block {
   border: 1px solid var(--line);
   background: var(--surface-muted);

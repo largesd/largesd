@@ -22,10 +22,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run lint checks (same rules as pre-commit)
+        run: pre-commit run --all-files
+
+      - name: Run type checks
+        run: mypy backend/pipeline/ backend/routes/ backend/utils/
 
       - name: Run default checks
         run: python scripts/dev_workflow.py check
+
+      - name: Run API route coverage (≥70%)
+        run: |
+          python -m pytest tests/integration/api/ \
+            --cov=backend.routes \
+            --cov-report=term-missing \
+            --cov-fail-under=70
 
       - name: Run smoke test
         run: python scripts/dev_workflow.py smoke --scenario server-check --port 5055 --timeout 45
@@ -47,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-test.txt
 
       - name: Install Playwright browser
         run: python -m playwright install --with-deps chromium
@@ -61,4 +74,123 @@ jobs:
         with:
           name: acceptance-artifacts
           path: artifacts/acceptance
+          if-no-files-found: ignore
+
+  a11y:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Install axe-core
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps chromium
+
+      - name: Start temporary server
+        run: |
+          python start_server_v3.py \
+            --host 127.0.0.1 \
+            --port 5081 \
+            --fact-mode OFFLINE \
+            --llm-provider mock \
+            --num-judges 3 \
+            --db-path /tmp/debate_system_a11y.db &
+          for i in {1..30}; do
+            curl -sf http://127.0.0.1:5081/api/health && break
+            sleep 1
+          done
+
+      - name: Run accessibility scan
+        run: |
+          python acceptance/run_a11y_scan.py \
+            --base-url http://127.0.0.1:5081 \
+            --impact critical
+
+      - name: Upload a11y artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-artifacts
+          path: artifacts/ui_acceptance
+          if-no-files-found: ignore
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Security scan with Bandit
+        run: |
+          bandit -r backend/ \
+            --exclude backend/archive/ \
+            -lll \
+            -f json \
+            -o bandit-report.json
+
+      - name: Check dependencies with pip-audit
+        run: |
+          pip-audit --local --format=json -o pip-audit-report.json
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Upload security scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-artifacts
+          path: |
+            bandit-report.json
+            pip-audit-report.json
+            trivy-results.sarif
           if-no-files-found: ignore

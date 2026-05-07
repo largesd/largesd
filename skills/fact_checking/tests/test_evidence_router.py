@@ -13,9 +13,6 @@ Covers:
 from __future__ import annotations
 
 import time
-from typing import List
-
-import pytest
 
 from skills.fact_checking.v15_models import (
     AtomicSubclaim,
@@ -26,7 +23,6 @@ from skills.fact_checking.v15_models import (
     VerdictScope,
 )
 from skills.fact_checking.v15_skill import V15FactCheckingSkill
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,6 +42,7 @@ def _subclaim(text: str, claim_type: ClaimType = ClaimType.EMPIRICAL_ATOMIC) -> 
 
 def _make_connector(cid: str, tier: int, direction: Direction, delay: float = 0.0):
     """Create a mock connector with optional artificial delay."""
+
     class _MockConn:
         @property
         def connector_id(self):

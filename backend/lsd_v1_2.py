@@ -10,12 +10,11 @@ from __future__ import annotations
 import json
 import math
 import os
-from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from collections import Counter
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from statistics import median
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
-
+from typing import Any
 
 LSD_VERSION = "1.2.0"
 AUDIT_SCHEMA_VERSION = "v1.2.0"
@@ -54,7 +53,14 @@ def fact_checker_mode() -> str:
     return feature_flag(
         "FACT_CHECKER_MODE",
         os.getenv("FACT_CHECK_MODE", "simulated").lower(),
-        ("simulated", "perfect_checker", "perfect", "online_allowlist", "OFFLINE", "ONLINE_ALLOWLIST"),
+        (
+            "simulated",
+            "perfect_checker",
+            "perfect",
+            "online_allowlist",
+            "OFFLINE",
+            "ONLINE_ALLOWLIST",
+        ),
     )
 
 
@@ -74,7 +80,7 @@ def coverage_mode() -> str:
     return feature_flag("COVERAGE_MODE", "leverage_legacy", ("leverage_legacy", "binary_v1_2"))
 
 
-def formula_registry() -> Dict[str, Any]:
+def formula_registry() -> dict[str, Any]:
     """Publish every public formula used by the v1.2 compatibility layer."""
     return {
         "lsd_version": LSD_VERSION,
@@ -127,7 +133,7 @@ def formula_registry() -> Dict[str, Any]:
     }
 
 
-def selection_formula_metadata() -> Dict[str, Any]:
+def selection_formula_metadata() -> dict[str, Any]:
     return {
         "version_id": SELECTION_FORMULA_VERSION,
         "centrality": CENTRALITY_FORMULA,
@@ -140,7 +146,9 @@ def selection_formula_metadata() -> Dict[str, Any]:
     }
 
 
-def compute_selection_score(centrality_capped: float, distinct_support: int, quality_proxy: float) -> float:
+def compute_selection_score(
+    centrality_capped: float, distinct_support: int, quality_proxy: float
+) -> float:
     """Deterministic v1.2 selection score used by formula tests and selection code."""
     return (
         SELECTION_WEIGHTS["w1"] * float(centrality_capped)
@@ -164,10 +172,12 @@ def compute_q_arith(components: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
-def compute_topic_relevance_from_masses(topic_content_mass: Mapping[str, float], mode: Optional[str] = None) -> Dict[str, float]:
+def compute_topic_relevance_from_masses(
+    topic_content_mass: Mapping[str, float], mode: str | None = None
+) -> dict[str, float]:
     """Compute relevance weights for legacy and v1.2 formula modes."""
     mode = mode or scoring_formula_mode()
-    transformed: Dict[str, float] = {}
+    transformed: dict[str, float] = {}
     for topic_id, raw_mass in topic_content_mass.items():
         mass = max(0.0, float(raw_mass or 0.0))
         if mode == "v1_2_sqrt":
@@ -202,7 +212,7 @@ def p95_cap(values: Sequence[float]) -> float:
 def _safe_json(value: Any, fallback: Any) -> Any:
     if value is None:
         return fallback
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict | list):
         return value
     if isinstance(value, str):
         try:
@@ -212,14 +222,16 @@ def _safe_json(value: Any, fallback: Any) -> Any:
     return fallback
 
 
-def _token_bucket(text: str) -> Tuple[str, int]:
+def _token_bucket(text: str) -> tuple[str, int]:
     words = [word.lower() for word in (text or "").split() if word.strip()]
     if not words:
         return "empty", 0
     return " ".join(words[:8]), len(words)
 
 
-def estimate_moderation_score(post: Mapping[str, Any], min_chars: int = 20, threshold: float = MODERATION_THRESHOLD) -> float:
+def estimate_moderation_score(
+    post: Mapping[str, Any], min_chars: int = 20, threshold: float = MODERATION_THRESHOLD
+) -> float:
     """Estimate a published moderation score from persisted post outcomes.
 
     The modulation engine is rule-based and does not persist a continuous score.
@@ -256,25 +268,41 @@ def build_suppression_policy(
     block_reason_counts: Mapping[str, int],
     *,
     k: int = SUPPRESSION_K,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     affected = []
 
     for reason, count in block_reason_counts.items():
         if 0 < int(count) < k:
-            affected.append({"channel": "block_reason_histogram", "key": str(reason), "count": int(count)})
+            affected.append(
+                {"channel": "block_reason_histogram", "key": str(reason), "count": int(count)}
+            )
 
     contributor_counts = Counter((post.get("user_id") or "anonymous") for post in posts)
     if 0 < len(contributor_counts) < k:
-        affected.append({"channel": "participation_concentration", "key": "contributors", "count": len(contributor_counts)})
+        affected.append(
+            {
+                "channel": "participation_concentration",
+                "key": "contributors",
+                "count": len(contributor_counts),
+            }
+        )
 
     channel_counts = Counter((post.get("channel") or "public") for post in posts)
     for channel, count in channel_counts.items():
         if 0 < int(count) < k:
-            affected.append({"channel": "channel_mix_proportions", "key": str(channel), "count": int(count)})
+            affected.append(
+                {"channel": "channel_mix_proportions", "key": str(channel), "count": int(count)}
+            )
 
     near_duplicates = template_similarity_prevalence(posts).get("near_duplicate_count", 0)
     if 0 < near_duplicates < k:
-        affected.append({"channel": "template_similarity_prevalence", "key": "near_duplicates", "count": int(near_duplicates)})
+        affected.append(
+            {
+                "channel": "template_similarity_prevalence",
+                "key": "near_duplicates",
+                "count": int(near_duplicates),
+            }
+        )
 
     return {
         "version_id": MODERATION_DIAGNOSTICS_VERSION,
@@ -289,7 +317,7 @@ def build_suppression_policy(
     }
 
 
-def participation_concentration(posts: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+def participation_concentration(posts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     counts = Counter((post.get("user_id") or "anonymous") for post in posts)
     total = sum(counts.values())
     sorted_counts = sorted(counts.values(), reverse=True)
@@ -320,7 +348,7 @@ def participation_concentration(posts: Sequence[Mapping[str, Any]]) -> Dict[str,
     }
 
 
-def channel_mix(posts: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
+def channel_mix(posts: Sequence[Mapping[str, Any]]) -> dict[str, float]:
     total = len(posts)
     counts = Counter((post.get("channel") or "public") for post in posts)
     base = {"public": 0.0, "org": 0.0, "accredited": 0.0, "invited_expert": 0.0}
@@ -331,7 +359,7 @@ def channel_mix(posts: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     return base
 
 
-def template_similarity_prevalence(posts: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+def template_similarity_prevalence(posts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     buckets = Counter()
     for post in posts:
         key, length = _token_bucket(f"{post.get('facts', '')} {post.get('inference', '')}")
@@ -347,7 +375,7 @@ def template_similarity_prevalence(posts: Sequence[Mapping[str, Any]]) -> Dict[s
     }
 
 
-def burstiness_indicators(posts: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+def burstiness_indicators(posts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     by_hour = Counter()
     by_topic_channel = Counter()
     for post in posts:
@@ -383,17 +411,32 @@ def compute_completeness_proxy(argument: Mapping[str, Any]) -> float:
     provenance = _safe_json(argument.get("provenance_links"), argument.get("provenance_links", []))
     member_ids = _safe_json(argument.get("member_au_ids"), argument.get("member_au_ids", []))
 
-    has_conclusion = 1.0 if any(marker in inference.lower() for marker in ("therefore", "so ", "thus", "should", "because")) or len(inference) > 20 else 0.0
+    has_conclusion = (
+        1.0
+        if any(
+            marker in inference.lower()
+            for marker in ("therefore", "so ", "thus", "should", "because")
+        )
+        or len(inference) > 20
+        else 0.0
+    )
     has_premise = 1.0 if supporting else 0.0
     span_count = len(provenance) if isinstance(provenance, list) else 0
     member_count = len(member_ids) if isinstance(member_ids, list) else 0
     provenance_richness = min(1.0, (span_count + member_count) / 4.0)
-    explicit_link = 1.0 if any(marker in inference.lower() for marker in ("because", "therefore", "implies", "so", "leads to")) else 0.0
+    explicit_link = (
+        1.0
+        if any(
+            marker in inference.lower()
+            for marker in ("because", "therefore", "implies", "so", "leads to")
+        )
+        else 0.0
+    )
 
     return round((has_conclusion + has_premise + provenance_richness + explicit_link) / 4.0, 4)
 
 
-def mass_quantiles(values: Sequence[float]) -> Dict[str, float]:
+def mass_quantiles(values: Sequence[float]) -> dict[str, float]:
     if not values:
         return {"p25": 0.0, "p50": 0.0, "p75": 0.0, "p90": 0.0}
     sorted_values = sorted(float(value) for value in values)
@@ -402,7 +445,10 @@ def mass_quantiles(values: Sequence[float]) -> Dict[str, float]:
         index = min(len(sorted_values) - 1, max(0, int(math.ceil(q * len(sorted_values)) - 1)))
         return sorted_values[index]
 
-    return {label: round(pick(q), 4) for label, q in (("p25", 0.25), ("p50", 0.50), ("p75", 0.75), ("p90", 0.90))}
+    return {
+        label: round(pick(q), 4)
+        for label, q in (("p25", 0.25), ("p50", 0.50), ("p75", 0.75), ("p90", 0.90))
+    }
 
 
 def gini(values: Sequence[float]) -> float:
@@ -422,13 +468,20 @@ def topic_diagnostics(
     topic_content_mass: Mapping[str, float],
     selected_topic_facts: Mapping[str, Sequence[Mapping[str, Any]]],
     selected_topic_args: Mapping[str, Sequence[Mapping[str, Any]]],
-) -> Dict[str, Any]:
-    pre_masses = {topic.get("topic_id", ""): float(topic_content_mass.get(topic.get("topic_id", ""), 0.0)) for topic in topics}
-    selected_masses: Dict[str, float] = {}
+) -> dict[str, Any]:
+    pre_masses = {
+        topic.get("topic_id", ""): float(topic_content_mass.get(topic.get("topic_id", ""), 0.0))
+        for topic in topics
+    }
+    selected_masses: dict[str, float] = {}
     for topic in topics:
         tid = topic.get("topic_id", "")
-        fact_mass = sum(float(item.get("centrality", 0.0) or 0.0) for item in selected_topic_facts.get(tid, []))
-        arg_mass = sum(float(item.get("centrality", 0.0) or 0.0) for item in selected_topic_args.get(tid, []))
+        fact_mass = sum(
+            float(item.get("centrality", 0.0) or 0.0) for item in selected_topic_facts.get(tid, [])
+        )
+        arg_mass = sum(
+            float(item.get("centrality", 0.0) or 0.0) for item in selected_topic_args.get(tid, [])
+        )
         selected_masses[tid] = fact_mass + arg_mass
 
     total_pre = sum(pre_masses.values())
@@ -444,7 +497,11 @@ def topic_diagnostics(
             "top_3_canonical_mass_share": round(top_pre / total_pre, 4) if total_pre else 0.0,
             "top_3_selected_mass_share": round(top_sel / total_sel, 4) if total_sel else 0.0,
         },
-        "micro_topic_rate": round(sum(1 for value in sel_values if value < m_min) / len(sel_values), 4) if sel_values else 0.0,
+        "micro_topic_rate": round(
+            sum(1 for value in sel_values if value < m_min) / len(sel_values), 4
+        )
+        if sel_values
+        else 0.0,
         "micro_topic_threshold": round(m_min, 4),
         "mass_distribution_quantiles": mass_quantiles(sel_values),
         "gini_coefficient": gini(sel_values),
@@ -465,15 +522,14 @@ def merge_sensitivity(
     baseline_d: float,
     replicate_d: float,
     primary_to_replicate: Mapping[str, str],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Deterministic one-replicate topic-merge sensitivity audit.
     Computes mass-weighted mapping stability from actual ancestry and
     real score delta.
     """
     total_mass = sum(
-        topic_content_mass.get(str(t.get("topic_id", "")), 0.0)
-        for t in primary_topics
+        topic_content_mass.get(str(t.get("topic_id", "")), 0.0) for t in primary_topics
     )
     weighted_stable_mass = 0.0
 
@@ -485,10 +541,7 @@ def merge_sensitivity(
             continue
 
         # Find the replicate topic that P mapped to
-        r_topic = next(
-            (r for r in replicate_topics if str(r.get("topic_id", "")) == r_id),
-            None
-        )
+        r_topic = next((r for r in replicate_topics if str(r.get("topic_id", "")) == r_id), None)
         if not r_topic:
             continue
 
@@ -520,7 +573,9 @@ def merge_sensitivity(
     }
 
 
-def evaluator_variance_from_scores(topic_scores: Mapping[str, Any], overall_scores: Mapping[str, float]) -> Dict[str, float]:
+def evaluator_variance_from_scores(
+    topic_scores: Mapping[str, Any], overall_scores: Mapping[str, float]
+) -> dict[str, float]:
     reasoning = []
     coverage = []
     for value in topic_scores.values():
@@ -542,7 +597,7 @@ def evaluator_variance_from_scores(topic_scores: Mapping[str, Any], overall_scor
     }
 
 
-def centrality_cap_effect(selection_diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
+def centrality_cap_effect(selection_diagnostics: Mapping[str, Any]) -> dict[str, Any]:
     items_affected = 0
     pool_size = 0
     max_raw = 0.0
@@ -553,8 +608,13 @@ def centrality_cap_effect(selection_diagnostics: Mapping[str, Any]) -> Dict[str,
             pool_size += int(pool.get("pool_size", 0) or 0)
             affected = int(pool.get("items_affected_by_cap", 0) or 0)
             items_affected += affected
-            max_raw = max(max_raw, float(pool.get("raw_centrality_max", pool.get("max_raw_centrality", 0.0)) or 0.0))
-            max_cap = max(max_cap, float(pool.get("centrality_p95_cap", pool.get("p95_cap", 0.0)) or 0.0))
+            max_raw = max(
+                max_raw,
+                float(pool.get("raw_centrality_max", pool.get("max_raw_centrality", 0.0)) or 0.0),
+            )
+            max_cap = max(
+                max_cap, float(pool.get("centrality_p95_cap", pool.get("p95_cap", 0.0)) or 0.0)
+            )
     return {
         "version_id": "lsd-19.9-v1.2.0",
         "items_affected_by_cap": items_affected,
@@ -564,14 +624,11 @@ def centrality_cap_effect(selection_diagnostics: Mapping[str, Any]) -> Dict[str,
     }
 
 
-def budget_adequacy(selection_diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
+def budget_adequacy(selection_diagnostics: Mapping[str, Any]) -> dict[str, Any]:
     rows = {}
     for key, diag in selection_diagnostics.items():
         pools = diag.get("pool_diagnostics", {})
-        mass_ratios = [
-            float(pool.get("mass_ratio", 0.0) or 0.0)
-            for pool in pools.values()
-        ]
+        mass_ratios = [float(pool.get("mass_ratio", 0.0) or 0.0) for pool in pools.values()]
         rows[key] = {
             "mass_ratio": round(sum(mass_ratios) / len(mass_ratios), 4) if mass_ratios else 0.0,
             "top_k_centrality_coverage": diag.get("top_k_centrality_coverage", 0.0),
@@ -580,7 +637,7 @@ def budget_adequacy(selection_diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
     return {"version_id": "lsd-11.6-v1.2.0", "topic_side": rows}
 
 
-def rarity_utilization(selection_diagnostics: Mapping[str, Any]) -> Dict[str, Any]:
+def rarity_utilization(selection_diagnostics: Mapping[str, Any]) -> dict[str, Any]:
     rows = {}
     for key, diag in selection_diagnostics.items():
         pools = diag.get("pool_diagnostics", {})
@@ -599,7 +656,7 @@ def rarity_utilization(selection_diagnostics: Mapping[str, Any]) -> Dict[str, An
     return {"version_id": "lsd-19.6-v1.2.0", "topic_side": rows}
 
 
-def coverage_adequacy_trace(topic_scores: Mapping[str, Any]) -> Dict[str, Any]:
+def coverage_adequacy_trace(topic_scores: Mapping[str, Any]) -> dict[str, Any]:
     distribution = Counter()
     for score in topic_scores.values():
         if isinstance(score, Mapping):
@@ -610,9 +667,11 @@ def coverage_adequacy_trace(topic_scores: Mapping[str, Any]) -> Dict[str, Any]:
     return {"version_id": "lsd-15.1-v1.2.0", "rebuttal_type_distribution": dict(distribution)}
 
 
-def component_sensitivity(factuality: Optional[float], reasoning: float, coverage: float) -> Dict[str, Any]:
+def component_sensitivity(
+    factuality: float | None, reasoning: float, coverage: float
+) -> dict[str, Any]:
     """Drop-component sensitivity with optional factuality (None when no empirical premises)."""
-    components: Dict[str, float] = {}
+    components: dict[str, float] = {}
     if factuality is not None:
         components["F"] = float(factuality)
     components["Reason"] = float(reasoning)
@@ -636,7 +695,7 @@ def component_sensitivity(factuality: Optional[float], reasoning: float, coverag
     }
 
 
-def insufficiency_sensitivity(topic_scores: Mapping[str, Any], actual_d: float) -> Dict[str, Any]:
+def insufficiency_sensitivity(topic_scores: Mapping[str, Any], actual_d: float) -> dict[str, Any]:
     """Publish bounded sensitivity estimates for missing empirical evidence."""
     max_insuff = 0.0
     for score in topic_scores.values():
@@ -657,37 +716,45 @@ def unselected_tail_summary(
     topic_arguments: Mapping[str, Sequence[Mapping[str, Any]]],
     selected_facts: Mapping[str, Sequence[Mapping[str, Any]]],
     selected_args: Mapping[str, Sequence[Mapping[str, Any]]],
-) -> Dict[str, Any]:
-    selected_fact_ids = {item.get("canon_fact_id") for items in selected_facts.values() for item in items}
-    selected_arg_ids = {item.get("canon_arg_id") for items in selected_args.values() for item in items}
+) -> dict[str, Any]:
+    selected_fact_ids = {
+        item.get("canon_fact_id") for items in selected_facts.values() for item in items
+    }
+    selected_arg_ids = {
+        item.get("canon_arg_id") for items in selected_args.values() for item in items
+    }
     result = {}
     topic_ids = sorted(set(topic_facts.keys()) | set(topic_arguments.keys()))
     for tid in topic_ids:
         rows = []
         for fact in topic_facts.get(tid, []):
             if fact.get("canon_fact_id") not in selected_fact_ids:
-                rows.append({
-                    "id": fact.get("canon_fact_id"),
-                    "type": "fact",
-                    "side": fact.get("side"),
-                    "text": fact.get("canon_fact_text", "")[:180],
-                    "centrality": float(fact.get("centrality", 0.0) or 0.0),
-                    "reason_for_exclusion": "budget cap",
-                })
+                rows.append(
+                    {
+                        "id": fact.get("canon_fact_id"),
+                        "type": "fact",
+                        "side": fact.get("side"),
+                        "text": fact.get("canon_fact_text", "")[:180],
+                        "centrality": float(fact.get("centrality", 0.0) or 0.0),
+                        "reason_for_exclusion": "budget cap",
+                    }
+                )
         for arg in topic_arguments.get(tid, []):
             if arg.get("canon_arg_id") not in selected_arg_ids:
-                rows.append({
-                    "id": arg.get("canon_arg_id"),
-                    "type": "argument",
-                    "side": arg.get("side"),
-                    "text": arg.get("inference_text", "")[:180],
-                    "centrality": float(arg.get("centrality", 0.0) or 0.0),
-                    "reason_for_exclusion": "budget cap or rarity slice not picked",
-                })
+                rows.append(
+                    {
+                        "id": arg.get("canon_arg_id"),
+                        "type": "argument",
+                        "side": arg.get("side"),
+                        "text": arg.get("inference_text", "")[:180],
+                        "centrality": float(arg.get("centrality", 0.0) or 0.0),
+                        "reason_for_exclusion": "budget cap or rarity slice not picked",
+                    }
+                )
         rows.sort(key=lambda item: item["centrality"], reverse=True)
         result[tid] = {"count": len(rows), "top_unselected": rows[:3]}
     return {"version_id": "lsd-20-tail-v1.2.0", "topics": result}
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")

@@ -14,11 +14,13 @@ Per 01_DATA_MODELS.md and 03_PIPELINE.md §decomposer.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from .policies import get_default_policy
 from .synthesis import SynthesisEngine
+from .v15_audit import AuditStore
 from .v15_models import (
     AtomicSubclaim,
     ClaimExpression,
@@ -68,7 +70,6 @@ _STOPWORDS = {
     "her",
     "she",
     "or",
-    "an",
     "will",
     "my",
     "one",
@@ -151,9 +152,9 @@ class CanonicalPremise:
     original_text: str
     topic_id: str
     side: Side
-    provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
+    provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
     claim_type: ClaimType = ClaimType.EMPIRICAL_ATOMIC
-    frame_info: Optional[Dict[str, Any]] = None
+    frame_info: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -161,12 +162,8 @@ class CanonicalPremise:
 # ---------------------------------------------------------------------------
 
 
-def _significant_words(text: str) -> Set[str]:
-    return {
-        w.lower()
-        for w in re.findall(r"[a-zA-Z]+", text)
-        if w.lower() not in _STOPWORDS
-    }
+def _significant_words(text: str) -> set[str]:
+    return {w.lower() for w in re.findall(r"[a-zA-Z]+", text) if w.lower() not in _STOPWORDS}
 
 
 def _is_simple_claim(text: str) -> bool:
@@ -197,11 +194,11 @@ def _is_simple_claim(text: str) -> bool:
 
 def validate_claim_expression(
     expr: ClaimExpression,
-    subclaim_ids: Set[str],
+    subclaim_ids: set[str],
     depth: int = 0,
-) -> List[str]:
+) -> list[str]:
     """Structural validation for a ClaimExpression tree."""
-    errors: List[str] = []
+    errors: list[str] = []
     if depth > 3:
         errors.append(f"ClaimExpression exceeds max depth of 3 (depth={depth})")
 
@@ -238,25 +235,23 @@ def validate_claim_expression(
 def validate_provenance_spans(
     decomposition: PremiseDecomposition,
     premise: CanonicalPremise,
-) -> List[str]:
-    errors: List[str] = []
+) -> list[str]:
+    errors: list[str] = []
     parent_keys = {(s.span_id, s.post_id) for s in premise.provenance_spans}
     for subclaim in decomposition.atomic_subclaims:
         subclaim_keys = {(s.span_id, s.post_id) for s in subclaim.provenance_spans}
         missing = parent_keys - subclaim_keys
         if missing:
-            errors.append(
-                f"Subclaim {subclaim.subclaim_id} missing provenance spans: {missing}"
-            )
+            errors.append(f"Subclaim {subclaim.subclaim_id} missing provenance spans: {missing}")
     return errors
 
 
 def validate_semantic_equivalence(
     decomposition: PremiseDecomposition,
     premise: CanonicalPremise,
-) -> List[str]:
+) -> list[str]:
     """Lightweight deterministic check that no new claims are introduced."""
-    errors: List[str] = []
+    errors: list[str] = []
     original_words = _significant_words(premise.original_text)
     for subclaim in decomposition.atomic_subclaims:
         subclaim_words = _significant_words(subclaim.text)
@@ -271,17 +266,15 @@ def validate_semantic_equivalence(
 def validate_logical_structure(
     decomposition: PremiseDecomposition,
     premise: CanonicalPremise,
-) -> List[str]:
+) -> list[str]:
     """Heuristic check that root node type matches obvious logical connectives."""
-    errors: List[str] = []
+    errors: list[str] = []
     text_lower = premise.original_text.lower()
     root = decomposition.root_claim_expression.node_type
 
     has_and = " and " in text_lower or " while " in text_lower or ";" in text_lower
     has_or = " or " in text_lower
-    has_if_then = " if " in text_lower and (
-        " then " in text_lower or " else " in text_lower
-    )
+    has_if_then = " if " in text_lower and (" then " in text_lower or " else " in text_lower)
 
     if has_and and root not in (NodeType.AND, NodeType.ATOMIC):
         errors.append("Original premise contains compound 'and' but root is not AND")
@@ -295,9 +288,7 @@ def validate_logical_structure(
     if root == NodeType.OR and not has_or:
         errors.append("Root is OR but original premise lacks obvious 'or' connective")
     if root == NodeType.IF_THEN and not has_if_then:
-        errors.append(
-            "Root is IF_THEN but original premise lacks obvious conditional connective"
-        )
+        errors.append("Root is IF_THEN but original premise lacks obvious conditional connective")
 
     return errors
 
@@ -305,8 +296,8 @@ def validate_logical_structure(
 def validate_frame_independence(
     decomposition: PremiseDecomposition,
     premise: CanonicalPremise,
-) -> List[str]:
-    errors: List[str] = []
+) -> list[str]:
+    errors: list[str] = []
     if premise.frame_info:
         for subclaim in decomposition.atomic_subclaims:
             policy = get_default_policy(subclaim.claim_type)
@@ -329,19 +320,17 @@ def validate_decomposition(
     premise: CanonicalPremise,
 ) -> ValidationResult:
     """Run the full validation suite on a PremiseDecomposition."""
-    errors: List[str] = []
+    errors: list[str] = []
     subclaim_ids = {sc.subclaim_id for sc in decomposition.atomic_subclaims}
 
-    errors.extend(
-        validate_claim_expression(decomposition.root_claim_expression, subclaim_ids)
-    )
+    errors.extend(validate_claim_expression(decomposition.root_claim_expression, subclaim_ids))
     errors.extend(validate_provenance_spans(decomposition, premise))
     errors.extend(validate_semantic_equivalence(decomposition, premise))
     errors.extend(validate_logical_structure(decomposition, premise))
     errors.extend(validate_frame_independence(decomposition, premise))
 
     # Reachability rule: every AtomicSubclaim must be reachable from root
-    reachable_ids: Set[str] = set()
+    reachable_ids: set[str] = set()
 
     def _collect_atomic_ids(expr: ClaimExpression) -> None:
         if expr.node_type == NodeType.ATOMIC and expr.subclaim_id:
@@ -367,9 +356,7 @@ class Decomposer:
 
     def __init__(
         self,
-        llm_backend: Optional[
-            Callable[[CanonicalPremise], PremiseDecomposition]
-        ] = None,
+        llm_backend: Callable[[CanonicalPremise], PremiseDecomposition] | None = None,
     ):
         self.llm_backend = llm_backend
 
@@ -378,9 +365,7 @@ class Decomposer:
         if self.llm_backend is not None:
             try:
                 decomposition = self.llm_backend(premise)
-                decomposition.validation_result = validate_decomposition(
-                    decomposition, premise
-                )
+                decomposition.validation_result = validate_decomposition(decomposition, premise)
                 # Return the decomposition even if invalid so the pipeline
                 # can route validation failures to INSUFFICIENT with the
                 # appropriate audit metadata and flags.
@@ -436,9 +421,7 @@ class Decomposer:
             provenance_spans=list(premise.provenance_spans),
             validation_result=ValidationResult(
                 valid=False,
-                errors=[
-                    "decomposition_failure: complex claim and LLM decomposition unavailable"
-                ],
+                errors=["decomposition_failure: complex claim and LLM decomposition unavailable"],
             ),
         )
 
@@ -471,7 +454,7 @@ def _is_normative(text: str) -> bool:
 
 def decompose_and_synthesize(
     premise: CanonicalPremise,
-    evidence_items: List[EvidenceItem],
+    evidence_items: list[EvidenceItem],
     decomposer: Decomposer,
     engine: SynthesisEngine,
     **synthesize_kwargs,
@@ -534,39 +517,45 @@ def decompose_and_synthesize(
 
 def decompose_synthesize_and_audit(
     premise: CanonicalPremise,
-    evidence_items: List[EvidenceItem],
+    evidence_items: list[EvidenceItem],
     decomposer: Decomposer,
     engine: SynthesisEngine,
-    audit_store: "AuditStore",
+    audit_store: AuditStore,
     evidence_policy_version: str = "",
-    connector_versions: Optional[Dict[str, str]] = None,
-    display_summary: Optional[Any] = None,
+    connector_versions: dict[str, str] | None = None,
+    display_summary: Any | None = None,
     **synthesize_kwargs,
-) -> "Tuple[FactCheckResult, Any]":
+) -> tuple[FactCheckResult, Any]:
     """
     Full pipeline: decompose, validate, synthesize, and create an AuditRecord.
 
     Returns (FactCheckResult, AuditRecord).
     """
-    from .v15_audit import AuditStore, build_audit_record
+    from .v15_audit import build_audit_record
 
     # Run decomposition first so we have the decomposition for the audit record
     decomposition = decomposer.decompose(premise)
 
     # Run synthesis
-    fact_check_result = decompose_and_synthesize(premise, evidence_items, decomposer, engine, **synthesize_kwargs)
+    fact_check_result = decompose_and_synthesize(
+        premise, evidence_items, decomposer, engine, **synthesize_kwargs
+    )
 
     # Build evidence retrieval manifest
-    evidence_retrieval_manifest: List[Dict[str, Any]] = []
-    connector_counts: Dict[str, int] = {}
+    evidence_retrieval_manifest: list[dict[str, Any]] = []
+    connector_counts: dict[str, int] = {}
     for item in evidence_items:
-        connector_counts[item.connector_version] = connector_counts.get(item.connector_version, 0) + 1
+        connector_counts[item.connector_version] = (
+            connector_counts.get(item.connector_version, 0) + 1
+        )
     for connector, count in connector_counts.items():
-        evidence_retrieval_manifest.append({
-            "connector": connector,
-            "query_hash": "",  # Would be populated by real connectors
-            "item_count": count,
-        })
+        evidence_retrieval_manifest.append(
+            {
+                "connector": connector,
+                "query_hash": "",  # Would be populated by real connectors
+                "item_count": count,
+            }
+        )
 
     # Get previous audit hash for tamper chain
     previous_hash = audit_store.get_latest_audit_hash(premise.snapshot_id)

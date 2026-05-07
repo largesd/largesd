@@ -1,4 +1,5 @@
 """API integration tests for topic endpoints."""
+
 import pytest
 
 

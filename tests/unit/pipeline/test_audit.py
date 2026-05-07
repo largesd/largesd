@@ -1,10 +1,11 @@
 """Unit tests for pipeline audit stage."""
 
-import pytest
 from unittest.mock import MagicMock
 
-from backend.pipeline.context import PipelineContext
+import pytest
+
 from backend.pipeline.audit import audit_stage
+from backend.pipeline.context import PipelineContext
 
 
 class FakeTopic:
@@ -35,8 +36,17 @@ def engine():
     e.scoring_engine.compute_relevance_sensitivity.return_value = {"rel": True}
 
     e.llm_client = MagicMock()
-    e.llm_client.get_usage_summary.return_value = {"call_count": 5, "prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
-    e.llm_client.get_runtime_metadata.return_value = {"provider": "mock", "configured_model": "mock", "num_judges": 3}
+    e.llm_client.get_usage_summary.return_value = {
+        "call_count": 5,
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30,
+    }
+    e.llm_client.get_runtime_metadata.return_value = {
+        "provider": "mock",
+        "configured_model": "mock",
+        "num_judges": 3,
+    }
     e.llm_client._usage_log = []
 
     e.num_judges = 3
@@ -45,17 +55,30 @@ def engine():
 
 def test_audit_stage(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        topics=[FakeTopic()], side_order=["FOR", "AGAINST"], frame_context="scope",
-        allowed_posts=[], blocked_posts=[], posts=[], drift_report={},
-        canonical_facts={"t1": []}, canonical_args={"t1": []},
-        selected_facts={"t1": []}, selected_args={"t1": []},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        topics=[FakeTopic()],
+        side_order=["FOR", "AGAINST"],
+        frame_context="scope",
+        allowed_posts=[],
+        blocked_posts=[],
+        posts=[],
+        drift_report={},
+        canonical_facts={"t1": []},
+        canonical_args={"t1": []},
+        selected_facts={"t1": []},
+        selected_args={"t1": []},
         topic_content_mass={"t1": 10},
         scores={"topic_scores": {}, "overall_scores": {}, "margin_d": 0.2},
-        counterfactuals=[], symmetry_result={"sym": True},
+        counterfactuals=[],
+        symmetry_result={"sym": True},
         verdict_result={"verdict": "FOR", "ci_lower": 0.1, "ci_upper": 0.3, "confidence": 0.9},
-        replicates=[], replicate_topics=[], selection_diagnostics={},
+        replicates=[],
+        replicate_topics=[],
+        selection_diagnostics={},
         selection_seed=42,
     )
     ctx = audit_stage(ctx)

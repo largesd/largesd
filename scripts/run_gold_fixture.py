@@ -10,25 +10,24 @@ Modes:
     PERFECT           — strict v1 contract with Wikidata snapshot backend
     ONLINE_ALLOWLIST  — experimental async-capable mode
 """
+
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
 from skills.fact_checking import (
     FactCheckingSkill,
-    FactCheckVerdict,
     WikidataConnector,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 GOLD_PATH = REPO_ROOT / "skills" / "fact_checking" / "testdata" / "fact_check_gold_v1.jsonl"
 
 
 def load_gold_cases():
-    with open(GOLD_PATH, "r", encoding="utf-8") as handle:
+    with open(GOLD_PATH, encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
 
 

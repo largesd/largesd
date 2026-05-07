@@ -1,0 +1,121 @@
+TASK 04: Split Governance Routes Without URL Changes
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Reduce backend/routes/governance_bp.py from 1008 lines to <= 400 lines by
+splitting it into focused route modules while preserving every current public
+URL exactly.
+
+Important hidden dependency:
+Moving a route to a new Flask blueprint changes its endpoint name even when the
+URL is unchanged. Example:
+- governance.accept_frame_petition -> frame.accept_frame_petition
+- governance.resolve_appeal -> appeals.resolve_appeal
+- governance.get_judge_pool -> judge.get_judge_pool
+
+Endpoint names can be used outside route decorators by url_for(), rate-limit
+maps, logging, metrics, tests, or helper code. Treat endpoint-name changes as a
+real compatibility surface. Public URLs must stay the same; internal endpoint
+name references must be found and updated deliberately.
+
+Current route groups in backend/routes/governance_bp.py:
+- Frame routes:
+  - GET  /api/governance/frames
+  - POST /api/admin/frame-petitions/<petition_id>/accept
+  - POST /api/admin/frame-petitions/<petition_id>/reject
+  - GET  /api/governance/frame-cadence
+  - POST /api/governance/frame-cadence
+  - POST /api/governance/emergency-override
+  - GET  /api/governance/changelog
+- Appeal routes:
+  - GET  /api/governance/appeals
+  - POST /api/debate/<debate_id>/appeals
+  - GET  /api/debate/<debate_id>/appeals/mine
+  - GET  /api/admin/appeals
+  - POST /api/admin/appeals/<appeal_id>/resolve
+- Judge-pool routes:
+  - GET  /api/governance/judge-pool
+  - POST /api/governance/judge-pool/composition
+  - GET  /api/governance/judge-pool/rotation-policy
+  - POST /api/governance/judge-pool/rotation-policy
+  - GET  /api/governance/judge-pool/calibration-protocol
+  - POST /api/governance/judge-pool/calibration-protocol
+  - POST /api/governance/judge-pool/conflict-of-interest
+- Remaining governance routes:
+  - GET /api/governance/fairness-audits
+  - GET /api/governance/incidents
+  - GET /api/governance/summary
+
+Write scope:
+- backend/routes/governance_bp.py
+- new backend/routes/frame_bp.py
+- new backend/routes/appeals_bp.py
+- new backend/routes/judge_bp.py
+- backend/routes/__init__.py
+- backend/app_v3.py
+- tests only if they refer to Flask endpoint names rather than URLs
+
+Implementation steps:
+1. Read the whole current governance_bp.py before moving code.
+2. Before editing, run these blast-radius searches and keep the results in mind:
+   - rg -n 'url_for\(' backend/ tests/ scripts/
+   - rg -n '\.activate|\.accept|\.reject' backend/ tests/
+   - rg -n 'governance\.(get_frames|accept_frame_petition|reject_frame_petition|get_frame_cadence|set_frame_cadence|emergency_frame_override|get_changelog|get_appeals|submit_appeal|get_my_appeals|get_admin_appeals|resolve_appeal|get_judge_pool|record_judge_pool_composition|get_rotation_policy|set_rotation_policy|get_calibration_protocol|set_calibration_protocol|log_conflict_of_interest)' backend/ tests/ scripts/
+   The first search finds generated-URL dependencies. The second catches broad
+   review-suggested endpoint suffixes. The third catches the concrete
+   governance endpoints that will move.
+3. Capture a baseline URL map for the affected routes before moving code:
+   - python -c "from backend.app_v3 import create_app; app=create_app(); [print(rule.rule, sorted(rule.methods - {'HEAD','OPTIONS'}), '->', rule.endpoint) for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule) if rule.rule.startswith('/api/governance') or rule.rule.startswith('/api/admin/frame-petitions') or '/appeals' in rule.rule or '/judge-pool' in rule.rule]"
+4. Identify shared imports and helper functions. If several new route modules
+   need the same helper, move that helper into a small shared module such as:
+   - backend/routes/governance_helpers.py
+   Keep helpers private and focused.
+5. Create new blueprints with unique blueprint names:
+   - frame_bp = Blueprint("frame", __name__)
+   - appeals_bp = Blueprint("appeals", __name__)
+   - judge_bp = Blueprint("judge", __name__)
+6. Move route functions into the new files.
+7. Preserve route decorator paths exactly as they are today. Do not add
+   url_prefix registration that changes the public URL.
+   Correct:
+   - @frame_bp.route("/api/governance/frames", methods=["GET"])
+   Incorrect:
+   - app.register_blueprint(frame_bp, url_prefix="/api/frames")
+8. Leave backend/routes/governance_bp.py with only the remaining governance
+   routes and any truly local helpers.
+9. Update backend/routes/__init__.py to export the new blueprints.
+10. Update backend/app_v3.py to register the new blueprints. Register them in
+   the same general area as governance_bp.
+11. Re-run the preflight endpoint-name searches. Update only references to
+   endpoints that actually moved. Do not update URL strings unless a test was
+   incorrectly asserting an endpoint name.
+12. Compare the post-move URL map with the baseline. The endpoint names for
+   moved routes should change to frame.*, appeals.*, or judge.*, but the path
+   and method pairs must match exactly.
+13. Do not defer new regression coverage to Task 10. If this split exposes a
+   missing route integration test, endpoint-name assertion, or route-specific
+   rate-limit/logging dependency, add the focused test in this task.
+14. Verify line counts:
+   - wc -l backend/routes/governance_bp.py backend/routes/frame_bp.py backend/routes/appeals_bp.py backend/routes/judge_bp.py
+
+Acceptance criteria:
+- backend/routes/governance_bp.py is <= 400 lines.
+- Each new route module is <= 400 lines.
+- Every public URL listed above still responds at the same path.
+- Any changed Flask endpoint-name references are updated intentionally.
+- No circular import errors.
+- Existing governance tests pass.
+
+Required tests:
+- python -c "from backend.app_v3 import create_app; app = create_app(); print(len(app.url_map._rules)); print(app.view_functions.keys())"
+- python -m pytest tests/integration/api/test_governance.py -q
+- python scripts/smoke_test_api.py
+
+Guardrails:
+- Do not rename URLs as part of this refactor.
+- Do not combine this with the debate_bp split.
+- Do not move business logic into app_v3.py.
+- Do not add endpoint aliases or compatibility shims unless a concrete
+  endpoint-name dependency requires it and a targeted test proves the behavior.

@@ -7,28 +7,27 @@ Integration tests for the snapshot pipeline.
 """
 
 import os
-import sys
 import shutil
 import tempfile
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from backend.debate_engine_v2 import DebateEngineV2
-from backend.pipeline.orchestrator import run_snapshot_pipeline, STAGES
+from backend.pipeline.audit import audit_stage
+from backend.pipeline.canonicalize import canonicalize_stage
 from backend.pipeline.context import PipelineContext
+from backend.pipeline.counterfactual import counterfactual_stage
 from backend.pipeline.extract import extract_stage
 from backend.pipeline.fact_check import fact_check_stage
-from backend.pipeline.canonicalize import canonicalize_stage
-from backend.pipeline.score import score_stage
-from backend.pipeline.replicate import replicate_stage
-from backend.pipeline.counterfactual import counterfactual_stage
-from backend.pipeline.symmetry import symmetry_stage
-from backend.pipeline.audit import audit_stage
+from backend.pipeline.orchestrator import STAGES
 from backend.pipeline.persist import persist_stage
+from backend.pipeline.replicate import replicate_stage
+from backend.pipeline.score import score_stage
+from backend.pipeline.symmetry import symmetry_stage
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -103,7 +102,9 @@ def test_pipeline_failure_in_score_stage(engine, temp_db):
     debate_id = _setup_debate_with_posts(engine)
 
     with patch("backend.pipeline.orchestrator.logger") as mock_logger:
-        with patch.object(engine.scoring_engine, "compute_debate_scores", side_effect=ValueError("Bad scores")):
+        with patch.object(
+            engine.scoring_engine, "compute_debate_scores", side_effect=ValueError("Bad scores")
+        ):
             with pytest.raises(ValueError, match="Bad scores"):
                 engine.generate_snapshot(debate_id, trigger_type="manual")
 
@@ -144,12 +145,18 @@ def test_pipeline_context_state_progression():
     e.llm_client.generate_steelman_summary.return_value = {"summary": ""}
     e.scoring_engine = MagicMock()
     e.scoring_engine.compute_debate_scores.return_value = {
-        "overall_scores": {}, "overall_for": 0.5, "overall_against": 0.5,
-        "margin_d": 0.0, "topic_scores": {}
+        "overall_scores": {},
+        "overall_for": 0.5,
+        "overall_against": 0.5,
+        "margin_d": 0.0,
+        "topic_scores": {},
     }
     e.scoring_engine.run_replicates.return_value = []
     e.scoring_engine.compute_verdict.return_value = {
-        "verdict": "TIE", "ci_lower": -0.1, "ci_upper": 0.1, "confidence": 0.5,
+        "verdict": "TIE",
+        "ci_lower": -0.1,
+        "ci_upper": 0.1,
+        "confidence": 0.5,
     }
     e.scoring_engine.compute_counterfactuals.return_value = []
     e.scoring_engine.run_symmetry_tests.return_value = {}
@@ -160,7 +167,11 @@ def test_pipeline_context_state_progression():
     e._build_recipe_versions.return_value = {}
     e._remap_to_replicate.return_value = ({}, {}, {}, {})
     e.llm_client.get_usage_summary.return_value = {}
-    e.llm_client.get_runtime_metadata.return_value = {"provider": "mock", "configured_model": "mock", "num_judges": 3}
+    e.llm_client.get_runtime_metadata.return_value = {
+        "provider": "mock",
+        "configured_model": "mock",
+        "num_judges": 3,
+    }
     e.llm_client._usage_log = []
     e.num_judges = 3
     e.modulation_engine = MagicMock()
@@ -172,11 +183,16 @@ def test_pipeline_context_state_progression():
     e.get_frame_info = MagicMock(return_value=None)
 
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=e,
-        debate={"debate_id": "d1"}, active_frame={"frame_id": "f1"},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=e,
+        debate={"debate_id": "d1"},
+        active_frame={"frame_id": "f1"},
         side_order=["FOR", "AGAINST"],
-        frame_id="f1", frame_context="scope",
+        frame_id="f1",
+        frame_context="scope",
     )
 
     # Run each stage and verify state progression
@@ -222,6 +238,13 @@ def test_pipeline_orchestrator_runs_all_stages():
     """Orchestrator should call every registered stage."""
     stage_names = [name for name, _ in STAGES]
     assert stage_names == [
-        "extract", "fact_check", "canonicalize", "score",
-        "replicate", "counterfactual", "symmetry", "audit", "persist",
+        "extract",
+        "fact_check",
+        "canonicalize",
+        "score",
+        "replicate",
+        "counterfactual",
+        "symmetry",
+        "audit",
+        "persist",
     ]

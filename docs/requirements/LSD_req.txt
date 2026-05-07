@@ -543,4 +543,3 @@ No silent retractions; only additive correction snapshots.
 - Emergency incident protocol added.
 
 End v1.2
-

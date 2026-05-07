@@ -15,16 +15,13 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from skills.fact_checking.scoring_inputs import (
     ScoringAdapter,
     TopicSideScore,
-    compute_scoring_inputs,
     _compute_topic_side_score,
+    compute_scoring_inputs,
 )
 from skills.fact_checking.v15_models import FactCheckResult, Side
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -294,10 +291,17 @@ def test_no_d_computation():
     DecisivePremiseRanking fields. (Per 03_PIPELINE.md §7 critical rule)"""
     score = TopicSideScore(topic_id="t1", side=Side.FOR)
     # Ensure these fields are absent from the dataclass
-    forbidden = {"D", "delta_D", "delta_D_true", "delta_D_false",
-                 "max_abs_delta_D", "decisive_premise_ranking",
-                 "overall_for", "overall_against"}
+    forbidden = {
+        "D",
+        "delta_D",
+        "delta_D_true",
+        "delta_D_false",
+        "max_abs_delta_D",
+        "decisive_premise_ranking",
+        "overall_for",
+        "overall_against",
+    }
     actual_fields = {f.name for f in score.__dataclass_fields__.values()}
-    assert actual_fields.isdisjoint(forbidden), (
-        f"TopicSideScore must not contain dossier-computed fields: {actual_fields & forbidden}"
-    )
+    assert actual_fields.isdisjoint(
+        forbidden
+    ), f"TopicSideScore must not contain dossier-computed fields: {actual_fields & forbidden}"

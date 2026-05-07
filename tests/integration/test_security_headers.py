@@ -5,9 +5,9 @@ Acceptance criteria:
   • All responses include X-Frame-Options, X-Content-Type-Options, CSP, HSTS
   • CSP blocks external script injection
 """
-import os
-import sys
+
 import importlib
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +22,7 @@ def _reload_app_v3_with_env(**env_overrides):
             os.environ[key] = value
 
     import backend.app_v3 as app_v3
+
     app_module = importlib.reload(app_v3)
     app_module.app.config["TESTING"] = True
     return app_module

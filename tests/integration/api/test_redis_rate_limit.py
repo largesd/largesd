@@ -1,6 +1,7 @@
 """Tests for Redis-backed rate limiting (Task 4.1)."""
-import os
+
 import importlib
+import os
 
 import pytest
 
@@ -46,10 +47,7 @@ def test_redis_connected_uses_redis_storage(monkeypatch):
 
     monkeypatch.setattr(redis, "from_url", lambda url, **kwargs: FakeRedis())
 
-    old_env = {
-        k: os.environ.get(k)
-        for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]
-    }
+    old_env = {k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]}
     os.environ["ENABLE_RATE_LIMITER"] = "true"
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
     os.environ["ENV"] = "development"
@@ -98,10 +96,7 @@ def test_redis_unavailable_fallback_in_dev(monkeypatch):
 
     monkeypatch.setattr(redis, "from_url", mock_from_url)
 
-    old_env = {
-        k: os.environ.get(k)
-        for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]
-    }
+    old_env = {k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]}
     os.environ["ENABLE_RATE_LIMITER"] = "true"
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
     os.environ["ENV"] = "development"
@@ -144,10 +139,7 @@ def test_redis_unavailable_raises_in_production(monkeypatch):
 
     monkeypatch.setattr(redis, "from_url", mock_from_url)
 
-    old_env = {
-        k: os.environ.get(k)
-        for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]
-    }
+    old_env = {k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV"]}
     os.environ["ENABLE_RATE_LIMITER"] = "true"
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
     os.environ["ENV"] = "production"
@@ -185,8 +177,7 @@ def test_rate_limits_persist_across_app_restarts(monkeypatch):
     monkeypatch.setattr(redis, "from_url", lambda url, **kwargs: FakeRedis())
 
     old_env = {
-        k: os.environ.get(k)
-        for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV", "DEBATE_DB_PATH"]
+        k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV", "DEBATE_DB_PATH"]
     }
     os.environ["ENABLE_RATE_LIMITER"] = "true"
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
@@ -243,8 +234,7 @@ def test_multiple_workers_share_rate_limit_state(monkeypatch):
     monkeypatch.setattr(redis, "from_url", lambda url, **kwargs: FakeRedis())
 
     old_env = {
-        k: os.environ.get(k)
-        for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV", "DEBATE_DB_PATH"]
+        k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "REDIS_URL", "ENV", "DEBATE_DB_PATH"]
     }
     os.environ["ENABLE_RATE_LIMITER"] = "true"
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"

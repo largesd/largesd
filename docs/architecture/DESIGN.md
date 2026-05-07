@@ -147,8 +147,8 @@ The palette is a disciplined blue-leaning neutral field with a single civic acce
 
 ## Typography
 
-**Display Font:** Source Serif 4 (fallback: Literata, serif)  
-**Body Font:** Public Sans (fallback: Noto Sans, sans-serif)  
+**Display Font:** Source Serif 4 (fallback: Literata, serif)
+**Body Font:** Public Sans (fallback: Noto Sans, sans-serif)
 **Label/Mono Font:** Red Hat Mono (fallback: Menlo, Consolas, monospace)
 
 **Character:** Serif headlines establish institutional authority, while the sans body keeps workflows approachable for mixed technical audiences. Mono appears only for identifiers, metrics, and machine-like metadata.

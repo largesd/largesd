@@ -15,14 +15,12 @@ Responsibilities:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set
+from collections.abc import Callable
 
 from .claim_expression import evaluate_expression
 from .policies import get_default_policy
 from .v15_models import (
     AtomicSubclaim,
-    ClaimExpression,
     ClaimType,
     Direction,
     DirectionMethod,
@@ -35,12 +33,9 @@ from .v15_models import (
     ProvenanceSpan,
     ResolvedValue,
     RetrievalPath,
-    Side,
     SubclaimResult,
     SynthesisLogic,
-    VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -68,7 +63,9 @@ def _default_authority_rank(item: EvidenceItem) -> int:
     return 0
 
 
-def _confidence_for_tiers(best_tier: Optional[int], cross_met: bool, entity_ok: bool, direction_ok: bool) -> float:
+def _confidence_for_tiers(
+    best_tier: int | None, cross_met: bool, entity_ok: bool, direction_ok: bool
+) -> float:
     base = 1.0 if best_tier == 1 else 0.80 if best_tier == 2 else 0.5
     cross_penalty = 0.2 if not cross_met else 0.0
     entity_penalty = 0.0 if entity_ok else 0.3
@@ -80,11 +77,11 @@ def _independence_key(item: EvidenceItem) -> str:
     return item.source_independence_group_id or item.source_url or item.evidence_id
 
 
-def _distinct_independent_count(items: List[EvidenceItem]) -> int:
+def _distinct_independent_count(items: list[EvidenceItem]) -> int:
     return len({_independence_key(i) for i in items})
 
 
-def _filter_evidence(items: List[EvidenceItem]) -> List[EvidenceItem]:
+def _filter_evidence(items: list[EvidenceItem]) -> list[EvidenceItem]:
     """Apply Phase 1 normalization gates.
 
     - Relevance below threshold → reject entirely.
@@ -93,7 +90,7 @@ def _filter_evidence(items: List[EvidenceItem]) -> List[EvidenceItem]:
     """
     from dataclasses import replace
 
-    filtered: List[EvidenceItem] = []
+    filtered: list[EvidenceItem] = []
     for item in items:
         if item.relevance_score < RELEVANCE_THRESHOLD:
             # Too irrelevant to keep even as non-decisive
@@ -107,7 +104,7 @@ def _filter_evidence(items: List[EvidenceItem]) -> List[EvidenceItem]:
     return filtered
 
 
-def _items_by_tier_and_direction(items: List[EvidenceItem]):
+def _items_by_tier_and_direction(items: list[EvidenceItem]):
     """Split decisive items into tier/direction buckets."""
     t1_supports = []
     t1_refutes = []
@@ -137,17 +134,18 @@ def _items_by_tier_and_direction(items: List[EvidenceItem]):
 # SynthesisEngine
 # ---------------------------------------------------------------------------
 
+
 class SynthesisEngine:
     def __init__(
         self,
-        authority_ranking_hook: Optional[Callable[[EvidenceItem], int]] = None,
+        authority_ranking_hook: Callable[[EvidenceItem], int] | None = None,
     ):
         self.authority_ranking_hook = authority_ranking_hook or _default_authority_rank
 
     def _check_high_impact_llm(
         self,
         subclaim: AtomicSubclaim,
-        filtered_evidence: List[EvidenceItem],
+        filtered_evidence: list[EvidenceItem],
     ) -> bool:
         """Check if HIGH_IMPACT_LLM_DIRECTION flag should be added.
 
@@ -163,9 +161,9 @@ class SynthesisEngine:
             return False
 
         for item in filtered_evidence:
-            if (
-                item.direction_method == DirectionMethod.LLM_CLASSIFIER
-                and item.direction in (Direction.SUPPORTS, Direction.REFUTES)
+            if item.direction_method == DirectionMethod.LLM_CLASSIFIER and item.direction in (
+                Direction.SUPPORTS,
+                Direction.REFUTES,
             ):
                 has_deterministic = any(
                     i.direction_method == DirectionMethod.DETERMINISTIC_STRUCTURED
@@ -179,12 +177,12 @@ class SynthesisEngine:
     def synthesize(
         self,
         decomposition: PremiseDecomposition,
-        evidence_items: List[EvidenceItem],
-        entity_failure_subclaim_ids: Optional[Set[str]] = None,
-        scope_mismatch_subclaim_ids: Optional[Set[str]] = None,
-        predictive_subclaim_ids: Optional[Set[str]] = None,
-        connector_failure_subclaim_ids: Optional[Set[str]] = None,
-        policy: Optional[EvidencePolicy] = None,
+        evidence_items: list[EvidenceItem],
+        entity_failure_subclaim_ids: set[str] | None = None,
+        scope_mismatch_subclaim_ids: set[str] | None = None,
+        predictive_subclaim_ids: set[str] | None = None,
+        connector_failure_subclaim_ids: set[str] | None = None,
+        policy: EvidencePolicy | None = None,
     ) -> FactCheckResult:
         """Run the full synthesis pipeline for a premise."""
         entity_failure_subclaim_ids = entity_failure_subclaim_ids or set()
@@ -193,11 +191,11 @@ class SynthesisEngine:
         connector_failure_subclaim_ids = connector_failure_subclaim_ids or set()
 
         # Group evidence by subclaim_id
-        evidence_by_subclaim: Dict[str, List[EvidenceItem]] = {}
+        evidence_by_subclaim: dict[str, list[EvidenceItem]] = {}
         for item in evidence_items:
             evidence_by_subclaim.setdefault(item.subclaim_id, []).append(item)
 
-        subclaim_results: Dict[str, SubclaimResult] = {}
+        subclaim_results: dict[str, SubclaimResult] = {}
         for subclaim in decomposition.atomic_subclaims:
             result = self._synthesize_atomic(
                 subclaim=subclaim,
@@ -214,17 +212,19 @@ class SynthesisEngine:
         root_result = evaluate_expression(decomposition.root_claim_expression, subclaim_results)
 
         # Build final FactCheckResult
-        return self._build_fact_check_result(decomposition, root_result, list(subclaim_results.values()))
+        return self._build_fact_check_result(
+            decomposition, root_result, list(subclaim_results.values())
+        )
 
     def _synthesize_atomic(
         self,
         subclaim: AtomicSubclaim,
-        evidence: List[EvidenceItem],
+        evidence: list[EvidenceItem],
         entity_failure: bool,
         scope_mismatch: bool,
         predictive: bool,
         connector_failure: bool,
-        policy: Optional[EvidencePolicy] = None,
+        policy: EvidencePolicy | None = None,
     ) -> SubclaimResult:
         # Rule A — Entity failure
         if entity_failure:
@@ -305,7 +305,10 @@ class SynthesisEngine:
                 operationalization=subclaim.operationalization_hint,
                 verdict_scope=subclaim.verdict_scope_hint,
                 provenance_spans=list(subclaim.provenance_spans),
-                human_review_flags=([HumanReviewFlag.CONNECTOR_FAILURE] if connector_failure else []) + extra_flags,
+                human_review_flags=(
+                    [HumanReviewFlag.CONNECTOR_FAILURE] if connector_failure else []
+                )
+                + extra_flags,
                 synthesis_logic=SynthesisLogic(
                     status_rule_applied="rule_i_no_evidence",
                     insufficiency_trigger=reason,
@@ -415,10 +418,10 @@ class SynthesisEngine:
     def _resolve_tier1(
         self,
         subclaim: AtomicSubclaim,
-        supports: List[EvidenceItem],
-        refutes: List[EvidenceItem],
+        supports: list[EvidenceItem],
+        refutes: list[EvidenceItem],
         policy: EvidencePolicy,
-        extra_flags: Optional[List[HumanReviewFlag]] = None,
+        extra_flags: list[HumanReviewFlag] | None = None,
     ) -> SubclaimResult:
         # If both directions present, handle contradictory Tier 1
         if supports and refutes:
@@ -460,7 +463,8 @@ class SynthesisEngine:
                 operationalization=subclaim.operationalization_hint,
                 verdict_scope=subclaim.verdict_scope_hint,
                 provenance_spans=list(subclaim.provenance_spans),
-                human_review_flags=[HumanReviewFlag.CONTRADICTORY_TIER1_EVIDENCE] + (extra_flags or []),
+                human_review_flags=[HumanReviewFlag.CONTRADICTORY_TIER1_EVIDENCE]
+                + (extra_flags or []),
                 synthesis_logic=SynthesisLogic(
                     status_rule_applied="rule_e_contradictory_tier1_unresolved",
                     insufficiency_trigger="contradictory_tier1_evidence",
@@ -513,10 +517,10 @@ class SynthesisEngine:
     def _resolve_tier2(
         self,
         subclaim: AtomicSubclaim,
-        supports: List[EvidenceItem],
-        refutes: List[EvidenceItem],
+        supports: list[EvidenceItem],
+        refutes: list[EvidenceItem],
         policy: EvidencePolicy,
-        extra_flags: Optional[List[HumanReviewFlag]] = None,
+        extra_flags: list[HumanReviewFlag] | None = None,
     ) -> SubclaimResult:
         cross_required = policy.cross_verification_required
         min_sources = policy.cross_verification_minimum_sources
@@ -664,12 +668,12 @@ class SynthesisEngine:
         status: str,
         p: float,
         tier: int,
-        citations: List[str],
-        provenance_spans: List[ProvenanceSpan],
-        confidence: Optional[float] = None,
+        citations: list[str],
+        provenance_spans: list[ProvenanceSpan],
+        confidence: float | None = None,
         authority_ranking_applied: bool = False,
-        resolved_value: Optional[ResolvedValue] = None,
-        extra_flags: Optional[List[HumanReviewFlag]] = None,
+        resolved_value: ResolvedValue | None = None,
+        extra_flags: list[HumanReviewFlag] | None = None,
     ) -> SubclaimResult:
         if confidence is None:
             confidence = _confidence_for_tiers(
@@ -693,7 +697,9 @@ class SynthesisEngine:
             provenance_spans=provenance_spans,
             human_review_flags=flags,
             synthesis_logic=SynthesisLogic(
-                status_rule_applied="rule_d_tier1_decisive" if tier == 1 else "rule_f_tier2_decisive",
+                status_rule_applied="rule_d_tier1_decisive"
+                if tier == 1
+                else "rule_f_tier2_decisive",
                 claim_expression_node_type=NodeType.ATOMIC,
                 authority_ranking_applied=authority_ranking_applied,
             ),
@@ -704,7 +710,7 @@ class SynthesisEngine:
         self,
         decomposition: PremiseDecomposition,
         root_result: SubclaimResult,
-        atomic_results: List[SubclaimResult],
+        atomic_results: list[SubclaimResult],
     ) -> FactCheckResult:
         # Synthesize operationalization from subclaim results
         if root_result.status == "SUPPORTED":
@@ -714,8 +720,7 @@ class SynthesisEngine:
             )
         elif root_result.status == "REFUTED":
             op = (
-                "To overturn: provide a primary source that supersedes "
-                "the contradicting record."
+                "To overturn: provide a primary source that supersedes " "the contradicting record."
             )
         else:  # INSUFFICIENT
             if not atomic_results:
@@ -736,7 +741,7 @@ class SynthesisEngine:
                     )
 
         # Compute insufficiency sensitivity if there are insufficient subclaims
-        insufficiency_sensitivity: Dict[str, float] = {}
+        insufficiency_sensitivity: dict[str, float] = {}
         if any(r.status == "INSUFFICIENT" for r in atomic_results):
             from .scoring_inputs import compute_insufficiency_sensitivity
 

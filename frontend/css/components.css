@@ -240,7 +240,6 @@
   color: var(--state-tone-ink, var(--ink-strong));
 }
 
-main,
 .intro-copy {
   margin: 8px 0 0;
   color: var(--ink-default);

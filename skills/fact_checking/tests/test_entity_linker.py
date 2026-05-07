@@ -12,9 +12,7 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
-from skills.fact_checking.entity_linker import EntityLink, EntityLinker, WikidataEntityConnector
+from skills.fact_checking.entity_linker import EntityLinker
 
 
 class FakeWikidataConnector:
@@ -55,9 +53,7 @@ def test_extract_mentions_no_spacy():
 
 def test_single_candidate_high_confidence():
     linker = EntityLinker(wikidata_connector=FakeWikidataConnector())
-    candidates = [
-        {"qid": "Q937", "label": "Albert Einstein", "score": 100, "type": "PERSON"}
-    ]
+    candidates = [{"qid": "Q937", "label": "Albert Einstein", "score": 100, "type": "PERSON"}]
     link = linker._disambiguate("Einstein", "Einstein was a physicist.", candidates)
     assert link.canonical_id == "Q937"
     assert link.ambiguity_flag is False
@@ -99,11 +95,13 @@ def test_link_no_candidates_empty_result():
 
 
 def test_link_with_candidates():
-    wikidata = FakeWikidataConnector({
-        "Albert Einstein": [
-            {"qid": "Q937", "label": "Albert Einstein", "score": 100, "type": "PERSON"}
-        ]
-    })
+    wikidata = FakeWikidataConnector(
+        {
+            "Albert Einstein": [
+                {"qid": "Q937", "label": "Albert Einstein", "score": 100, "type": "PERSON"}
+            ]
+        }
+    )
     linker = EntityLinker(wikidata_connector=wikidata, confidence_threshold=0.5)
     links = linker.link("The physicist Albert Einstein lived in Germany.")
     assert len(links) >= 1

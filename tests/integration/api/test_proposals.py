@@ -1,5 +1,4 @@
 """API integration tests for debate proposal endpoints."""
-import pytest
 
 
 def test_submit_proposal_success(client, auth_headers):

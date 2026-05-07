@@ -3,22 +3,22 @@ Pipeline orchestrator: execute snapshot stages in order with error handling.
 """
 
 import logging
-from typing import Callable, List, Tuple
+from collections.abc import Callable
 
+from backend.pipeline.audit import audit_stage
+from backend.pipeline.canonicalize import canonicalize_stage
 from backend.pipeline.context import PipelineContext
+from backend.pipeline.counterfactual import counterfactual_stage
 from backend.pipeline.extract import extract_stage
 from backend.pipeline.fact_check import fact_check_stage
-from backend.pipeline.canonicalize import canonicalize_stage
-from backend.pipeline.score import score_stage
-from backend.pipeline.replicate import replicate_stage
-from backend.pipeline.counterfactual import counterfactual_stage
-from backend.pipeline.symmetry import symmetry_stage
-from backend.pipeline.audit import audit_stage
 from backend.pipeline.persist import persist_stage
+from backend.pipeline.replicate import replicate_stage
+from backend.pipeline.score import score_stage
+from backend.pipeline.symmetry import symmetry_stage
 
 logger = logging.getLogger(__name__)
 
-STAGES: List[Tuple[str, Callable[[PipelineContext], PipelineContext]]] = [
+STAGES: list[tuple[str, Callable[[PipelineContext], PipelineContext]]] = [
     ("extract", extract_stage),
     ("fact_check", fact_check_stage),
     ("canonicalize", canonicalize_stage),

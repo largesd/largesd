@@ -1,0 +1,146 @@
+TASK 02: Remove Inline Scripts for Strict CSP
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Move all frontend inline script logic into external JavaScript files so the
+current strict CSP remains secure:
+script-src 'self'
+
+Why this matters:
+Flask-Talisman applies CSP to static HTML responses. Inline <script> blocks are
+blocked by the browser, which can make the UI non-functional.
+
+Current inline script findings:
+- frontend/audits.html:436
+- frontend/frame-dossier.html:60
+- frontend/governance.html:176
+- frontend/appeals.html:885 and 1113
+- frontend/verdict.html:314
+- frontend/login.html:113
+- frontend/dossier.html:225
+- frontend/setup.html:69
+- frontend/evidence.html:8
+- frontend/new_debate.html:252
+- frontend/register.html:132
+- frontend/propose.html:130
+- frontend/topic.html:220
+- frontend/admin.html:927 and 1715
+- frontend/snapshot.html:271
+- frontend/topics.html:480
+
+Write scope:
+- frontend/*.html files containing inline scripts
+- frontend/static/js/*.js
+- do not change backend CSP policy in this task except for comments if needed
+- do not add unsafe-inline
+
+Recommended implementation style:
+- Work page-by-page, not with one large mechanical rewrite.
+- Start with a low-risk page, verify it, then move to the next page.
+- Treat admin.html and appeals.html as high-risk because each has multiple
+  inline script blocks and more interactive behavior.
+- Preserve exact script execution order on pages with multiple blocks.
+- After extracting a page, verify that page before extracting another high-risk
+  page.
+
+Implementation steps:
+1. Re-audit before editing:
+   - rg --pcre2 -n '<script(?![^>]*\bsrc=)' frontend/*.html
+2. Create a short extraction inventory before editing. For each inline script
+   block, note:
+   - source HTML file and approximate line
+   - whether it wraps DOMContentLoaded
+   - globals it reads or writes, especially window.*, BDA, localStorage, and
+     auth state
+   - DOM IDs/classes it expects to exist
+   - fetch endpoints it calls
+   - event listeners, forms, buttons, filters, modals, timers, or render
+     functions it controls
+3. For each page with inline script logic, create or update a matching external
+   JS file under frontend/static/js/.
+   Examples:
+   - frontend/admin.html -> frontend/static/js/admin.js
+   - frontend/appeals.html -> frontend/static/js/appeals.js
+   - frontend/frame-dossier.html -> frontend/static/js/frame-dossier.js
+4. Move the inline JavaScript into the external file.
+   - Preserve DOMContentLoaded behavior.
+   - Prefer keeping existing IIFEs if they protect page-local variables.
+   - Keep load order with defer script tags near the end of body.
+   - If multiple inline blocks exist on one page, merge them carefully in the
+     same external page script while preserving execution order.
+5. Replace inline script blocks with external script tags:
+   - <script src="/static/js/PAGENAME.js" defer></script>
+6. If a page needs static data, do not leave an inline script that assigns
+   window variables. CSP blocks that too. Use data-* attributes, non-script
+   markup, or have the external JS fetch the needed data.
+7. Verify static JS serving before adding any backend route. The current
+   backend/routes/api_bp.py catch-all should serve:
+   - /static/js/common.js
+   - /static/js/PAGENAME.js
+   Only add a backend route if a direct request proves the file does not serve.
+   Verification options:
+   - curl -I http://127.0.0.1:PORT/static/js/PAGENAME.js
+   - browser DevTools Network tab shows the page script with HTTP 200 and the
+     expected JavaScript MIME type
+8. Re-run the audit:
+   - rg --pcre2 -n '<script(?![^>]*\bsrc=)' frontend/*.html
+   Expected result: no inline executable scripts.
+9. Run focused UI smoke checks:
+   - python scripts/dev_workflow.py smoke --scenario server-check --port 5055 --timeout 45
+   - python scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+
+Manual verification:
+Manual browser verification is required because grep and tests can prove that
+inline scripts are gone, but they cannot prove every page workflow still works.
+
+Open each changed page in a browser with DevTools Console and Network visible.
+For each page:
+- confirm the external /static/js/PAGENAME.js request returns HTTP 200
+- confirm there are no CSP violations
+- confirm there are no uncaught JavaScript errors
+- confirm the page's main interactive behavior still works
+
+Minimum page behavior checks:
+- login.html: fill the form and verify submit behavior still fires.
+- register.html: fill the form and verify submit behavior still fires.
+- new_debate.html: create/generate flow controls still respond.
+- propose.html: proposal form controls still respond.
+- setup.html: setup controls still respond.
+- topic.html: topic loading/rendering still works.
+- topics.html: topic table/list rendering, filters, and actions still work.
+- snapshot.html: snapshot data loading and controls still work.
+- verdict.html: verdict rendering and expandable/detail behavior still works.
+- dossier.html: dossier loading/rendering still works.
+- frame-dossier.html: frame dossier loading/rendering still works.
+- governance.html: governance tables/sections load and action buttons still work.
+- audits.html: audit data rendering and controls still work.
+- appeals.html: both former script blocks still run in order; filters, tables,
+  and appeal actions still work.
+- admin.html: both former script blocks still run in order; admin tables,
+  filters, forms, modals, and action buttons still work.
+- evidence.html: early-page script behavior still works after extraction.
+
+Stop conditions:
+- If a page script returns 404, fix static serving or script path before moving
+  on.
+- If DevTools shows a CSP violation, do not proceed until it is fixed.
+- If a page has an uncaught JavaScript error, do not proceed until the cause is
+  understood and fixed.
+- If admin.html or appeals.html loses behavior after merging multiple blocks,
+  restore the original order inside the external script and retest.
+
+Acceptance criteria:
+- No inline executable <script> blocks remain in frontend/*.html.
+- No unsafe-inline is added to CSP.
+- External page scripts are loaded with defer and from /static/js/...
+- Existing interactivity still works on pages that were changed.
+- Acceptance suite passes, or any failure is documented as unrelated with a
+  reproduction note.
+
+Guardrails:
+- Do not migrate to server-rendered Jinja just to add CSP nonces.
+- Do not change API endpoints while moving scripts.
+- Do not convert scripts to type="module" unless all dependencies and globals
+  are audited. The existing frontend appears to use plain scripts.

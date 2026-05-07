@@ -21,7 +21,6 @@ Rules:
 from __future__ import annotations
 
 import os
-from typing import List
 
 import pytest
 
@@ -33,11 +32,8 @@ from skills.fact_checking.v15_connectors import (
     ConnectorRegistry,
     CrossrefConnector,
     CuratedRAGConnector,
-    DEFAULT_CURATED_DOCUMENTS,
-    DEFAULT_WIKIDATA_ENTITIES,
     WikidataEntityConnector,
     _CuratedDocument,
-    _WikidataEntity,
 )
 from skills.fact_checking.v15_models import (
     AtomicSubclaim,
@@ -48,21 +44,20 @@ from skills.fact_checking.v15_models import (
     EvidenceItem,
     NodeType,
     PremiseDecomposition,
-    ResolvedValue,
     RetrievalPath,
     Side,
     SourceType,
-    ValueType,
     VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _subclaim(sid: str, text: str, claim_type: ClaimType = ClaimType.EMPIRICAL_ATOMIC) -> AtomicSubclaim:
+def _subclaim(
+    sid: str, text: str, claim_type: ClaimType = ClaimType.EMPIRICAL_ATOMIC
+) -> AtomicSubclaim:
     return AtomicSubclaim(
         subclaim_id=sid,
         parent_premise_id="p1",
@@ -73,7 +68,7 @@ def _subclaim(sid: str, text: str, claim_type: ClaimType = ClaimType.EMPIRICAL_A
     )
 
 
-def _decomposition(root: ClaimExpression, subclaims: List[AtomicSubclaim]) -> PremiseDecomposition:
+def _decomposition(root: ClaimExpression, subclaims: list[AtomicSubclaim]) -> PremiseDecomposition:
     return PremiseDecomposition(
         premise_id="p1",
         snapshot_id="snap1",
@@ -89,7 +84,7 @@ def _atomic_expr(sid: str) -> ClaimExpression:
     return ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=sid)
 
 
-def _run_synthesis(subclaim: AtomicSubclaim, items: List[EvidenceItem]):
+def _run_synthesis(subclaim: AtomicSubclaim, items: list[EvidenceItem]):
     root = _atomic_expr(subclaim.subclaim_id)
     dec = _decomposition(root, [subclaim])
     engine = SynthesisEngine()
@@ -220,7 +215,9 @@ def test_bls_placeholder_retrieval_path_marked():
 @pytest.mark.skipif(not os.environ.get("BLS_API_KEY"), reason="BLS_API_KEY not available")
 def test_bls_live_api_returns_evidence():
     conn = BLSStatisticsConnector()
-    sc = _subclaim("sc1", "the us unemployment rate is 4 percent", claim_type=ClaimType.NUMERIC_STATISTICAL)
+    sc = _subclaim(
+        "sc1", "the us unemployment rate is 4 percent", claim_type=ClaimType.NUMERIC_STATISTICAL
+    )
     items = conn.retrieve(sc)
     assert len(items) >= 0  # may be empty if API is down
     for ev in items:
@@ -242,7 +239,9 @@ def test_crossref_no_doi_no_scientific_claim_returns_empty():
 
 def test_crossref_offline_without_email():
     conn = CrossrefConnector(email="")
-    sc = _subclaim("sc1", "study doi 10.1000/182 shows positive effect", claim_type=ClaimType.SCIENTIFIC)
+    sc = _subclaim(
+        "sc1", "study doi 10.1000/182 shows positive effect", claim_type=ClaimType.SCIENTIFIC
+    )
     items = conn.retrieve(sc)
     # Without email, search path is disabled; DOI path still attempts but may 404
     assert isinstance(items, list)
@@ -251,7 +250,9 @@ def test_crossref_offline_without_email():
 @pytest.mark.skipif(not os.environ.get("CROSSREF_EMAIL"), reason="CROSSREF_EMAIL not available")
 def test_crossref_live_doi_query():
     conn = CrossrefConnector()
-    sc = _subclaim("sc1", "the study 10.1038/s41586-021-03819-2 found X", claim_type=ClaimType.SCIENTIFIC)
+    sc = _subclaim(
+        "sc1", "the study 10.1038/s41586-021-03819-2 found X", claim_type=ClaimType.SCIENTIFIC
+    )
     items = conn.retrieve(sc)
     assert len(items) >= 0
     for ev in items:
@@ -361,7 +362,7 @@ def test_wikidata_plus_curated_rag_cross_verification():
     wikidata = WikidataEntityConnector()
     curated = CuratedRAGConnector()
     sc = _subclaim("sc1", "openai was founded in 2015", claim_type=ClaimType.EMPIRICAL_ATOMIC)
-    items: List[EvidenceItem] = []
+    items: list[EvidenceItem] = []
     items.extend(wikidata.retrieve(sc))
     items.extend(curated.retrieve(sc))
 
@@ -420,7 +421,9 @@ def test_connector_registry_default_set():
 
 def test_bls_placeholder_only_is_insufficient():
     """If only OFFLINE_PLACEHOLDER evidence exists, result is INSUFFICIENT."""
-    sc = _subclaim("sc1", "the us unemployment rate is 4 percent", claim_type=ClaimType.NUMERIC_STATISTICAL)
+    sc = _subclaim(
+        "sc1", "the us unemployment rate is 4 percent", claim_type=ClaimType.NUMERIC_STATISTICAL
+    )
     placeholder = EvidenceItem(
         subclaim_id=sc.subclaim_id,
         source_type=SourceType.OFFICIAL_STAT,
@@ -444,11 +447,14 @@ def test_bls_placeholder_only_is_insufficient():
     assert result.p == 0.5
     assert result.best_evidence_tier == 1
     assert result.insufficiency_reason == "connector_offline_placeholder"
-    assert result.subclaim_results[0].synthesis_logic.status_rule_applied == "rule_i_placeholder_only"
+    assert (
+        result.subclaim_results[0].synthesis_logic.status_rule_applied == "rule_i_placeholder_only"
+    )
 
 
 def test_connector_failure_returns_empty_not_crash():
     """If a live connector raises, it should return empty evidence."""
+
     class FailingConnector(BaseEvidenceConnector):
         @property
         def connector_id(self):

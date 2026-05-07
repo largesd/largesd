@@ -1,11 +1,12 @@
 """Unit tests for pipeline canonicalize stage."""
 
-import pytest
 from unittest.mock import MagicMock
 
-from backend.pipeline.context import PipelineContext
+import pytest
+
+from backend.extraction import CanonicalArgument, CanonicalFact
 from backend.pipeline.canonicalize import canonicalize_stage
-from backend.extraction import CanonicalFact, CanonicalArgument
+from backend.pipeline.context import PipelineContext
 
 
 class FakeTopic:
@@ -20,14 +21,22 @@ def engine():
     e.db = MagicMock()
     e.extraction_engine = MagicMock()
     cf = CanonicalFact(
-        canon_fact_id="cf1", topic_id="t1", side="FOR",
-        canon_fact_text="fact", member_fact_ids=["f1"],
-        provenance_spans=[], p_true=0.8,
+        canon_fact_id="cf1",
+        topic_id="t1",
+        side="FOR",
+        canon_fact_text="fact",
+        member_fact_ids=["f1"],
+        provenance_spans=[],
+        p_true=0.8,
     )
     ca = CanonicalArgument(
-        canon_arg_id="ca1", topic_id="t1", side="FOR",
-        inference_text="inf", supporting_facts=["cf1"],
-        member_au_ids=["au1"], provenance_spans=[],
+        canon_arg_id="ca1",
+        topic_id="t1",
+        side="FOR",
+        inference_text="inf",
+        supporting_facts=["cf1"],
+        member_au_ids=["au1"],
+        provenance_spans=[],
     )
     e.extraction_engine.canonicalize_facts.return_value = [cf]
     e.extraction_engine.canonicalize_arguments.return_value = [ca]
@@ -38,9 +47,14 @@ def engine():
 
 def test_canonicalize_stage(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        extracted={"t1": {"topic": FakeTopic(), "topic_posts": [], "spans": [], "facts": [], "args": []}},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        extracted={
+            "t1": {"topic": FakeTopic(), "topic_posts": [], "spans": [], "facts": [], "args": []}
+        },
     )
     ctx = canonicalize_stage(ctx)
 
@@ -64,9 +78,14 @@ def test_canonicalize_stage_empty(engine):
     e.content_mass_calculator.calculate_topic_mass.return_value = 0
 
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=e,
-        extracted={"t1": {"topic": FakeTopic(), "topic_posts": [], "spans": [], "facts": [], "args": []}},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=e,
+        extracted={
+            "t1": {"topic": FakeTopic(), "topic_posts": [], "spans": [], "facts": [], "args": []}
+        },
     )
     ctx = canonicalize_stage(ctx)
     assert ctx.canonical_facts["t1"] == []

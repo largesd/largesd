@@ -15,17 +15,17 @@ Design principles:
 """
 
 import hashlib
-import json
 from datetime import datetime
-from typing import Optional, List, Protocol, Dict, Any
-from .connectors import SourceConnector, SourceResult, SourceConfidence
+from typing import Any, Protocol
+
+from .connectors import SourceConfidence, SourceConnector, SourceResult
 from .models import EvidenceTier
 
 
 class SearchBackend(Protocol):
     """Protocol for search abstraction."""
 
-    def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int) -> list[dict[str, Any]]:
         """Return list of results, each with at least 'url' and optionally 'title'."""
         ...
 
@@ -36,8 +36,7 @@ class LLMClient(Protocol):
     class Response:
         content: str
 
-    def generate(self, prompt: str, temperature: float, max_tokens: int) -> Response:
-        ...
+    def generate(self, prompt: str, temperature: float, max_tokens: int) -> Response: ...
 
 
 class WebRAGConnector(SourceConnector):
@@ -47,6 +46,7 @@ class WebRAGConnector(SourceConnector):
         This connector implements the legacy v1 interface and will be removed
         in a future release.
     """
+
     """
     Conservative web-retrieval connector.
 
@@ -73,6 +73,7 @@ class WebRAGConnector(SourceConnector):
         max_pages: int = 3,
     ):
         import warnings
+
         warnings.warn(
             "WebRAGConnector is deprecated since v1.5.0. Use BraveSearchConnector instead.",
             DeprecationWarning,
@@ -92,28 +93,30 @@ class WebRAGConnector(SourceConnector):
     def tier(self) -> EvidenceTier:
         return self._tier
 
-    def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
+    def query(self, normalized_claim: str, claim_hash: str) -> SourceResult | None:
         # Step 1: Search
         results = self.search.search(normalized_claim, top_k=self._max_pages)
         if not results:
             return None
 
         # Step 2: Fetch each page independently
-        documents: List[Dict[str, str]] = []
+        documents: list[dict[str, str]] = []
         for r in results[: self._max_pages]:
             content = self._fetch_clean(r["url"])
             if content:
-                documents.append({
-                    "url": r["url"],
-                    "title": r.get("title", "Unknown"),
-                    "content": content[:3000],
-                })
+                documents.append(
+                    {
+                        "url": r["url"],
+                        "title": r.get("title", "Unknown"),
+                        "content": content[:3000],
+                    }
+                )
 
         if not documents:
             return None
 
         # Step 3: Per-source classification
-        per_source_labels: List[SourceConfidence] = []
+        per_source_labels: list[SourceConfidence] = []
         for doc in documents:
             label = self._llm_classify_single_source(normalized_claim, doc)
             per_source_labels.append(label)
@@ -142,23 +145,23 @@ class WebRAGConnector(SourceConnector):
             tier=self.tier,
         )
 
-    def _fetch_clean(self, url: str) -> Optional[str]:
+    def _fetch_clean(self, url: str) -> str | None:
         try:
             import requests
+
             resp = requests.get(url, timeout=10, headers={"User-Agent": "FactBot/1.0"})
             if resp.status_code != 200:
                 return None
             try:
                 import trafilatura
+
                 return trafilatura.extract(resp.text, include_comments=False)
             except ImportError:
                 return resp.text[:5000]
         except Exception:
             return None
 
-    def _llm_classify_single_source(
-        self, claim: str, document: Dict[str, str]
-    ) -> SourceConfidence:
+    def _llm_classify_single_source(self, claim: str, document: dict[str, str]) -> SourceConfidence:
         prompt = f"""You have read the source below. Assess whether it supports or contradicts the claim.
 
 CLAIM: {claim}
@@ -185,14 +188,14 @@ Do not output numbers. Do not explain."""
         return mapping.get(text, SourceConfidence.AMBIGUOUS)
 
     @staticmethod
-    def _aggregate_labels(labels: List[SourceConfidence]) -> Optional[SourceConfidence]:
+    def _aggregate_labels(labels: list[SourceConfidence]) -> SourceConfidence | None:
         if not labels:
             return None
         unique = set(labels)
         if unique == {SourceConfidence.SILENT}:
             return SourceConfidence.SILENT
         # Remove silent from consideration
-        non_silent = {l for l in unique if l != SourceConfidence.SILENT}
+        non_silent = {label for label in unique if label != SourceConfidence.SILENT}
         if not non_silent:
             return SourceConfidence.SILENT
         if len(non_silent) == 1:

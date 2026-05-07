@@ -46,14 +46,14 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Tier 3 Promotion Registry
   -----------------------------------------------------------------------------
   File: skills/fact_checking/source_registry.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - SourceReputationRegistry with ReputationEntry dataclass
     - Domain-indexed allowlist for Tier 3 → Tier 2 promotion
     - Methods: is_promoted(), get_promoted_tier(), promote()
-  
+
   Integration needed:
     - Wire into V15FactCheckingSkill._retrieve_evidence() so that retrieved
       Tier 3 evidence is passed through the registry before synthesis.
@@ -62,15 +62,15 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Web Evidence Archiving
   -----------------------------------------------------------------------------
   File: skills/fact_checking/normalizer.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - archive_web_evidence(source_url, page_text) attempts archive.org submission
     - _request_archive_org() POSTs to https://web.archive.org/save/{url}
     - Fallback to snapshot storage key on archive.org failure
     - Returns dict with archive_org_url and snapshot_storage_key
-  
+
   Integration needed:
     - Called by normalizer but NOT automatically invoked during
       V15FactCheckingSkill._retrieve_evidence(). Should be wired so that
@@ -79,9 +79,9 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Normative Claim Routing
   -----------------------------------------------------------------------------
   File: skills/fact_checking/decomposition.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - _is_normative() detects 14 normative indicators ("should", "ought to",
       "must", "need to", "important to", "better to", "worse to", "right to",
@@ -93,9 +93,9 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Predictive Claim Handling
   -----------------------------------------------------------------------------
   File: skills/fact_checking/synthesis.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - SynthesisEngine.synthesize() accepts predictive_subclaim_ids: Set[str]
     - Rule J (predictive rule) marks predictive subclaims as:
@@ -103,7 +103,7 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
         p = 0.0
         insufficiency_reason = "predictive_claim_not_checkable"
         status_rule_applied = "rule_j_predictive"
-  
+
   Integration needed:
     - V15FactCheckingSkill does not currently SET predictive_subclaim_ids
       before calling synthesis. A claim classifier (or heuristic in the skill)
@@ -112,9 +112,9 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Circuit Breakers
   -----------------------------------------------------------------------------
   File: skills/fact_checking/rate_limiter.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - CircuitBreaker class with OPEN/CLOSED/HALF_OPEN states
     - Configurable failure_threshold and recovery_timeout
@@ -129,16 +129,16 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   GAP CLOSED — Production Audit Trail
   -----------------------------------------------------------------------------
   File: skills/fact_checking/decomposition.py
-  
+
   Status: FULLY IMPLEMENTED
-  
+
   Implementation:
     - decompose_synthesize_and_audit() wrapper function exists
     - Accepts audit_store: AuditStore parameter
     - Computes previous_hash from audit_store.get_latest_audit_hash()
     - Creates full AuditRecord with hash chain
     - Stores via audit_store.store(audit_record)
-  
+
   Integration needed:
     - V15FactCheckingSkill currently calls decomposer.decompose() and
       synthesis_engine.synthesize() DIRECTLY — it does NOT use the
@@ -174,10 +174,10 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
   PHASE 1 — Wikidata Search Integration (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/entity_linker.py
-  
+
   The WikidataEntityConnector in v15_connectors.py already has search
   capability. Extend EntityLinker to use it:
-  
+
     class EntityLinker:
         def __init__(self,
                      wikidata_connector: Optional[WikidataEntityConnector] = None,
@@ -186,7 +186,7 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
             self.wikidata = wikidata_connector or WikidataEntityConnector()
             self.llm_client = llm_client
             self.confidence_threshold = confidence_threshold
-        
+
         def link(self, subclaim_text: str) -> List[EntityLink]:
             mentions = self._extract_mentions(subclaim_text)
             links = []
@@ -197,7 +197,7 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
                 link = self._disambiguate(mention, subclaim_text, candidates)
                 links.append(link)
             return links
-        
+
         def _extract_mentions(self, text: str) -> List[str]:
             '''
             Strategy 1 (preferred): spaCy NER (PERSON, ORG, GPE, PRODUCT, EVENT)
@@ -214,11 +214,11 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
                                           "EVENT", "WORK_OF_ART", "LAW")]
             except Exception:
                 pass
-            
+
             # Fallback: regex for capitalized phrases
             import re
             return re.findall(r"\b[A-Z][a-zA-Z\s\.]+(?:\b[A-Z][a-zA-Z\s\.]+)*\b", text)
-        
+
         def _disambiguate(self, mention: str, context: str,
                           candidates: List[Dict[str, Any]]) -> EntityLink:
             '''
@@ -239,12 +239,12 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
                     ambiguity_flag=False,
                     ambiguity_candidates=[],
                 )
-            
+
             # Sort by score descending
             candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
             top = candidates[0]
             second = candidates[1] if len(candidates) > 1 else None
-            
+
             # If scores are close, flag ambiguity
             if second and (top.get("score", 0) - second.get("score", 0)) < 0.2:
                 return EntityLink(
@@ -257,7 +257,7 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
                     ambiguity_flag=True,
                     ambiguity_candidates=[c["qid"] for c in candidates[:3]],
                 )
-            
+
             # Clear winner
             return EntityLink(
                 entity_id=f"entity_{hashlib.sha256(mention.encode()).hexdigest()[:12]}",
@@ -269,11 +269,11 @@ details to reflect the CURRENT codebase state (as of 2026-05-03).
                 ambiguity_flag=False,
                 ambiguity_candidates=[c["qid"] for c in candidates[:3]],
             )
-  
+
   PHASE 2 — LLM Disambiguation (Optional, 0.5 days)
   -----------------------------------------------------------------------------
   If llm_client is provided, enhance _disambiguate():
-  
+
     def _llm_disambiguate(self, mention, context, candidates) -> Tuple[str, float]:
         prompt = f'''Given the claim: "{context}"
 The mention "{mention}" could refer to:
@@ -282,30 +282,30 @@ The mention "{mention}" could refer to:
 Which candidate best matches the mention in this context?
 Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
 {{"qid": "Q...", "confidence": 0.92}}'''
-        
+
         response = self.llm_client.complete(prompt)
         # Parse JSON, validate QID is in candidates, return (qid, confidence)
-  
+
   PHASE 3 — Integration with V15FactCheckingSkill (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
   Modify _retrieve_evidence() to also collect entity links:
-  
+
     def __init__(self, ...):
         # ... existing init ...
         self._entity_linker = EntityLinker()
-    
+
     def _retrieve_evidence(self, decomposition: PremiseDecomposition) -> List[EvidenceItem]:
         items: List[EvidenceItem] = []
         entity_failure_ids: List[str] = []
-        
+
         for subclaim in decomposition.atomic_subclaims:
             # Entity linking
             links = self._entity_linker.link(subclaim.text)
             if not links:
                 entity_failure_ids.append(subclaim.subclaim_id)
-            
+
             # Evidence retrieval (existing sequential loop)
             for connector in self._connectors:
                 try:
@@ -313,23 +313,23 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
                     items.extend(retrieved)
                 except Exception:
                     pass
-        
+
         # Store entity failures for synthesis
         self._last_entity_failure_ids = entity_failure_ids
         return items
-  
+
   Then pass entity_failure_ids to synthesis:
-  
+
     v15_result = self._synthesis_engine.synthesize(
         decomposition=decomposition,
         evidence_items=evidence_items,
         entity_failure_subclaim_ids=set(getattr(self, '_last_entity_failure_ids', [])),
     )
-  
+
   PHASE 4 — Testing (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/tests/test_entity_linker.py (NEW)
-  
+
   Tests:
     - test_link_single_candidate_high_confidence
     - test_link_multiple_candidates_ambiguity_flag
@@ -350,7 +350,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
 
 4.2 CURRENT STATE
     - V15FactCheckingSkill._retrieve_evidence() (v15_skill.py:456-467):
-      
+
       def _retrieve_evidence(self, decomposition: PremiseDecomposition) -> List[EvidenceItem]:
           items: List[EvidenceItem] = []
           for subclaim in decomposition.atomic_subclaims:
@@ -361,7 +361,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
                   except Exception:
                       pass
           return items
-  
+
   This is PURELY SEQUENTIAL. No asyncio, no ThreadPoolExecutor.
   - If one connector hangs for 30s, ALL subsequent connectors wait.
   - No timeout per connector.
@@ -380,12 +380,12 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 1 — Parallel Retrieval with ThreadPoolExecutor (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
   Replace _retrieve_evidence() with a parallel implementation:
-  
+
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from .rate_limiter import RateLimiterManager
-    
+
     class V15FactCheckingSkill:
         def __init__(self, ..., max_connector_workers: int = 4,
                      connector_timeout: float = 30.0):
@@ -393,27 +393,27 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
             self._max_workers = max_connector_workers
             self._connector_timeout = connector_timeout
             self._rate_limiter = RateLimiterManager()
-        
+
         def _retrieve_evidence(self, decomposition: PremiseDecomposition) -> List[EvidenceItem]:
             '''Collect evidence from all wired connectors in parallel.'''
             items: List[EvidenceItem] = []
-            
+
             # Build list of (subclaim, connector) tasks
             tasks = []
             for subclaim in decomposition.atomic_subclaims:
                 for connector in self._connectors:
                     tasks.append((subclaim, connector))
-            
+
             if not tasks:
                 return items
-            
+
             # Execute in parallel
             with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
                 future_to_task = {
                     executor.submit(self._retrieve_single, subclaim, connector): (subclaim, connector)
                     for subclaim, connector in tasks
                 }
-                
+
                 for future in as_completed(future_to_task):
                     subclaim, connector = future_to_task[future]
                     try:
@@ -424,9 +424,9 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
                             f"Connector {connector.connector_id} failed for "
                             f"subclaim {subclaim.subclaim_id}: {e}"
                         )
-            
+
             return items
-        
+
         def _retrieve_single(self, subclaim: AtomicSubclaim,
                              connector: BaseEvidenceConnector) -> List[EvidenceItem]:
             '''
@@ -437,7 +437,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
             if cb and cb.is_open():
                 logger.warning(f"Circuit breaker OPEN for {connector.connector_id}")
                 return []
-            
+
             try:
                 result = connector.retrieve(subclaim)
                 if cb:
@@ -447,7 +447,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
                 if cb:
                     cb.record_failure()
                 raise
-  
+
   NOTE: connector.retrieve() must be thread-safe. If connectors share state
   (e.g., a shared requests.Session), either:
     - Make retrieve() create a new session per call, OR
@@ -457,14 +457,14 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 2 — Circuit Breaker Integration (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/rate_limiter.py
-  
+
   The CircuitBreaker and RateLimiterManager already exist. Ensure:
     - RateLimiterManager.get_circuit_breaker(source_id) returns the breaker.
     - V15FactCheckingSkill initializes RateLimiterManager with default configs.
     - If a connector fails 5 times in 60 seconds, circuit opens for 60s.
-  
+
   Update config.py to add v1.5-specific circuit breaker defaults:
-  
+
     @dataclass
     class FactCheckConfig:
         # ... existing fields ...
@@ -476,7 +476,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 3 — Testing (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/tests/test_v15_skill.py (extend)
-  
+
   Tests:
     - test_parallel_retrieval_all_connectors_succeed
     - test_parallel_retrieval_one_connector_times_out
@@ -510,9 +510,9 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 1 — Fallback Chain Configuration (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/config.py
-  
+
   Add fallback chain configuration:
-  
+
     FALLBACK_CHAINS: Dict[str, List[str]] = {
         # Primary connector → [fallback 1, fallback 2, ...]
         "bls": ["census_api", "curated_rag"],
@@ -520,9 +520,9 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         "crossref": ["pubmed_api", "curated_rag"],
         "brave_search": ["curated_rag"],
     }
-  
+
   Or, more granularly, per claim type:
-  
+
     CLAIM_TYPE_FALLBACKS: Dict[ClaimType, Dict[str, List[str]]] = {
         ClaimType.NUMERIC_STATISTICAL: {
             "bls": ["census_api", "curated_rag"],
@@ -536,9 +536,9 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 2 — Fallback-Aware Retrieval (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
   Modify _retrieve_single() to support fallback:
-  
+
     def _retrieve_with_fallback(self, subclaim: AtomicSubclaim,
                                  primary_connector: BaseEvidenceConnector,
                                  claim_type: ClaimType) -> List[EvidenceItem]:
@@ -550,7 +550,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         connectors_to_try = [primary_connector] + [
             self._get_connector_by_id(cid) for cid in chain
         ]
-        
+
         for connector in connectors_to_try:
             if connector is None:
                 continue
@@ -560,9 +560,9 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
                     return result
             except Exception:
                 continue
-        
+
         return []
-    
+
     def _get_fallback_chain(self, connector_id: str,
                             claim_type: ClaimType) -> List[str]:
         '''Look up fallback chain from config.'''
@@ -570,22 +570,22 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         type_chains = self.config.claim_type_fallbacks.get(claim_type, {})
         if connector_id in type_chains:
             return type_chains[connector_id]
-        
+
         # Then try global chains
         return self.config.fallback_chains.get(connector_id, [])
-    
+
     def _get_connector_by_id(self, connector_id: str) -> Optional[BaseEvidenceConnector]:
         for c in self._connectors:
             if c.connector_id == connector_id:
                 return c
         return None
-  
+
   PHASE 3 — ConnectorRegistry Enhancement (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_connectors.py
-  
+
   Add to ConnectorRegistry:
-  
+
     @classmethod
     def connectors_with_fallbacks(cls, mode: str = "default") -> List[BaseEvidenceConnector]:
         '''
@@ -594,12 +594,12 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         '''
         primary = cls.default_connectors()
         primary_ids = {c.connector_id for c in primary}
-        
+
         # Add any fallback connectors not already in primary set
         all_needed = set(primary_ids)
         for chain in config.FALLBACK_CHAINS.values():
             all_needed.update(chain)
-        
+
         missing = all_needed - primary_ids
         # Instantiate missing connectors from a known factory map
         # ...
@@ -608,7 +608,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 4 — Testing (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/tests/test_v15_skill.py (extend)
-  
+
   Tests:
     - test_fallback_chain_executes_on_failure
     - test_fallback_chain_skipped_on_success
@@ -645,7 +645,7 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 1 — Policy-Aware Connector Selection (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
     def _select_connectors_for_claim(self, claim_type: ClaimType,
                                       policy: EvidencePolicy) -> List[BaseEvidenceConnector]:
         '''
@@ -653,17 +653,17 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         '''
         if not policy.allowed_source_types:
             return self._connectors
-        
+
         return [
             c for c in self._connectors
             if c.source_type in policy.allowed_source_types
             or c.source_type == "universal"  # Always allowed
         ]
-  
+
   PHASE 2 — Policy-Aware Evidence Filtering (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
     def _filter_evidence_by_policy(self, evidence: List[EvidenceItem],
                                     policy: EvidencePolicy) -> List[EvidenceItem]:
         '''
@@ -675,23 +675,23 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
             if policy.temporal_range and ev.evidence_date:
                 if not (policy.temporal_range[0] <= ev.evidence_date <= policy.temporal_range[1]):
                     continue
-            
+
             # Source type check
             if policy.allowed_source_types and ev.source_type not in policy.allowed_source_types:
                 continue
-            
+
             # Minimum tier check
             if policy.minimum_evidence_tier and ev.tier < policy.minimum_evidence_tier:
                 continue
-            
+
             filtered.append(ev)
-        
+
         return filtered
-  
+
   PHASE 3 — Cross-Verification Enforcement (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
     def _enforce_cross_verification(self, evidence: List[EvidenceItem],
                                      policy: EvidencePolicy) -> List[EvidenceItem]:
         '''
@@ -700,12 +700,12 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
         '''
         if not policy.requires_cross_verification:
             return evidence
-        
+
         groups = set()
         for ev in evidence:
             if ev.source_independence_group_id:
                 groups.add(ev.source_independence_group_id)
-        
+
         if len(groups) < 2:
             logger.warning(
                 f"Cross-verification failed: only {len(groups)} source group(s) "
@@ -714,35 +714,35 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
             # Option A: Return evidence anyway (synthesis will handle)
             # Option B: Return empty (strict mode)
             # Default to A for now.
-        
+
         return evidence
-  
+
   PHASE 4 — Integration (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
   Modify check_fact() flow:
-  
+
     def check_fact(self, claim_text: str, ...):
         # ... existing setup ...
         decomposition = self._get_decomposition(claim_text)
         claim_type = _claim_type_from_text(claim_text)
         policy = get_default_policy(claim_type)
-        
+
         # Select connectors based on policy
         active_connectors = self._select_connectors_for_claim(claim_type, policy)
-        
+
         # Retrieve evidence
         evidence_items = self._retrieve_evidence(decomposition, active_connectors)
-        
+
         # Filter by policy
         evidence_items = self._filter_evidence_by_policy(evidence_items, policy)
         evidence_items = self._enforce_cross_verification(evidence_items, policy)
-        
+
         # Synthesize
         v15_result = self._synthesis_engine.synthesize(...)
         # ...
-  
+
   PHASE 5 — Testing (1 day)
   -----------------------------------------------------------------------------
   Tests:
@@ -777,30 +777,30 @@ Respond with ONLY the QID and a confidence score (0.0–1.0) in JSON:
   PHASE 1 — LLM Backend Interface (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/decomposition.py
-  
+
   The Decomposer already accepts llm_backend. Define a standard interface:
-  
+
     from typing import Protocol
-    
+
     class LLMBackend(Protocol):
         def decompose_claim(self, claim_text: str, claim_type: ClaimType) -> Optional[PremiseDecomposition]:
             '''
             Return a PremiseDecomposition or None if the LLM cannot decompose.
             '''
             ...
-  
+
   PHASE 2 — Simple LLM Backend Implementation (1 day)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/llm_backend.py (NEW)
-  
+
     class SimpleLLMBackend:
         def __init__(self, client: Any, model: str = "gpt-4"):
             self.client = client
             self.model = model
-        
+
         def decompose_claim(self, claim_text: str, claim_type: ClaimType) -> Optional[PremiseDecomposition]:
             prompt = f'''Decompose this claim into atomic subclaims.
-            
+
 Claim: "{claim_text}"
 Claim type: {claim_type.value}
 
@@ -809,38 +809,38 @@ Return a JSON object with:
 - relationships: how subclaims combine (AND, OR, IF_THEN)
 
 If the claim is already atomic, return a single subclaim.'''
-            
+
             try:
                 response = self.client.complete(prompt, model=self.model)
                 parsed = json.loads(response)
                 return self._parsed_to_decomposition(parsed, claim_text)
             except Exception:
                 return None
-        
+
         def _parsed_to_decomposition(self, parsed: Dict, claim_text: str) -> PremiseDecomposition:
             # Convert LLM JSON output to PremiseDecomposition
             # ... validation, provenance span creation, etc.
-  
+
   PHASE 3 — Skill Integration with Feature Flag (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/v15_skill.py
-  
+
     def __init__(self, ..., llm_backend: Optional[Any] = None,
                  enable_llm_decomposition: bool = False):
         # ... existing init ...
         self._llm_backend = llm_backend
         self._enable_llm_decomposition = enable_llm_decomposition
-    
+
     def _get_decomposition(self, claim_text: str) -> PremiseDecomposition:
         premise = CanonicalPremise(...)
-        
+
         if self._enable_llm_decomposition and self._llm_backend:
             decomposer = Decomposer(llm_backend=self._llm_backend)
         else:
             decomposer = self._decomposer or Decomposer()
-        
+
         return decomposer.decompose(premise)
-  
+
   PHASE 4 — Testing (0.5 days)
   -----------------------------------------------------------------------------
   Tests:
@@ -879,29 +879,29 @@ If the claim is already atomic, return a single subclaim.'''
   PHASE 1 — Interface Adaptation (0.5 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/web_rag_connector.py
-  
+
     from .v15_connectors import BaseEvidenceConnector
     from .v15_models import EvidenceItem, VerdictScope, Direction
-    
+
     class WebRAGConnector(BaseEvidenceConnector):
         def __init__(self, ...):
             # ... existing init ...
-        
+
         @property
         def connector_id(self) -> str:
             return "web_rag"
-        
+
         @property
         def connector_version(self) -> str:
             return "2.0.0"
-        
+
         def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
             # Call existing search logic
             old_results = self._search_legacy(subclaim.text)
-            
+
             # Map SourceResult → EvidenceItem
             return [self._to_evidence_item(r, subclaim) for r in old_results]
-        
+
         def _to_evidence_item(self, source_result: SourceResult,
                               subclaim: AtomicSubclaim) -> EvidenceItem:
             return EvidenceItem(
@@ -922,7 +922,7 @@ If the claim is already atomic, return a single subclaim.'''
                 source_independence_group_id=f"web_rag:{urlparse(source_result.url).netloc}",
                 llm_direction_allowed=False,
             )
-  
+
   PHASE 2 — Deprecation Path (0.25 days)
   -----------------------------------------------------------------------------
   If Option B (deprecation) is preferred:
@@ -954,7 +954,7 @@ If the claim is already atomic, return a single subclaim.'''
 9.3 FIX (0.25 days)
   -----------------------------------------------------------------------------
   File: skills/fact_checking/synthesis.py
-  
+
   Change TIER_2_CONFIDENCE_BASE from 0.85 to 0.80.
   Update any test assertions that depend on 0.85.
   Run full test suite: pytest skills/fact_checking/tests/ -v
@@ -971,19 +971,19 @@ Recommended order based on impact and dependencies:
   P1a. Parallel Evidence Router              (2.5d) — Biggest perf win
   P1b. Policy-Driven Connector Filtering     (3d)   — Required for correctness
   P1c. Circuit Breaker Wiring                (0.5d) — Reliability, depends on P1a
-  
+
   SPRINT 2 — Completeness (Week 2)
   -----------------------------------------------------------------------------
   P2a. Connector Fallback Chains             (3d)   — Robustness
   P2b. Entity Linking (stub → full)          (3d)   — Spec compliance
   P2c. Tier 2 Confidence Base Fix            (0.25d)
-  
+
   SPRINT 3 — Advanced Features (Week 3)
   -----------------------------------------------------------------------------
   P3a. LLM Decomposition Wiring              (2.5d) — Quality of decomposition
   P3b. WebRAGConnector Migration/Deprecation (1d)   — Tech debt
   P3c. Audit Trail Integration in Skill      (1d)   — Use decompose_synthesize_and_audit()
-  
+
   SPRINT 4 — Integration & Hardening (Week 4)
   -----------------------------------------------------------------------------
   P4a. End-to-end tests with all gaps closed
@@ -1088,19 +1088,19 @@ skill path. Before declaring v1.5.1 complete, verify each:
 
   [ ] Tier 3 Promotion: SourceReputationRegistry.promote() called in
       V15FactCheckingSkill after evidence retrieval, before synthesis.
-  
+
   [ ] Web Archiving: archive_web_evidence() called for every web-sourced
       EvidenceItem in the normalizer or skill path.
-  
+
   [ ] Normative Routing: _is_normative() check active in the default
       Decomposer.decompose() path (it is — verify skill uses it).
-  
+
   [ ] Predictive Handling: predictive_subclaim_ids passed to synthesis
       when claims contain predictive language (add heuristic or classifier).
-  
+
   [ ] Circuit Breakers: RateLimiterManager circuit breakers checked in
       V15FactCheckingSkill connector loop (currently not wired).
-  
+
   [ ] Audit Trail: V15FactCheckingSkill uses decompose_synthesize_and_audit()
       instead of direct decompose() + synthesize() when enable_audit=True.
 

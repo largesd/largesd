@@ -8,13 +8,14 @@ which known edge cases changed.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
-from tests.gold_fact_check_cases import GOLD_FACT_CHECK_CASES
 from skills.fact_checking.skill import FactCheckingSkill
+from tests.gold_fact_check_cases import GOLD_FACT_CHECK_CASES
 
 try:  # SourceConfidence may live in models or connectors depending on revision.
     from skills.fact_checking.models import EvidenceTier, SourceConfidence, SourceResult
@@ -58,7 +59,7 @@ def _normalize_score(result: Any) -> float:
 class FixtureConnector:
     """One deterministic connector result used by one gold test case."""
 
-    def __init__(self, spec: Dict[str, Any]) -> None:
+    def __init__(self, spec: dict[str, Any]) -> None:
         self._spec = spec
         self._source_id = spec["source_id"]
         self._tier = _enum_value(EvidenceTier, spec.get("tier", "TIER_1"))
@@ -71,7 +72,7 @@ class FixtureConnector:
     def tier(self) -> Any:
         return self._tier
 
-    def query(self, normalized_claim: str, claim_hash: str) -> Optional[Any]:
+    def query(self, normalized_claim: str, claim_hash: str) -> Any | None:
         confidence_name = self._spec.get("confidence", "SILENT")
         if confidence_name == "SILENT":
             return None
@@ -84,7 +85,7 @@ class FixtureConnector:
             confidence=confidence,
             excerpt=self._spec.get("excerpt", "Gold fixture evidence."),
             content_hash=f"gold-{self.source_id}-{claim_hash[:16]}",
-            retrieved_at=datetime.now(timezone.utc),
+            retrieved_at=datetime.now(UTC),
         )
 
         # Support both `tier=` and older/newer `evidence_tier=` field names.
@@ -94,9 +95,9 @@ class FixtureConnector:
             return SourceResult(**kwargs, evidence_tier=self.tier)
 
 
-def _make_skill(source_specs: Iterable[Dict[str, Any]]) -> FactCheckingSkill:
+def _make_skill(source_specs: Iterable[dict[str, Any]]) -> FactCheckingSkill:
     connectors = [FixtureConnector(spec) for spec in source_specs]
-    kwargs: Dict[str, Any] = {"mode": "PERFECT", "connectors": connectors}
+    kwargs: dict[str, Any] = {"mode": "PERFECT", "connectors": connectors}
     if strict_policy is not None:
         kwargs["policy"] = strict_policy()
 
@@ -149,7 +150,7 @@ def test_gold_corpus_shape_and_coverage() -> None:
 
 
 @pytest.mark.parametrize("case", GOLD_FACT_CHECK_CASES, ids=lambda c: c["id"])
-def test_gold_corpus_against_fact_check_skill(case: Dict[str, Any]) -> None:
+def test_gold_corpus_against_fact_check_skill(case: dict[str, Any]) -> None:
     skill = _make_skill(case["source_specs"])
     result = _run_check(skill, case["claim"])
 
@@ -158,7 +159,9 @@ def test_gold_corpus_against_fact_check_skill(case: Dict[str, Any]) -> None:
 
 
 def test_gold_cases_document_source_types() -> None:
-    source_types = {source_type for case in GOLD_FACT_CHECK_CASES for source_type in case["source_types"]}
+    source_types = {
+        source_type for case in GOLD_FACT_CHECK_CASES for source_type in case["source_types"]
+    }
     assert {
         "TIER_1_PRIMARY",
         "TIER_2_SECONDARY",

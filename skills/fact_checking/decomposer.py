@@ -7,11 +7,9 @@ runtime remains inspectable and testable.
 """
 
 import re
-from typing import List, Optional, Tuple
 
 from .models import Subclaim
 from .normalization import ClaimNormalizer
-
 
 _COMPOUND_RE = re.compile(r"\s+(?:and|while)\s+")
 _TRAILING_SCOPE_RE = re.compile(
@@ -39,10 +37,10 @@ class ClaimDecomposer:
     }
 
     @classmethod
-    def decompose(cls, claim_text: str, source_fact_id: Optional[str] = None) -> List[Subclaim]:
+    def decompose(cls, claim_text: str, source_fact_id: str | None = None) -> list[Subclaim]:
         normalized = ClaimNormalizer.normalize(claim_text)
         clauses = cls._split_compound(normalized)
-        subclaims: List[Subclaim] = []
+        subclaims: list[Subclaim] = []
 
         for clause in clauses:
             clean_clause = clause.strip()
@@ -81,7 +79,10 @@ class ClaimDecomposer:
 
     @classmethod
     def classify_claim_family(cls, normalized_claim: str) -> str:
-        if re.search(r"\b(?:is|was) (?:the )?(?:ceo|chief executive officer|prime minister|president|mayor|governor) of\b", normalized_claim):
+        if re.search(
+            r"\b(?:is|was) (?:the )?(?:ceo|chief executive officer|prime minister|president|mayor|governor) of\b",
+            normalized_claim,
+        ):
             return "office_holder"
         if re.search(r"\bwas founded (?:in|on)\b|\bfounded in\b", normalized_claim):
             return "inception_date"
@@ -98,10 +99,10 @@ class ClaimDecomposer:
         return "unsupported"
 
     @classmethod
-    def _split_compound(cls, normalized_claim: str) -> List[str]:
+    def _split_compound(cls, normalized_claim: str) -> list[str]:
         semicolon_parts = [part.strip() for part in normalized_claim.split(";") if part.strip()]
         parts = semicolon_parts or [normalized_claim]
-        decomposed: List[str] = []
+        decomposed: list[str] = []
 
         for part in parts:
             if not _COMPOUND_RE.search(part):
@@ -125,7 +126,7 @@ class ClaimDecomposer:
         return decomposed
 
     @staticmethod
-    def _extract_trailing_scope(text: str) -> Tuple[str, str]:
+    def _extract_trailing_scope(text: str) -> tuple[str, str]:
         match = _TRAILING_SCOPE_RE.match(text)
         if not match:
             return text, ""
@@ -136,7 +137,7 @@ class ClaimDecomposer:
         return bool(_TRAILING_SCOPE_RE.match(text))
 
     @staticmethod
-    def _extract_actor(text: str, family: str) -> Optional[str]:
+    def _extract_actor(text: str, family: str) -> str | None:
         patterns = {
             "office_holder": r"^(?P<actor>.+?)\s+(?:is|was)\s+(?:the )?(?:ceo|chief executive officer|prime minister|president|mayor|governor)\s+of\b",
             "inception_date": r"^(?P<actor>.+?)\s+was founded\b",
@@ -153,16 +154,18 @@ class ClaimDecomposer:
         return match.group("actor").strip() if match else None
 
     @staticmethod
-    def _extract_geography(text: str) -> Optional[str]:
-        match = re.search(r"\b(?:in|of)\s+([a-z][a-z\s.\-]+?)(?:\s+(?:in|on)\s+(?:19|20)\d{2}\b|$)", text)
+    def _extract_geography(text: str) -> str | None:
+        match = re.search(
+            r"\b(?:in|of)\s+([a-z][a-z\s.\-]+?)(?:\s+(?:in|on)\s+(?:19|20)\d{2}\b|$)", text
+        )
         return match.group(1).strip() if match else None
 
     @staticmethod
-    def _extract_time_scope(text: str) -> Optional[str]:
+    def _extract_time_scope(text: str) -> str | None:
         match = _DATE_RE.search(text) or _YEAR_RE.search(text)
         return match.group(0) if match else None
 
     @staticmethod
-    def _extract_quantity(text: str) -> Optional[str]:
+    def _extract_quantity(text: str) -> str | None:
         match = _QUANTITY_RE.search(text)
         return match.group(0) if match else None

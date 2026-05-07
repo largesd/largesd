@@ -16,10 +16,6 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
-from skills.fact_checking.claim_expression import evaluate_expression
-from skills.fact_checking.policies import get_default_policy
 from skills.fact_checking.synthesis import SynthesisEngine
 from skills.fact_checking.v15_models import (
     AtomicSubclaim,
@@ -36,10 +32,10 @@ from skills.fact_checking.v15_models import (
     VerdictScope,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _subclaim(sid: str, claim_type: ClaimType = ClaimType.EMPIRICAL_ATOMIC) -> AtomicSubclaim:
     return AtomicSubclaim(
@@ -93,6 +89,7 @@ def _atomic_expr(sid: str) -> ClaimExpression:
 # ---------------------------------------------------------------------------
 # Atomic synthesis tests
 # ---------------------------------------------------------------------------
+
 
 def test_supported_atomic_claim():
     sc = _subclaim("sc1")
@@ -165,7 +162,9 @@ def test_contradictory_tier1_resolved_by_authority():
     dec = _decomposition(root, [sc])
     ev = [
         _evidence("sc1", tier=1, direction=Direction.SUPPORTS, authority="Supreme Court"),
-        _evidence("sc1", tier=1, direction=Direction.REFUTES, authority="Agency preliminary report"),
+        _evidence(
+            "sc1", tier=1, direction=Direction.REFUTES, authority="Agency preliminary report"
+        ),
     ]
     engine = SynthesisEngine()
     result = engine.synthesize(dec, ev)
@@ -208,6 +207,7 @@ def test_tier2_cross_verification_failed():
 # ---------------------------------------------------------------------------
 # ClaimExpression logic tests
 # ---------------------------------------------------------------------------
+
 
 def test_and_all_supported():
     sc1 = _subclaim("sc1")
@@ -364,7 +364,9 @@ def test_if_then_refuted_antecedent():
     result = engine.synthesize(dec, ev)
     assert result.status == "INSUFFICIENT"
     assert result.p == 0.5
-    assert result.insufficiency_reason == "antecedent_refuted_conditional_not_substantively_checkable"
+    assert (
+        result.insufficiency_reason == "antecedent_refuted_conditional_not_substantively_checkable"
+    )
 
 
 def test_if_then_supported_refuted():
@@ -389,6 +391,7 @@ def test_if_then_supported_refuted():
 # Comparison tests
 # ---------------------------------------------------------------------------
 
+
 def test_comparison_true():
     sc1 = _subclaim("sc1")
     sc2 = _subclaim("sc2")
@@ -399,8 +402,18 @@ def test_comparison_true():
     )
     dec = _decomposition(root, [sc1, sc2])
     ev = [
-        _evidence("sc1", tier=1, direction=Direction.SUPPORTS, source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count")),
-        _evidence("sc2", tier=1, direction=Direction.SUPPORTS, source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count")),
+        _evidence(
+            "sc1",
+            tier=1,
+            direction=Direction.SUPPORTS,
+            source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count"),
+        ),
+        _evidence(
+            "sc2",
+            tier=1,
+            direction=Direction.SUPPORTS,
+            source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count"),
+        ),
     ]
     engine = SynthesisEngine()
     result = engine.synthesize(dec, ev)
@@ -418,8 +431,18 @@ def test_comparison_false():
     )
     dec = _decomposition(root, [sc1, sc2])
     ev = [
-        _evidence("sc1", tier=1, direction=Direction.SUPPORTS, source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count")),
-        _evidence("sc2", tier=1, direction=Direction.SUPPORTS, source_value=ResolvedValue(value=99, value_type=ValueType.NUMBER, unit="count")),
+        _evidence(
+            "sc1",
+            tier=1,
+            direction=Direction.SUPPORTS,
+            source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count"),
+        ),
+        _evidence(
+            "sc2",
+            tier=1,
+            direction=Direction.SUPPORTS,
+            source_value=ResolvedValue(value=99, value_type=ValueType.NUMBER, unit="count"),
+        ),
     ]
     engine = SynthesisEngine()
     result = engine.synthesize(dec, ev)
@@ -437,7 +460,12 @@ def test_comparison_missing_value():
     )
     dec = _decomposition(root, [sc1, sc2])
     ev = [
-        _evidence("sc1", tier=1, direction=Direction.SUPPORTS, source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count")),
+        _evidence(
+            "sc1",
+            tier=1,
+            direction=Direction.SUPPORTS,
+            source_value=ResolvedValue(value=42, value_type=ValueType.NUMBER, unit="count"),
+        ),
         _evidence("sc2", tier=1, direction=Direction.SUPPORTS),  # no source_value
     ]
     engine = SynthesisEngine()
@@ -449,6 +477,7 @@ def test_comparison_missing_value():
 # ---------------------------------------------------------------------------
 # Edge case tests
 # ---------------------------------------------------------------------------
+
 
 def test_scope_mismatch():
     sc = _subclaim("sc1")
@@ -502,6 +531,7 @@ def test_all_insufficient_aggregation():
 # ---------------------------------------------------------------------------
 # p-value invariant
 # ---------------------------------------------------------------------------
+
 
 def test_p_values_are_exact():
     """p must always be exactly 1.0, 0.0, or 0.5 across all results."""

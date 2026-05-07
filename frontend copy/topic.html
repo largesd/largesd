@@ -126,12 +126,12 @@
 
       <hr />
       <h3>Steelman Summaries</h3>
-      
+
       <div class="steelman for">
         <strong style="color:var(--good)">FOR:</strong>
         <p id="summary-for" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
       </div>
-      
+
       <div class="steelman against">
         <strong style="color:var(--warn)">AGAINST:</strong>
         <p id="summary-against" style="margin:8px 0 0 0;color:var(--muted)">No summary available yet.</p>
@@ -199,19 +199,19 @@
   </div>
   <div class="help-panel-body">
     <p style="font-size:12px;color:var(--muted);margin-top:0">Topic geometry metrics and terms.</p>
-    
+
     <div class="glossary-term">Relevance (Rel)</div>
     <div class="glossary-def">Content mass share - how much of the total debate content belongs to this topic.</div>
-    
+
     <div class="glossary-term">Drift Score</div>
     <div class="glossary-def">How much this topic has changed from its previous state. Higher = more change.</div>
-    
+
     <div class="glossary-term">Coherence</div>
     <div class="glossary-def">How internally consistent the arguments in this topic are.</div>
-    
+
     <div class="glossary-term">Distinctness</div>
     <div class="glossary-def">How different this topic is from other topics (prevents duplication).</div>
-    
+
     <div class="glossary-term">Steelman</div>
     <div class="glossary-def">A summary presenting the strongest version of each side's arguments.</div>
   </div>
@@ -239,34 +239,34 @@ async function loadTopicData() {
         BDA.updateStateStrip(snapshotData);
       }
     }
-    
+
     // Load specific topic
     const topic = await BDA.api(`/api/debate/topics/${topicId}`);
-    
+
     if (topic.error) {
       document.getElementById('topic-name').textContent = 'Topic Not Found';
       document.getElementById('topic-scope').textContent = topic.error;
       return;
     }
-    
+
     // Update topic info
     document.getElementById('topic-name').textContent = topic.name || `Topic ${topicId}`;
     document.getElementById('topic-scope').textContent = topic.scope || '';
     document.getElementById('topic-id-badge').textContent = topicId;
     document.getElementById('topic-status').textContent = 'Active';
-    
+
     if (topic.operation && topic.operation !== 'created') {
       const opBadge = document.getElementById('topic-operation');
       opBadge.textContent = topic.operation;
       opBadge.style.display = 'inline-block';
     }
-    
+
     // Update metrics
     document.getElementById('meta-relevance').textContent = BDA.formatNumber(topic.relevance, 3);
     document.getElementById('meta-drift').textContent = BDA.formatNumber(topic.drift_score, 3);
     document.getElementById('meta-coherence').textContent = BDA.formatNumber(topic.coherence, 3);
     document.getElementById('meta-distinctness').textContent = BDA.formatNumber(topic.distinctness, 3);
-    
+
     // Update summaries
     if (topic.summary_for) {
       document.getElementById('summary-for').textContent = topic.summary_for;
@@ -276,13 +276,13 @@ async function loadTopicData() {
       document.getElementById('summary-against').textContent = topic.summary_against;
       document.getElementById('summary-against').style.color = '';
     }
-    
+
     // Update scores table
     updateScoresTable(topic.scores);
-    
+
     // Update facts
     updateFacts(topic.facts);
-    
+
   } catch (error) {
     console.error('Error loading topic:', error);
     document.getElementById('topic-name').textContent = 'Error Loading Topic';
@@ -291,10 +291,10 @@ async function loadTopicData() {
 
 function updateScoresTable(scores) {
   const tbody = document.getElementById('scores-tbody');
-  
+
   const forScores = scores?.FOR || {};
   const againstScores = scores?.AGAINST || {};
-  
+
   tbody.innerHTML = `
     <tr class="side-for">
       <td><strong>FOR</strong></td>
@@ -316,19 +316,19 @@ function updateScoresTable(scores) {
 function updateFacts(facts) {
   const forFacts = facts?.filter(f => f.side === 'FOR') || [];
   const againstFacts = facts?.filter(f => f.side === 'AGAINST') || [];
-  
+
   renderFactList('for-facts', forFacts, 'var(--good)');
   renderFactList('against-facts', againstFacts, 'var(--warn)');
 }
 
 function renderFactList(elementId, facts, colorVar) {
   const container = document.getElementById(elementId);
-  
+
   if (facts.length === 0) {
     container.innerHTML = '<small style="color:var(--muted)">No facts yet.</small>';
     return;
   }
-  
+
   container.innerHTML = facts.map(f => {
     const status = f.v15_status || (f.p_true === 1.0 ? 'SUPPORTED' : f.p_true === 0.0 ? 'REFUTED' : 'INSUFFICIENT');
     const p = f.v15_p !== undefined ? f.v15_p : f.p_true;
@@ -344,7 +344,7 @@ function renderFactList(elementId, facts, colorVar) {
     const synth = f.synthesis_logic_json || {};
     const resolved = f.resolved_value || null;
     const provenance = f.provenance_spans || [];
-    
+
     return `
     <div style="background:var(--surface-muted);padding:10px;border-radius:8px;margin:8px 0;border:1px solid var(--line)">
       <div style="font-size:13px">${BDA.escapeHtml(f.canon_fact_text)}</div>
@@ -395,20 +395,20 @@ async function loadTopicList() {
   try {
     const data = await BDA.api('/api/debate/topics');
     const topics = data.topics || [];
-    
+
     const container = document.getElementById('topic-list');
     if (topics.length === 0) {
       container.innerHTML = '<small style="color:var(--muted)">No topics available.</small>';
       return;
     }
-    
+
     container.innerHTML = topics.map(t => `
-      <a href="topic.html?id=${t.topic_id}" 
+      <a href="topic.html?id=${t.topic_id}"
          class="subnav-link ${t.topic_id === topicId ? 'active' : ''}">
         ${t.topic_id}: ${t.name}
       </a>
     `).join('');
-    
+
   } catch (error) {
     console.error('Error loading topic list:', error);
   }

@@ -25,7 +25,6 @@ def replicate_stage(ctx: PipelineContext) -> PipelineContext:
     selected_facts = ctx.selected_facts or {}
     selected_args = ctx.selected_args or {}
     topic_content_mass = ctx.topic_content_mass or {}
-    scores = ctx.scores or {}
 
     # Run replicates (judges + extraction + bootstrap)
     replicates = engine.scoring_engine.run_replicates(
@@ -72,8 +71,7 @@ def replicate_stage(ctx: PipelineContext) -> PipelineContext:
     verdict_result = engine.scoring_engine.compute_verdict(replicates, side_order=side_order)
 
     structural_count = sum(
-        1 for r in replicates
-        if getattr(r, "metadata", {}).get("replicate_type") == "merge_variant"
+        1 for r in replicates if getattr(r, "metadata", {}).get("replicate_type") == "merge_variant"
     )
     verdict_result["replicate_composition"] = {
         "bootstrap_samples": len(replicates) - structural_count,

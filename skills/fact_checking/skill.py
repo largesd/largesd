@@ -11,7 +11,7 @@ import hashlib
 import json
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .audit import AuditLogger
 from .cache import MultiLayerCache
@@ -57,13 +57,17 @@ class _EvidenceRetrieverProxy:
         normalized_claim: str,
         claim_hash: str,
         allowlist_version: str,
-    ) -> Tuple[List[EvidenceRecord], int, List[str]]:
+    ) -> tuple[list[EvidenceRecord], int, list[str]]:
         source_results, sources_considered, connector_errors = self._skill._query_connectors(
             normalized_claim,
             claim_hash,
             self._skill.connectors,
         )
-        return self._skill._to_evidence_records(source_results), sources_considered, connector_errors
+        return (
+            self._skill._to_evidence_records(source_results),
+            sources_considered,
+            connector_errors,
+        )
 
 
 class FactCheckingSkill:
@@ -84,15 +88,15 @@ class FactCheckingSkill:
         self,
         mode: str = "OFFLINE",
         allowlist_version: str = "v1",
-        config: Optional[FactCheckConfig] = None,
-        source_registry: Optional[Any] = None,  # kept for backward compat
+        config: FactCheckConfig | None = None,
+        source_registry: Any | None = None,  # kept for backward compat
         enable_async: bool = True,
         async_worker_count: int = 3,
-        connectors: Optional[List[SourceConnector]] = None,
-        ground_truth_db: Optional[GroundTruthDB] = None,
-        cache_ttl_seconds: Optional[int] = None,
-        policy: Optional[EvidencePolicy] = None,
-        v15_connectors: Optional[Any] = None,
+        connectors: list[SourceConnector] | None = None,
+        ground_truth_db: GroundTruthDB | None = None,
+        cache_ttl_seconds: int | None = None,
+        policy: EvidencePolicy | None = None,
+        v15_connectors: Any | None = None,
     ):
         del source_registry
 
@@ -111,12 +115,10 @@ class FactCheckingSkill:
         self._cache = MultiLayerCache(ttl_seconds=ttl)
         self._audit = AuditLogger()
 
-        self.policy = policy or (
-            strict_policy() if self.mode == "PERFECT" else default_policy()
-        )
+        self.policy = policy or (strict_policy() if self.mode == "PERFECT" else default_policy())
         self.ground_truth = ground_truth_db or GroundTruthDB()
 
-        self.connectors: List[SourceConnector] = connectors or []
+        self.connectors: list[SourceConnector] = connectors or []
         if self.mode == "ONLINE_ALLOWLIST" and not self.connectors:
             self.connectors = [
                 SimulatedSourceConnector("wikidata_sim", "wikidata.org", priority=10),
@@ -127,7 +129,7 @@ class FactCheckingSkill:
         self._evidence_retriever = _EvidenceRetrieverProxy(self)
 
         self._async_enabled = enable_async and self.mode == "ONLINE_ALLOWLIST"
-        self._queue: Optional[FactCheckQueue] = None
+        self._queue: FactCheckQueue | None = None
         if self._async_enabled:
             self._queue = FactCheckQueue(
                 max_size=self.config.async_queue_max_size,
@@ -137,7 +139,7 @@ class FactCheckingSkill:
             self._queue.start_workers(async_worker_count)
 
         # v1.5 delegation path
-        self._v15_skill: Optional[Any] = None
+        self._v15_skill: Any | None = None
         if v15_connectors is not None:
             from .v15_skill import V15FactCheckingSkill
 
@@ -155,8 +157,8 @@ class FactCheckingSkill:
     def check_fact(
         self,
         claim_text: str,
-        temporal_context: Optional[TemporalContext] = None,
-        request_context: Optional[RequestContext] = None,
+        temporal_context: TemporalContext | None = None,
+        request_context: RequestContext | None = None,
         wait_for_async: bool = False,
     ) -> FactCheckResult:
         start_time = time.time()
@@ -164,7 +166,7 @@ class FactCheckingSkill:
 
         claim_truncated = False
         if len(claim_text) > self.config.max_claim_length:
-            claim_text = claim_text[:self.config.max_claim_length]
+            claim_text = claim_text[: self.config.max_claim_length]
             claim_truncated = True
 
         normalized = ClaimNormalizer.normalize(claim_text)
@@ -291,14 +293,14 @@ class FactCheckingSkill:
     def check_fact_async(
         self,
         claim_text: str,
-        temporal_context: Optional[TemporalContext] = None,
-        request_context: Optional[RequestContext] = None,
+        temporal_context: TemporalContext | None = None,
+        request_context: RequestContext | None = None,
     ) -> FactCheckJob:
         if not self._async_enabled or not self._queue:
             raise RuntimeError("Async processing not enabled")
 
         if len(claim_text) > self.config.max_claim_length:
-            claim_text = claim_text[:self.config.max_claim_length]
+            claim_text = claim_text[: self.config.max_claim_length]
 
         normalized = ClaimNormalizer.normalize(claim_text)
         claim_hash = ClaimNormalizer.compute_hash(normalized)
@@ -315,13 +317,13 @@ class FactCheckingSkill:
             contains_pii=contains_pii,
         )
 
-    def get_job_result(self, job_id: str) -> Optional[FactCheckResult]:
+    def get_job_result(self, job_id: str) -> FactCheckResult | None:
         if not self._queue:
             return None
         job = self._queue.get_job(job_id)
         return job.result if job and job.result else None
 
-    def get_job_status(self, job_id: str) -> Optional[str]:
+    def get_job_status(self, job_id: str) -> str | None:
         if not self._queue:
             return None
         job = self._queue.get_job(job_id)
@@ -337,7 +339,7 @@ class FactCheckingSkill:
         normalized_claim: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         claim_truncated: bool = False,
     ) -> FactCheckResult:
         return FactCheckResult(
@@ -366,12 +368,15 @@ class FactCheckingSkill:
         normalized_claim: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         claim_truncated: bool = False,
     ) -> FactCheckResult:
         ground_truth_entry = self.ground_truth.lookup(claim_hash)
 
-        if ground_truth_entry and str(ground_truth_entry.get("verdict")) == FactCheckVerdict.INSUFFICIENT.value:
+        if (
+            ground_truth_entry
+            and str(ground_truth_entry.get("verdict")) == FactCheckVerdict.INSUFFICIENT.value
+        ):
             return self._build_result_from_ground_truth(
                 claim_text,
                 normalized_claim,
@@ -422,7 +427,7 @@ class FactCheckingSkill:
         normalized_claim: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         claim_truncated: bool = False,
     ) -> FactCheckResult:
         return self._perfect_check(
@@ -483,9 +488,9 @@ class FactCheckingSkill:
         normalized: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         fact_mode: str,
-        ground_truth_entry: Optional[Dict[str, Any]],
+        ground_truth_entry: dict[str, Any] | None,
         enforce_contract: bool,
         claim_truncated: bool = False,
     ) -> FactCheckResult:
@@ -513,7 +518,7 @@ class FactCheckingSkill:
         decisions = ConnectorPlanner.plan_claim(subclaims, self.connectors, fact_mode)
         diagnostics = self._build_diagnostics(subclaims, decisions, fact_mode, claim_truncated)
 
-        ground_truth_results: List[SourceResult] = []
+        ground_truth_results: list[SourceResult] = []
         if ground_truth_entry and str(ground_truth_entry.get("verdict")) in {
             FactCheckVerdict.SUPPORTED.value,
             FactCheckVerdict.REFUTED.value,
@@ -579,15 +584,16 @@ class FactCheckingSkill:
             if connector_path:
                 allowed = set(connector_path)
                 connectors_to_query = [
-                    connector for connector in self.connectors
-                    if connector.source_id in allowed
+                    connector for connector in self.connectors if connector.source_id in allowed
                 ]
 
         if not enforce_contract and fact_mode == "ONLINE_ALLOWLIST":
-            evidence, sources_considered, connector_errors = self._evidence_retriever.retrieve_evidence(
-                query_claim,
-                claim_hash,
-                self.allowlist_version,
+            evidence, sources_considered, connector_errors = (
+                self._evidence_retriever.retrieve_evidence(
+                    query_claim,
+                    claim_hash,
+                    self.allowlist_version,
+                )
             )
             source_results = self._evidence_to_source_results(evidence)
             diagnostics["connector_errors"] = connector_errors
@@ -627,7 +633,8 @@ class FactCheckingSkill:
                 {
                     "source_id": connector.source_id,
                     "tier": getattr(connector, "tier", None).value
-                    if getattr(connector, "tier", None) is not None else None,
+                    if getattr(connector, "tier", None) is not None
+                    else None,
                     "class": connector.__class__.__name__,
                 }
                 for connector in self.connectors
@@ -644,8 +651,8 @@ class FactCheckingSkill:
     def _build_cache_key(
         self,
         claim_hash: str,
-        fact_mode: Optional[str] = None,
-        allowlist_version: Optional[str] = None,
+        fact_mode: str | None = None,
+        allowlist_version: str | None = None,
     ) -> str:
         scoped_claim_hash = f"{claim_hash}:{self._cache_runtime_signature}"
         return self._cache.build_key(
@@ -658,10 +665,10 @@ class FactCheckingSkill:
         self,
         normalized_claim: str,
         claim_hash: str,
-        connectors: List[SourceConnector],
-    ) -> Tuple[List[SourceResult], int, List[str]]:
-        results: List[SourceResult] = []
-        connector_errors: List[str] = []
+        connectors: list[SourceConnector],
+    ) -> tuple[list[SourceResult], int, list[str]]:
+        results: list[SourceResult] = []
+        connector_errors: list[str] = []
         for connector in connectors:
             try:
                 source_result = connector.query(normalized_claim, claim_hash)
@@ -676,11 +683,11 @@ class FactCheckingSkill:
 
     def _build_diagnostics(
         self,
-        subclaims: List[Subclaim],
-        decisions: List[PlannerDecision],
+        subclaims: list[Subclaim],
+        decisions: list[PlannerDecision],
         fact_mode: str,
         claim_truncated: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             "fact_mode": fact_mode,
             "subclaim_count": len(subclaims),
@@ -699,12 +706,14 @@ class FactCheckingSkill:
         claim_hash: str,
         fact_mode: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
-        verdict_bundle: Tuple[FactCheckVerdict, float, str, str, List[EvidenceRecord], Dict[str, int]],
+        temporal_context: TemporalContext | None,
+        verdict_bundle: tuple[
+            FactCheckVerdict, float, str, str, list[EvidenceRecord], dict[str, int]
+        ],
         source_count_considered: int,
         source_count_retained: int,
         duration_ms: int,
-        diagnostics: Dict[str, Any],
+        diagnostics: dict[str, Any],
         algorithm_version: str,
     ) -> FactCheckResult:
         verdict, p_true, explanation, operationalization, evidence, tier_counts = verdict_bundle
@@ -734,10 +743,10 @@ class FactCheckingSkill:
 
     def _adjudicate(
         self,
-        source_results: List[SourceResult],
+        source_results: list[SourceResult],
         normalized_claim: str,
         from_ground_truth: bool = False,
-    ) -> Tuple[FactCheckVerdict, float, str, str, List[EvidenceRecord], Dict[str, int]]:
+    ) -> tuple[FactCheckVerdict, float, str, str, list[EvidenceRecord], dict[str, int]]:
         is_sufficient, verdict_hint, reason = apply_policy(
             source_results,
             self.policy,
@@ -776,8 +785,8 @@ class FactCheckingSkill:
         return self._build_insufficient(reason, operationalization, source_results)
 
     @staticmethod
-    def _evidence_to_source_results(evidence: List[EvidenceRecord]) -> List[SourceResult]:
-        source_results: List[SourceResult] = []
+    def _evidence_to_source_results(evidence: list[EvidenceRecord]) -> list[SourceResult]:
+        source_results: list[SourceResult] = []
         for record in evidence:
             if record.support_score >= 0.9 and record.contradiction_score <= 0.1:
                 confidence = SourceConfidence.CONFIRMS
@@ -806,8 +815,8 @@ class FactCheckingSkill:
         verdict: FactCheckVerdict,
         p_true: float,
         explanation: str,
-        source_results: List[SourceResult],
-    ) -> Tuple[FactCheckVerdict, float, str, str, List[EvidenceRecord], Dict[str, int]]:
+        source_results: list[SourceResult],
+    ) -> tuple[FactCheckVerdict, float, str, str, list[EvidenceRecord], dict[str, int]]:
         evidence = self._to_evidence_records(source_results)
         tier_counts = self._count_tiers(evidence)
         operationalization = self._generate_operationalization(verdict, source_results, p_true)
@@ -817,8 +826,8 @@ class FactCheckingSkill:
         self,
         explanation: str,
         operationalization: str,
-        source_results: List[SourceResult],
-    ) -> Tuple[FactCheckVerdict, float, str, str, List[EvidenceRecord], Dict[str, int]]:
+        source_results: list[SourceResult],
+    ) -> tuple[FactCheckVerdict, float, str, str, list[EvidenceRecord], dict[str, int]]:
         evidence = self._to_evidence_records(source_results)
         tier_counts = self._count_tiers(evidence)
         return (
@@ -836,12 +845,12 @@ class FactCheckingSkill:
         normalized: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         status: FactCheckStatus = FactCheckStatus.CHECKED,
         explanation: str = "",
         operationalization: str = "",
         fact_mode: str = "PERFECT",
-        diagnostics: Optional[Dict[str, Any]] = None,
+        diagnostics: dict[str, Any] | None = None,
     ) -> FactCheckResult:
         return FactCheckResult(
             claim_text=claim_text,
@@ -864,8 +873,8 @@ class FactCheckingSkill:
             diagnostics=diagnostics or {},
         )
 
-    def _to_evidence_records(self, source_results: List[SourceResult]) -> List[EvidenceRecord]:
-        evidence: List[EvidenceRecord] = []
+    def _to_evidence_records(self, source_results: list[SourceResult]) -> list[EvidenceRecord]:
+        evidence: list[EvidenceRecord] = []
         for index, result in enumerate(source_results):
             evidence.append(
                 EvidenceRecord(
@@ -877,10 +886,13 @@ class FactCheckingSkill:
                     content_hash=result.content_hash,
                     retrieved_at=result.retrieved_at,
                     relevance_score=0.9
-                    if result.confidence in (SourceConfidence.CONFIRMS, SourceConfidence.CONTRADICTS)
+                    if result.confidence
+                    in (SourceConfidence.CONFIRMS, SourceConfidence.CONTRADICTS)
                     else 0.5,
                     support_score=1.0 if result.confidence == SourceConfidence.CONFIRMS else 0.0,
-                    contradiction_score=1.0 if result.confidence == SourceConfidence.CONTRADICTS else 0.0,
+                    contradiction_score=1.0
+                    if result.confidence == SourceConfidence.CONTRADICTS
+                    else 0.0,
                     selected_rank=index + 1,
                     evidence_tier=result.tier,
                 )
@@ -888,7 +900,7 @@ class FactCheckingSkill:
         return evidence
 
     @staticmethod
-    def _count_tiers(evidence: List[EvidenceRecord]) -> Dict[str, int]:
+    def _count_tiers(evidence: list[EvidenceRecord]) -> dict[str, int]:
         return {
             "TIER_1": sum(1 for item in evidence if item.evidence_tier == EvidenceTier.TIER_1),
             "TIER_2": sum(1 for item in evidence if item.evidence_tier == EvidenceTier.TIER_2),
@@ -898,7 +910,7 @@ class FactCheckingSkill:
     def _generate_operationalization(
         self,
         verdict: FactCheckVerdict,
-        source_results: List[SourceResult],
+        source_results: list[SourceResult],
         p_true: float,
     ) -> str:
         del p_true
@@ -923,12 +935,14 @@ class FactCheckingSkill:
         claim_text: str,
         normalized: str,
         claim_hash: str,
-        ground_truth_entry: Dict[str, Any],
+        ground_truth_entry: dict[str, Any],
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
         fact_mode: str,
     ) -> FactCheckResult:
-        verdict = FactCheckVerdict(ground_truth_entry.get("verdict", FactCheckVerdict.INSUFFICIENT.value))
+        verdict = FactCheckVerdict(
+            ground_truth_entry.get("verdict", FactCheckVerdict.INSUFFICIENT.value)
+        )
         p_true = float(ground_truth_entry.get("p_true", 0.5))
         evidence = GroundTruthDB.entry_to_evidence_records(ground_truth_entry)
         tier_counts = ground_truth_entry.get("tier_counts") or self._count_tiers(evidence)
@@ -944,7 +958,9 @@ class FactCheckingSkill:
             factuality_score=p_true,
             confidence=1.0 if verdict != FactCheckVerdict.INSUFFICIENT else 0.0,
             confidence_explanation="Resolved from curated ground truth.",
-            operationalization=ground_truth_entry.get("operationalization", "See curated ground-truth entry."),
+            operationalization=ground_truth_entry.get(
+                "operationalization", "See curated ground-truth entry."
+            ),
             evidence=evidence,
             evidence_tier_counts=tier_counts,
             algorithm_version="fc-perfect-gt-v1.2",
@@ -964,7 +980,7 @@ class FactCheckingSkill:
         normalized_claim: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[TemporalContext],
+        temporal_context: TemporalContext | None,
     ) -> FactCheckResult:
         lowered = normalized_claim.lower()
         if any(marker in lowered for marker in ("refuted", "false", "contradicted")):
@@ -1012,7 +1028,9 @@ class FactCheckingSkill:
             return FactCheckVerdict.REFUTED
         return FactCheckVerdict.INSUFFICIENT
 
-    def _calculate_confidence(self, support: float, contradiction: float, evidence_count: int) -> float:
+    def _calculate_confidence(
+        self, support: float, contradiction: float, evidence_count: int
+    ) -> float:
         base_confidence = min(0.9, 0.3 + evidence_count * 0.15)
         if abs(support - contradiction) < self.config.confidence_penalty_threshold:
             base_confidence *= 0.75
@@ -1026,13 +1044,13 @@ class FactCheckingSkill:
         del reason
         self._cache.invalidate_by_claim(claim_hash, self.mode, self.allowlist_version)
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         return self._cache.get_stats()
 
-    def get_audit_stats(self) -> Dict[str, Any]:
+    def get_audit_stats(self) -> dict[str, Any]:
         return self._audit.get_stats()
 
-    def get_queue_stats(self) -> Optional[Dict[str, Any]]:
+    def get_queue_stats(self) -> dict[str, Any] | None:
         if not self._queue:
             return None
         stats = self._queue.get_stats()

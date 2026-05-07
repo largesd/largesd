@@ -11,11 +11,12 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List
 
 try:
-    from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, expect, sync_playwright
+    from playwright.sync_api import Page, expect, sync_playwright
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 except ImportError as exc:  # pragma: no cover - helpful runtime message
     raise SystemExit(
         "Playwright is not installed. Run `pip install -r requirements.txt` and "
@@ -38,11 +39,11 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def write_json(path: Path, payload: Dict) -> None:
+def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def write_markdown(path: Path, lines: List[str]) -> None:
+def write_markdown(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
@@ -51,7 +52,7 @@ def open_new_debate_page(page: Page, base_url: str) -> None:
     expect(page.locator("#debate-section")).to_be_visible()
 
 
-def authenticate_browser_user(page: Page, base_url: str) -> Dict[str, str]:
+def authenticate_browser_user(page: Page, base_url: str) -> dict[str, str]:
     suffix = unique_suffix()
     email = f"acceptance_{suffix}@example.com"
     password = "AcceptancePass123"
@@ -105,7 +106,7 @@ def authenticate_browser_user(page: Page, base_url: str) -> Dict[str, str]:
     return user
 
 
-def create_debate_via_api(page: Page, base_url: str, token: str) -> Dict[str, str]:
+def create_debate_via_api(page: Page, base_url: str, token: str) -> dict[str, str]:
     """Create a debate via admin API (default admin access mode allows authenticated users)."""
     motion = f"Resolved: External AI audits should be mandatory ({unique_suffix()})."
     debate_scope = (
@@ -132,7 +133,7 @@ def create_debate_via_api(page: Page, base_url: str, token: str) -> Dict[str, st
     }
 
 
-def create_debate(page: Page, base_url: str) -> Dict[str, str]:
+def create_debate(page: Page, base_url: str) -> dict[str, str]:
     # Acceptance user is authenticated; default admin mode allows direct creation.
     token = page.evaluate("() => localStorage.getItem('access_token')") or ""
     return create_debate_via_api(page, base_url, token)
@@ -148,9 +149,11 @@ def submit_post(page: Page, side: str, topic_id: str, facts: str, inference: str
     expect(page.locator("#status-message")).to_contain_text("Email generated")
 
 
-def generate_snapshot(page: Page) -> Dict[str, str]:
+def generate_snapshot(page: Page) -> dict[str, str]:
     page.get_by_role("button", name="Generate New Snapshot").first.click()
-    expect(page.locator("#status-message")).to_contain_text("generated", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#status-message")).to_contain_text(
+        "generated", timeout=SNAPSHOT_TIMEOUT_MS
+    )
     expect(page.locator("#pending-count")).to_have_text("0", timeout=SNAPSHOT_TIMEOUT_MS)
 
     snapshot_id = (page.locator("#header-snapshot").text_content() or "").strip()
@@ -164,7 +167,7 @@ def generate_snapshot(page: Page) -> Dict[str, str]:
     return {"snapshot_id": snapshot_id, "verdict": verdict}
 
 
-def criterion_ac1(page: Page, base_url: str) -> List[str]:
+def criterion_ac1(page: Page, base_url: str) -> list[str]:
     user = authenticate_browser_user(page, base_url)
     open_new_debate_page(page, base_url)
     expect(page.locator("#display-resolution")).to_contain_text("No active debate")
@@ -180,7 +183,7 @@ def criterion_ac1(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac2(page: Page, base_url: str) -> List[str]:
+def criterion_ac2(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -209,7 +212,7 @@ def criterion_ac2(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac3(page: Page, base_url: str) -> List[str]:
+def criterion_ac3(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -236,7 +239,7 @@ def criterion_ac3(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac4(page: Page, base_url: str) -> List[str]:
+def criterion_ac4(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -277,7 +280,7 @@ def criterion_ac4(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac5(page: Page, base_url: str) -> List[str]:
+def criterion_ac5(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -288,10 +291,14 @@ def criterion_ac5(page: Page, base_url: str) -> List[str]:
     page.locator("#template-version").fill(version)
     page.locator("#template-base").select_option("minimal")
     page.locator("#save-draft-btn").click()
-    expect(page.locator("#admin-action-feedback")).to_contain_text("Draft saved", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#admin-action-feedback")).to_contain_text(
+        "Draft saved", timeout=SNAPSHOT_TIMEOUT_MS
+    )
 
     page.reload(wait_until="networkidle")
-    expect(page.locator("#template-history-tbody")).to_contain_text(version, timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#template-history-tbody")).to_contain_text(
+        version, timeout=SNAPSHOT_TIMEOUT_MS
+    )
 
     return [
         f"Saved moderation draft version {version} from admin UI.",
@@ -299,7 +306,7 @@ def criterion_ac5(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac6(page: Page, base_url: str) -> List[str]:
+def criterion_ac6(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -324,7 +331,9 @@ def criterion_ac6(page: Page, base_url: str) -> List[str]:
 
     page.goto(f"{base_url}/dossier.html", wait_until="networkidle")
     expect(page.locator("#dossier-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
-    expect(page.locator("#dossier-snapshot-id")).to_contain_text("snap_", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#dossier-snapshot-id")).to_contain_text(
+        "snap_", timeout=SNAPSHOT_TIMEOUT_MS
+    )
 
     page.goto(f"{base_url}/governance.html", wait_until="networkidle")
     expect(page.locator("#governance-content")).to_be_visible(timeout=SNAPSHOT_TIMEOUT_MS)
@@ -336,7 +345,7 @@ def criterion_ac6(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def register_user_via_ui(page: Page, base_url: str) -> Dict[str, str]:
+def register_user_via_ui(page: Page, base_url: str) -> dict[str, str]:
     suffix = unique_suffix()
     email = f"acceptance_ui_{suffix}@example.com"
     password = "AcceptancePass123"
@@ -351,7 +360,9 @@ def register_user_via_ui(page: Page, base_url: str) -> Dict[str, str]:
     page.locator("#confirm_password").fill(password)
     page.locator("#submit-btn").click()
 
-    expect(page.locator("#success-alert")).to_contain_text("Account created", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#success-alert")).to_contain_text(
+        "Account created", timeout=SNAPSHOT_TIMEOUT_MS
+    )
     page.wait_for_url(f"{base_url}/index.html*", timeout=SNAPSHOT_TIMEOUT_MS)
 
     token = page.evaluate("() => localStorage.getItem('access_token')")
@@ -379,7 +390,9 @@ def login_user_via_ui(page: Page, base_url: str, email: str, password: str) -> N
     page.locator("#email").fill(email)
     page.locator("#password").fill(password)
     page.locator("#submit-btn").click()
-    expect(page.locator("#success-alert")).to_contain_text("Login successful", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator("#success-alert")).to_contain_text(
+        "Login successful", timeout=SNAPSHOT_TIMEOUT_MS
+    )
     page.wait_for_url(f"{base_url}/new_debate.html*", timeout=SNAPSHOT_TIMEOUT_MS)
 
     token = page.evaluate("() => localStorage.getItem('access_token')")
@@ -387,7 +400,7 @@ def login_user_via_ui(page: Page, base_url: str, email: str, password: str) -> N
         raise AssertionError("Login flow did not persist access_token in localStorage.")
 
 
-def criterion_ac7(page: Page, base_url: str) -> List[str]:
+def criterion_ac7(page: Page, base_url: str) -> list[str]:
     creds = register_user_via_ui(page, base_url)
 
     # Force a fresh login path after successful registration.
@@ -395,7 +408,9 @@ def criterion_ac7(page: Page, base_url: str) -> List[str]:
 
     login_user_via_ui(page, base_url, creds["email"], creds["password"])
     # Phase 3: nav shows generic "Account" instead of display_name
-    expect(page.locator(".auth-link button")).to_contain_text("Account", timeout=SNAPSHOT_TIMEOUT_MS)
+    expect(page.locator(".auth-link button")).to_contain_text(
+        "Account", timeout=SNAPSHOT_TIMEOUT_MS
+    )
 
     # Validate logout behavior from authenticated UI state.
     page.evaluate("() => Auth.logout()")
@@ -414,7 +429,7 @@ def criterion_ac7(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac8(page: Page, base_url: str) -> List[str]:
+def criterion_ac8(page: Page, base_url: str) -> list[str]:
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
 
@@ -454,7 +469,9 @@ def criterion_ac8(page: Page, base_url: str) -> List[str]:
     old_id = (page.locator("#diff-old-id").text_content() or "").strip()
     new_id = (page.locator("#diff-new-id").text_content() or "").strip()
     if not old_id.startswith("snap_") or not new_id.startswith("snap_"):
-        raise AssertionError("Snapshot diff ids were not populated with expected snapshot identifiers.")
+        raise AssertionError(
+            "Snapshot diff ids were not populated with expected snapshot identifiers."
+        )
     if old_id == new_id:
         raise AssertionError("Snapshot diff old/new ids should differ when two snapshots exist.")
 
@@ -469,9 +486,9 @@ def criterion_ac8(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac9(page: Page, base_url: str) -> List[str]:
+def criterion_ac9(page: Page, base_url: str) -> list[str]:
     """Proposal lifecycle: submit, admin queue, accept."""
-    user = authenticate_browser_user(page, base_url)
+    authenticate_browser_user(page, base_url)
 
     # Submit a proposal via API
     token = page.evaluate("() => localStorage.getItem('access_token')") or ""
@@ -479,11 +496,13 @@ def criterion_ac9(page: Page, base_url: str) -> List[str]:
     proposal_response = page.request.post(
         f"{base_url}/api/debate-proposals",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-        data=json.dumps({
-            "motion": motion,
-            "moderation_criteria": "Allow on-topic arguments. Block spam.",
-            "debate_frame": "Judge which side presents the stronger case.",
-        }),
+        data=json.dumps(
+            {
+                "motion": motion,
+                "moderation_criteria": "Allow on-topic arguments. Block spam.",
+                "debate_frame": "Judge which side presents the stronger case.",
+            }
+        ),
     )
     if not proposal_response.ok:
         raise AssertionError(f"Proposal submission failed: HTTP {proposal_response.status}")
@@ -528,7 +547,7 @@ def criterion_ac9(page: Page, base_url: str) -> List[str]:
     ]
 
 
-def criterion_ac10(page: Page, base_url: str) -> List[str]:
+def criterion_ac10(page: Page, base_url: str) -> list[str]:
     """Identity-blind public surface: no display_name or email in nav."""
     user = authenticate_browser_user(page, base_url)
 
@@ -548,11 +567,11 @@ def criterion_ac10(page: Page, base_url: str) -> List[str]:
 
     return [
         "Authenticated user sees generic 'Account' label, not personal identifiers.",
-        f"Verified absence of display_name and email in nav text.",
+        "Verified absence of display_name and email in nav text.",
     ]
 
 
-def criterion_ac11(page: Page, base_url: str) -> List[str]:
+def criterion_ac11(page: Page, base_url: str) -> list[str]:
     """Snapshot integrity fields visible in UI."""
     authenticate_browser_user(page, base_url)
     create_debate(page, base_url)
@@ -589,7 +608,7 @@ def criterion_ac11(page: Page, base_url: str) -> List[str]:
     ]
 
 
-CRITERION_RUNNERS: Dict[str, Callable[[Page, str], List[str]]] = {
+CRITERION_RUNNERS: dict[str, Callable[[Page, str], list[str]]] = {
     "AC-1": criterion_ac1,
     "AC-2": criterion_ac2,
     "AC-3": criterion_ac3,
@@ -604,7 +623,7 @@ CRITERION_RUNNERS: Dict[str, Callable[[Page, str], List[str]]] = {
 }
 
 
-def run_criterion(page: Page, base_url: str, criterion: Dict, screenshots_dir: Path) -> Dict:
+def run_criterion(page: Page, base_url: str, criterion: dict, screenshots_dir: Path) -> dict:
     criterion_id = criterion["id"]
     runner = CRITERION_RUNNERS.get(criterion_id)
     if runner is None:
@@ -646,7 +665,7 @@ def run_criterion(page: Page, base_url: str, criterion: Dict, screenshots_dir: P
         }
 
 
-def build_markdown_report(spec: Dict, report: Dict) -> List[str]:
+def build_markdown_report(spec: dict, report: dict) -> list[str]:
     lines = [
         "# UI Acceptance Report",
         "",

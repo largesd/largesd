@@ -6,7 +6,7 @@ Field annotations document the producing stage and consuming stage(s).
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -46,65 +46,65 @@ class PipelineContext:
     request_id: str
     trigger_type: str
     engine: Any  # DebateEngineV2 instance
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
     # -- extract stage output --
-    debate: Optional[Dict[str, Any]] = None
-    active_frame: Optional[Dict[str, Any]] = None
-    side_order: Optional[List[str]] = None
-    frame_id: Optional[str] = None
-    frame_context: Optional[str] = None
-    posts: Optional[List[Dict[str, Any]]] = None
-    allowed_posts: Optional[List[Dict[str, Any]]] = None
-    blocked_posts: Optional[List[Dict[str, Any]]] = None
-    block_reasons: Optional[Dict[str, int]] = None
-    borderline_rate: Optional[float] = None
-    suppression_policy: Optional[Dict[str, Any]] = None
-    previous_topics: Optional[List[Any]] = None
-    topics: Optional[List[Any]] = None
-    drift_report: Optional[Dict[str, Any]] = None
-    post_assignments: Optional[Dict[str, List[str]]] = None
+    debate: dict[str, Any] | None = None
+    active_frame: dict[str, Any] | None = None
+    side_order: list[str] | None = None
+    frame_id: str | None = None
+    frame_context: str | None = None
+    posts: list[dict[str, Any]] | None = None
+    allowed_posts: list[dict[str, Any]] | None = None
+    blocked_posts: list[dict[str, Any]] | None = None
+    block_reasons: dict[str, int] | None = None
+    borderline_rate: float | None = None
+    suppression_policy: dict[str, Any] | None = None
+    previous_topics: list[Any] | None = None
+    topics: list[Any] | None = None
+    drift_report: dict[str, Any] | None = None
+    post_assignments: dict[str, list[str]] | None = None
 
     # extracted[topic_id] -> {"topic_posts": [...], "spans": [...],
     #                         "facts": [...], "args": [...]}
-    extracted: Optional[Dict[str, Dict[str, Any]]] = None
+    extracted: dict[str, dict[str, Any]] | None = None
 
     # -- fact_check stage output (mutates extracted facts in-place) --
-    fact_checks: Optional[List[Dict[str, Any]]] = None
+    fact_checks: list[dict[str, Any]] | None = None
 
     # -- canonicalize stage output --
-    canonical_facts: Optional[Dict[str, List[Dict[str, Any]]]] = None
-    canonical_args: Optional[Dict[str, List[Dict[str, Any]]]] = None
-    topic_content_mass: Optional[Dict[str, int]] = None
+    canonical_facts: dict[str, list[dict[str, Any]]] | None = None
+    canonical_args: dict[str, list[dict[str, Any]]] | None = None
+    topic_content_mass: dict[str, int] | None = None
 
     # -- score stage output --
-    selected_facts: Optional[Dict[str, List[Dict[str, Any]]]] = None
-    selected_args: Optional[Dict[str, List[Dict[str, Any]]]] = None
-    selection_diagnostics: Optional[Dict[str, Any]] = None
+    selected_facts: dict[str, list[dict[str, Any]]] | None = None
+    selected_args: dict[str, list[dict[str, Any]]] | None = None
+    selection_diagnostics: dict[str, Any] | None = None
     selection_seed: int = 42
-    scores: Optional[Dict[str, Any]] = None
+    scores: dict[str, Any] | None = None
 
     # -- replicate stage output --
-    replicates: Optional[List[Any]] = None
-    replicate_topics: Optional[List[Any]] = None
-    verdict_result: Optional[Dict[str, Any]] = None
+    replicates: list[Any] | None = None
+    replicate_topics: list[Any] | None = None
+    verdict_result: dict[str, Any] | None = None
 
     # -- counterfactual stage output --
-    counterfactuals: Optional[List[Dict[str, Any]]] = None
+    counterfactuals: list[dict[str, Any]] | None = None
 
     # -- symmetry stage output --
-    symmetry_result: Optional[Dict[str, Any]] = None
+    symmetry_result: dict[str, Any] | None = None
 
     # -- audit stage output --
-    decision_dossier: Optional[Dict[str, Any]] = None
-    audit_records: Optional[Dict[str, Any]] = None
-    replay_manifest: Optional[Dict[str, Any]] = None
-    recipe_versions: Optional[Dict[str, Any]] = None
-    input_hash_root: Optional[str] = None
-    output_hash_root: Optional[str] = None
-    provider_metadata: Optional[Dict[str, Any]] = None
+    decision_dossier: dict[str, Any] | None = None
+    audit_records: dict[str, Any] | None = None
+    replay_manifest: dict[str, Any] | None = None
+    recipe_versions: dict[str, Any] | None = None
+    input_hash_root: str | None = None
+    output_hash_root: str | None = None
+    provider_metadata: dict[str, Any] | None = None
 
     # -- persist stage output --
-    snapshot_id: Optional[str] = None
-    snapshot_data: Optional[Dict[str, Any]] = None
-    result: Optional[Dict[str, Any]] = None
+    snapshot_id: str | None = None
+    snapshot_data: dict[str, Any] | None = None
+    result: dict[str, Any] | None = None

@@ -1,7 +1,8 @@
 """Unit tests for pipeline symmetry stage."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from backend.pipeline.context import PipelineContext
 from backend.pipeline.symmetry import symmetry_stage
@@ -17,8 +18,11 @@ def engine():
 
 def test_symmetry_stage(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
         selected_facts={"t1": []},
         active_frame={"evaluation_criteria": ["fairness"]},
         side_order=["FOR", "AGAINST"],

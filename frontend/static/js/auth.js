@@ -98,7 +98,7 @@ const Auth = {
         }
       }).catch(() => {}); // Ignore errors
     }
-    
+
     // Clear local storage + debate context and redirect
     this.clearSession();
     this.redirectToLogin('logged-out');
@@ -201,21 +201,21 @@ const Auth = {
       ...fetchOptions
     } = options;
     const token = this.getToken();
-    
+
     const headers = {
       'Content-Type': 'application/json',
       ...fetchOptions.headers
     };
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     const response = await fetch(url, {
       ...fetchOptions,
       headers
     });
-    
+
     // If unauthorized, clear token and redirect to login
     if (response.status === 401) {
       this.clearSession();
@@ -224,7 +224,7 @@ const Auth = {
       }
       return null;
     }
-    
+
     return response;
   }
 };

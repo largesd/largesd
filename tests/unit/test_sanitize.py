@@ -3,8 +3,6 @@
 Covers OWASP XSS cheat-sheet vectors and common bypass techniques.
 """
 
-import pytest
-
 from backend.sanitize import sanitize_html
 
 
@@ -18,7 +16,7 @@ class TestScriptTagRemoval:
         assert sanitize_html(raw) == ""
 
     def test_nested_script(self):
-        raw = '<scr<script>ipt>alert(1)</scr</script>ipt>'
+        raw = "<scr<script>ipt>alert(1)</scr</script>ipt>"
         result = sanitize_html(raw)
         assert "<script>" not in result.lower()
 
@@ -28,7 +26,7 @@ class TestScriptTagRemoval:
         assert "<script" not in result.lower()
 
     def test_script_in_attribute(self):
-        raw = '<p>safe</p><script>alert(1)</script>'
+        raw = "<p>safe</p><script>alert(1)</script>"
         result = sanitize_html(raw)
         assert "<script" not in result.lower()
         assert "safe" in result
@@ -36,7 +34,7 @@ class TestScriptTagRemoval:
 
 class TestEventHandlerRemoval:
     def test_onerror(self):
-        raw = '<img src=x onerror=alert(1)>'
+        raw = "<img src=x onerror=alert(1)>"
         result = sanitize_html(raw)
         assert "onerror" not in result.lower()
 
@@ -47,7 +45,7 @@ class TestEventHandlerRemoval:
         assert "Click me" in result
 
     def test_onload(self):
-        raw = '<body onload=alert(1)>'
+        raw = "<body onload=alert(1)>"
         result = sanitize_html(raw)
         assert "onload" not in result.lower()
 
@@ -58,7 +56,7 @@ class TestEventHandlerRemoval:
         assert "hover" in result
 
     def test_mixed_case_event_handler(self):
-        raw = '<img src=x ONERROR=alert(1)>'
+        raw = "<img src=x ONERROR=alert(1)>"
         result = sanitize_html(raw)
         assert "onerror" not in result.lower()
 
@@ -161,12 +159,12 @@ class TestOwaspVectors:
     """Selected vectors from the OWASP XSS Cheat Sheet."""
 
     def test_img_src_javascript(self):
-        raw = '<img src="javascript:alert(\'XSS\')">'
+        raw = "<img src=\"javascript:alert('XSS')\">"
         result = sanitize_html(raw)
         assert "javascript:" not in result.lower()
 
     def test_img_src_onerror(self):
-        raw = '<img src=x onerror="alert(\'XSS\')">'
+        raw = "<img src=x onerror=\"alert('XSS')\">"
         result = sanitize_html(raw)
         assert "onerror" not in result.lower()
 
@@ -207,13 +205,13 @@ class TestOwaspVectors:
         assert "onfocus" not in result.lower()
 
     def test_svg_onload(self):
-        raw = '<svg onload="alert(1)">' 
+        raw = '<svg onload="alert(1)">'
         result = sanitize_html(raw)
         assert "onload" not in result.lower()
         assert "<svg" not in result.lower()
 
     def test_mathml_removed(self):
-        raw = '<math><mtext></mtext></math>'
+        raw = "<math><mtext></mtext></math>"
         result = sanitize_html(raw)
         assert "<math" not in result.lower()
 

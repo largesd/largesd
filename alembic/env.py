@@ -4,10 +4,12 @@ Alembic environment for Blind Debate Adjudicator.
 Supports both SQLite and PostgreSQL via DATABASE_URL.
 Autogenerate is disabled because the project uses raw SQL, not SQLAlchemy ORM.
 """
+
 import os
 from logging.config import fileConfig
 
 from sqlalchemy import create_engine, pool
+
 from alembic import context
 
 config = context.config

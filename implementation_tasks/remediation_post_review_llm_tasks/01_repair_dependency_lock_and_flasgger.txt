@@ -1,0 +1,57 @@
+TASK 01: Repair Dependency Lock and flasgger Availability
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Fix the integration-test import failure caused by flasgger being listed in
+requirements.in but missing from the compiled requirements.txt lock file.
+
+Current findings:
+- requirements.in contains: flasgger>=0.9.7
+- requirements-test.txt includes: -r requirements.txt
+- requirements.txt currently does not contain flasgger
+- backend/app_v3.py imports: from flasgger import Swagger
+
+Write scope:
+- requirements.txt
+- optionally requirements-dev.txt if your chosen compile command requires a
+  consistent dev lock refresh
+- do not change application code in this task
+
+Implementation steps:
+1. Inspect dependency files:
+   - requirements.in
+   - requirements.txt
+   - requirements-test.txt
+   - requirements-dev.in
+   - requirements-dev.txt
+2. Recompile requirements.txt from requirements.in using the project's existing
+   pip-tools workflow. Preserve the hash-locked style already present in
+   requirements.txt if it is hash locked.
+   Preferred commands:
+   - python -m pip install pip-tools
+   - python -m piptools compile --generate-hashes -o requirements.txt requirements.in
+3. Verify flasgger appears in requirements.txt after compilation.
+4. Install the test dependencies in the active environment:
+   - python -m pip install -r requirements-test.txt
+5. Verify imports:
+   - python -c "import flask, flasgger, nh3, redis, bcrypt, sqlalchemy"
+6. Run a focused integration import check:
+   - python -m pytest tests/integration/api/test_api_misc.py -q
+7. Run the broader integration suite if time permits:
+   - python -m pytest tests/integration/ -q --tb=short
+
+Acceptance criteria:
+- requirements.txt includes flasgger and remains compiled from requirements.in.
+- python -c "import flasgger" succeeds.
+- Integration tests no longer fail with ModuleNotFoundError for flasgger.
+- No unrelated dependency churn beyond what pip-tools needs to produce a
+  consistent lock.
+
+Guardrails:
+- Do not remove hash locking if requirements.txt is currently hash locked.
+- Do not add flasgger only to requirements-test.txt. app_v3.py imports it at
+  runtime, so it belongs in the main lock.
+- Do not pin an arbitrary old flasgger version manually unless pip-tools cannot
+  resolve the declared requirement.

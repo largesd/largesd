@@ -6,10 +6,11 @@ that matches the shapes returned by the v3 API endpoints.
 
 This bundle is what gets published to GitHub as consolidated_results.json.
 """
+
 import json
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from backend.database import DebateDatabase
 from backend.lsd_v1_2 import AUDIT_SCHEMA_VERSION, formula_registry
@@ -19,7 +20,7 @@ def _coerce_json(raw: Any, fallback: Any = None) -> Any:
     """Parse a JSON string or return the fallback."""
     if raw is None:
         return fallback
-    if isinstance(raw, (dict, list)):
+    if isinstance(raw, dict | list):
         return raw
     try:
         return json.loads(raw)
@@ -32,16 +33,16 @@ class PublishedResultsBuilder:
     Build a consolidated results bundle from the database for a given debate.
     """
 
-    def __init__(self, db_path: str = "data/debate_system.db", engine: Optional[Any] = None):
+    def __init__(self, db_path: str = "data/debate_system.db", engine: Any | None = None):
         self.db = DebateDatabase(db_path)
         self.engine = engine
 
     def build_bundle(
         self,
         debate_id: str,
-        commit_message: Optional[str] = None,
-        published_at: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        commit_message: str | None = None,
+        published_at: str | None = None,
+    ) -> dict[str, Any]:
         """
         Build the full consolidated results bundle.
 
@@ -75,7 +76,7 @@ class PublishedResultsBuilder:
         modulation_data = self._build_modulation(snapshot)
 
         bundle = {
-            "published_at": published_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "published_at": published_at or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "commit_message": commit_message or f"Published results for {debate_id}",
             "debate": {
                 "debate_id": debate["debate_id"],
@@ -116,9 +117,9 @@ class PublishedResultsBuilder:
         self,
         debate_id: str,
         output_path: str,
-        commit_message: Optional[str] = None,
-        published_at: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        commit_message: str | None = None,
+        published_at: str | None = None,
+    ) -> dict[str, Any]:
         """Build and write the bundle to a local file."""
         bundle = self.build_bundle(debate_id, commit_message, published_at)
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -130,7 +131,7 @@ class PublishedResultsBuilder:
     # Internal builders
     # ------------------------------------------------------------------
 
-    def _build_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_snapshot(self, snapshot: dict[str, Any] | None) -> dict[str, Any]:
         if not snapshot:
             return {
                 "snapshot_id": None,
@@ -180,7 +181,7 @@ class PublishedResultsBuilder:
             "status": snapshot.get("status", "valid"),
         }
 
-    def _build_frame(self, frame: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _build_frame(self, frame: dict[str, Any] | None) -> dict[str, Any] | None:
         if not frame:
             return None
         return {
@@ -206,34 +207,36 @@ class PublishedResultsBuilder:
         }
 
     def _build_topics(
-        self, topics: List[Dict[str, Any]], snapshot: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, topics: list[dict[str, Any]], snapshot: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
         topic_scores = _coerce_json(snapshot.get("topic_scores") if snapshot else None, {})
         result = []
         for t in topics:
             tid = t["topic_id"]
-            result.append({
-                "topic_id": tid,
-                "name": t.get("name", ""),
-                "scope": t.get("scope", ""),
-                "relevance": t.get("relevance", 0.0),
-                "drift_score": t.get("drift_score", 0.0),
-                "coherence": t.get("coherence", 0.0),
-                "distinctness": t.get("distinctness", 0.0),
-                "summary_for": t.get("summary_for", ""),
-                "summary_against": t.get("summary_against", ""),
-                "operation": t.get("operation", "created"),
-                "parent_topic_ids": _coerce_json(t.get("parent_topic_ids"), []),
-                "scores": {
-                    "FOR": topic_scores.get(f"{tid}_FOR", {}),
-                    "AGAINST": topic_scores.get(f"{tid}_AGAINST", {}),
-                },
-            })
+            result.append(
+                {
+                    "topic_id": tid,
+                    "name": t.get("name", ""),
+                    "scope": t.get("scope", ""),
+                    "relevance": t.get("relevance", 0.0),
+                    "drift_score": t.get("drift_score", 0.0),
+                    "coherence": t.get("coherence", 0.0),
+                    "distinctness": t.get("distinctness", 0.0),
+                    "summary_for": t.get("summary_for", ""),
+                    "summary_against": t.get("summary_against", ""),
+                    "operation": t.get("operation", "created"),
+                    "parent_topic_ids": _coerce_json(t.get("parent_topic_ids"), []),
+                    "scores": {
+                        "FOR": topic_scores.get(f"{tid}_FOR", {}),
+                        "AGAINST": topic_scores.get(f"{tid}_AGAINST", {}),
+                    },
+                }
+            )
         return result
 
     def _build_topic_details(
-        self, debate_id: str, topics: List[Dict[str, Any]]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, debate_id: str, topics: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
         details = {}
         for t in topics:
             tid = t["topic_id"]
@@ -260,13 +263,17 @@ class PublishedResultsBuilder:
                         "fact_type": f.get("fact_type", "empirical"),
                         "operationalization": f.get("operationalization", ""),
                         "normative_provenance": f.get("normative_provenance", ""),
-                        "evidence_tier_counts": _coerce_json(f.get("evidence_tier_counts_json"), {}),
+                        "evidence_tier_counts": _coerce_json(
+                            f.get("evidence_tier_counts_json"), {}
+                        ),
                         "member_count": len(_coerce_json(f.get("member_fact_ids"), [])),
                         # LSD_FactCheck_v1_5_1 ternary fields
                         "v15_status": f.get("v15_status"),
                         "v15_p": f.get("v15_p", f.get("p_true", 0.5)),
                         "v15_insufficiency_reason": f.get("v15_insufficiency_reason"),
-                        "v15_human_review_flags": _coerce_json(f.get("v15_human_review_flags_json"), []),
+                        "v15_human_review_flags": _coerce_json(
+                            f.get("v15_human_review_flags_json"), []
+                        ),
                         "v15_best_evidence_tier": f.get("v15_best_evidence_tier"),
                     }
                     for f in facts
@@ -287,8 +294,8 @@ class PublishedResultsBuilder:
         return details
 
     def _build_verdict(
-        self, snapshot: Optional[Dict[str, Any]], topics: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, snapshot: dict[str, Any] | None, topics: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         if not snapshot:
             return {
                 "snapshot_id": None,
@@ -305,17 +312,23 @@ class PublishedResultsBuilder:
         contributions = []
         for t in topics:
             tid = t["topic_id"]
-            q_for = topic_scores.get(f"{tid}_FOR", {}).get("quality", topic_scores.get(f"{tid}_FOR", {}).get("q", 0.0))
-            q_against = topic_scores.get(f"{tid}_AGAINST", {}).get("quality", topic_scores.get(f"{tid}_AGAINST", {}).get("q", 0.0))
+            q_for = topic_scores.get(f"{tid}_FOR", {}).get(
+                "quality", topic_scores.get(f"{tid}_FOR", {}).get("q", 0.0)
+            )
+            q_against = topic_scores.get(f"{tid}_AGAINST", {}).get(
+                "quality", topic_scores.get(f"{tid}_AGAINST", {}).get("q", 0.0)
+            )
             contrib = (q_for - q_against) * t.get("relevance", 0.0)
-            contributions.append({
-                "topic_id": tid,
-                "name": t.get("name", ""),
-                "relevance": t.get("relevance", 0.0),
-                "q_for": q_for,
-                "q_against": q_against,
-                "contribution_to_d": round(contrib, 4),
-            })
+            contributions.append(
+                {
+                    "topic_id": tid,
+                    "name": t.get("name", ""),
+                    "relevance": t.get("relevance", 0.0),
+                    "q_for": q_for,
+                    "q_against": q_against,
+                    "contribution_to_d": round(contrib, 4),
+                }
+            )
 
         return {
             "snapshot_id": snapshot["snapshot_id"],
@@ -334,9 +347,7 @@ class PublishedResultsBuilder:
             "formula_metadata": formula_registry(),
         }
 
-    def _build_audits(
-        self, debate_id: str, snapshot: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _build_audits(self, debate_id: str, snapshot: dict[str, Any] | None) -> dict[str, Any]:
         if not snapshot:
             return {
                 "snapshot_id": None,
@@ -369,7 +380,7 @@ class PublishedResultsBuilder:
             }
 
         audit_rows = self.db.get_audits_by_snapshot(snapshot["snapshot_id"])
-        audits_dict: Dict[str, Any] = {}
+        audits_dict: dict[str, Any] = {}
         for row in audit_rows:
             atype = row.get("audit_type", "unknown")
             audits_dict[atype] = _coerce_json(row.get("result_data"), {})
@@ -377,16 +388,18 @@ class PublishedResultsBuilder:
         topics = self.db.get_topics_by_debate(debate_id)
         topic_geometry = []
         for t in topics:
-            topic_geometry.append({
-                "topic_id": t["topic_id"],
-                "name": t.get("name", ""),
-                "content_mass": t.get("relevance", 0.0),
-                "drift_score": t.get("drift_score", 0.0),
-                "coherence": t.get("coherence", 0.0),
-                "distinctness": t.get("distinctness", 0.0),
-                "operation": t.get("operation", "created"),
-                "parent_topic_ids": _coerce_json(t.get("parent_topic_ids"), []),
-            })
+            topic_geometry.append(
+                {
+                    "topic_id": t["topic_id"],
+                    "name": t.get("name", ""),
+                    "content_mass": t.get("relevance", 0.0),
+                    "drift_score": t.get("drift_score", 0.0),
+                    "coherence": t.get("coherence", 0.0),
+                    "distinctness": t.get("distinctness", 0.0),
+                    "operation": t.get("operation", "created"),
+                    "parent_topic_ids": _coerce_json(t.get("parent_topic_ids"), []),
+                }
+            )
 
         return {
             "snapshot_id": snapshot["snapshot_id"],
@@ -395,32 +408,53 @@ class PublishedResultsBuilder:
             "verdict": snapshot.get("verdict", "NO VERDICT"),
             "confidence": snapshot.get("confidence", 0.0),
             "topic_geometry": topic_geometry,
-            "extraction_stability": audits_dict.get("extraction_stability", {
-                "fact_overlap": {},
-                "argument_overlap": {},
-                "mismatches": [],
-                "num_runs": 0,
-                "stability_score": 0,
-            }),
-            "evaluator_disagreement": audits_dict.get("evaluator_variance", audits_dict.get("evaluator_disagreement", {
-                "reasoning_iqr_median": 0.0,
-                "coverage_iqr_median": 0.0,
-                "overall_iqr": 0.0,
-            })),
-            "label_symmetry": audits_dict.get("side_label_symmetry", audits_dict.get("label_symmetry", {
-                "median_delta_d": 0,
-                "abs_delta_d": 0,
-                "original_d": 0,
-                "swapped_d": 0,
-                "topic_deltas": {},
-                "interpretation": "",
-            })),
+            "extraction_stability": audits_dict.get(
+                "extraction_stability",
+                {
+                    "fact_overlap": {},
+                    "argument_overlap": {},
+                    "mismatches": [],
+                    "num_runs": 0,
+                    "stability_score": 0,
+                },
+            ),
+            "evaluator_disagreement": audits_dict.get(
+                "evaluator_variance",
+                audits_dict.get(
+                    "evaluator_disagreement",
+                    {
+                        "reasoning_iqr_median": 0.0,
+                        "coverage_iqr_median": 0.0,
+                        "overall_iqr": 0.0,
+                    },
+                ),
+            ),
+            "label_symmetry": audits_dict.get(
+                "side_label_symmetry",
+                audits_dict.get(
+                    "label_symmetry",
+                    {
+                        "median_delta_d": 0,
+                        "abs_delta_d": 0,
+                        "original_d": 0,
+                        "swapped_d": 0,
+                        "topic_deltas": {},
+                        "interpretation": "",
+                    },
+                ),
+            ),
             "relevance_sensitivity": audits_dict.get("relevance_sensitivity", {}),
             "topic_dominance": audits_dict.get("topic_diagnostics", {}).get("dominance", {}),
             "topic_concentration": {
-                "micro_topic_rate": audits_dict.get("topic_diagnostics", {}).get("micro_topic_rate", 0.0),
-                "mass_distribution_quantiles": audits_dict.get("topic_diagnostics", {}).get("mass_distribution_quantiles", {}),
-                "gini_coefficient": audits_dict.get("topic_diagnostics", {}).get("gini_coefficient", 0.0),
+                "micro_topic_rate": audits_dict.get("topic_diagnostics", {}).get(
+                    "micro_topic_rate", 0.0
+                ),
+                "mass_distribution_quantiles": audits_dict.get("topic_diagnostics", {}).get(
+                    "mass_distribution_quantiles", {}
+                ),
+                "gini_coefficient": audits_dict.get("topic_diagnostics", {}).get(
+                    "gini_coefficient", 0.0
+                ),
             },
             "frame_sensitivity": audits_dict.get("frame_sensitivity", {}),
             "integrity_indicators": audits_dict.get("integrity_indicators", {}),
@@ -434,7 +468,7 @@ class PublishedResultsBuilder:
             "formula_registry": audits_dict.get("formula_registry", formula_registry()),
         }
 
-    def _build_decision_dossier(self, snapshot: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_decision_dossier(self, snapshot: dict[str, Any] | None) -> dict[str, Any]:
         if not snapshot:
             return {}
         audit_rows = self.db.get_audits_by_snapshot(snapshot["snapshot_id"])
@@ -455,7 +489,7 @@ class PublishedResultsBuilder:
             "selection_diagnostics": {},
         }
 
-    def _build_snapshot_history(self, debate_id: str) -> Dict[str, Any]:
+    def _build_snapshot_history(self, debate_id: str) -> dict[str, Any]:
         snapshots = self.db.get_snapshots_by_debate(debate_id)
         return {
             "debate_id": debate_id,
@@ -472,7 +506,7 @@ class PublishedResultsBuilder:
             ],
         }
 
-    def _build_snapshot_diff(self, debate_id: str) -> Optional[Dict[str, Any]]:
+    def _build_snapshot_diff(self, debate_id: str) -> dict[str, Any] | None:
         snapshots = self.db.get_snapshots_by_debate(debate_id)
         if len(snapshots) < 2:
             return None
@@ -497,8 +531,8 @@ class PublishedResultsBuilder:
         }
 
     def _build_evidence_targets(
-        self, debate_id: str, snapshot: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, debate_id: str, snapshot: dict[str, Any] | None
+    ) -> dict[str, Any]:
         snapshot_id = snapshot["snapshot_id"] if snapshot else None
 
         if self.engine and snapshot_id:
@@ -517,16 +551,16 @@ class PublishedResultsBuilder:
             "note": "Evidence targets require DebateEngineV2 instance",
         }
 
-    def _build_modulation(self, snapshot: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _build_modulation(self, snapshot: dict[str, Any] | None) -> dict[str, Any]:
         if not snapshot:
             return {
                 "template_name": None,
                 "template_version": None,
                 "allowed_count": 0,
-            "blocked_count": 0,
-            "borderline_rate": 0.0,
-            "suppression_policy": {"k": 5, "affected_buckets": [], "affected_bucket_count": 0},
-        }
+                "blocked_count": 0,
+                "borderline_rate": 0.0,
+                "suppression_policy": {"k": 5, "affected_buckets": [], "affected_bucket_count": 0},
+            }
         return {
             "template_name": snapshot.get("template_name", ""),
             "template_version": snapshot.get("template_version", ""),

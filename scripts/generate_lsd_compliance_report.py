@@ -7,7 +7,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CRITERIA_PATH = ROOT / "acceptance" / "lsd_v1_2_criteria.json"
 OUT_DIR = ROOT / "docs" / "compliance"
@@ -24,7 +23,11 @@ EVIDENCE_LINKS = {
     "LSD-UI-06": ["backend/extraction.py", "backend/selection_engine.py", "frontend/audits.html"],
     "LSD-UI-07": ["backend/lsd_v1_2.py", "backend/debate_engine_v2.py", "frontend/audits.html"],
     "LSD-UI-08": ["backend/app_v3.py", "frontend/verdict.html", "frontend/dossier.html"],
-    "LSD-UI-09": ["backend/debate_engine_v2.py", "frontend/audits.html", "test_lsd_v1_2_contracts.py"],
+    "LSD-UI-09": [
+        "backend/debate_engine_v2.py",
+        "frontend/audits.html",
+        "test_lsd_v1_2_contracts.py",
+    ],
     "LSD-UI-10": ["backend/governance.py", "frontend/governance.html", "frontend/dossier.html"],
 }
 
@@ -42,14 +45,16 @@ def main() -> int:
         evidence = item.get("evidence_links") or EVIDENCE_LINKS.get(cid, [])
         if status in {"partial", "missing"} and not item.get("deferral"):
             undocumented.append(cid)
-        rows.append({
-            "id": cid,
-            "title": item.get("title", ""),
-            "section": item.get("section", ""),
-            "status": status,
-            "evidence_links": evidence,
-            "deferral": item.get("deferral"),
-        })
+        rows.append(
+            {
+                "id": cid,
+                "title": item.get("title", ""),
+                "section": item.get("section", ""),
+                "status": status,
+                "evidence_links": evidence,
+                "deferral": item.get("deferral"),
+            }
+        )
 
     report = {
         "source_version": criteria_doc.get("source_version", "LSD v1.2"),
@@ -79,9 +84,23 @@ def main() -> int:
             f"- `{row['id']}` {row['title']} ({row['section']}): **{row['status']}**. Evidence: {evidence}.{deferral}"
         )
     if undocumented:
-        lines.extend(["", "## Action Required", "", f"Undocumented partial/missing criteria: {', '.join(undocumented)}"])
+        lines.extend(
+            [
+                "",
+                "## Action Required",
+                "",
+                f"Undocumented partial/missing criteria: {', '.join(undocumented)}",
+            ]
+        )
     else:
-        lines.extend(["", "## Action Required", "", "No partial or missing criteria remain without a deferral note."])
+        lines.extend(
+            [
+                "",
+                "## Action Required",
+                "",
+                "No partial or missing criteria remain without a deferral note.",
+            ]
+        )
 
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {REPORT_MD}")

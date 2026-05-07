@@ -23,13 +23,12 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 import sqlite3
 import threading
 import uuid
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 from .v15_cache import canonical_json_hash, canonical_json_serialize
 from .v15_models import (
@@ -37,7 +36,6 @@ from .v15_models import (
     EvidenceItem,
     FactCheckResult,
     HumanReviewFlag,
-    HumanReviewRecord,
     NodeType,
     ProvenanceSpan,
     SubclaimResult,
@@ -56,7 +54,7 @@ class DisplaySummary:
 
     summary_text: str = ""
     explanation: str = ""
-    citations_formatted: List[str] = field(default_factory=list)
+    citations_formatted: list[str] = field(default_factory=list)
     confidence_statement: str = ""
     generated_at: str = ""
     generation_model: str = ""
@@ -93,38 +91,38 @@ class AuditRecord:
     input_premise_text: str
     input_topic_id: str
     input_frame_id: str
-    input_provenance_spans: List[ProvenanceSpan] = field(default_factory=list)
+    input_provenance_spans: list[ProvenanceSpan] = field(default_factory=list)
 
     # Processing provenance
     decomposition_version: str = ""
     decomposition_prompt_hash: str = ""
-    linking_queries: List[Dict[str, str]] = field(default_factory=list)
+    linking_queries: list[dict[str, str]] = field(default_factory=list)
     evidence_policy_version: str = ""
-    connector_versions: Dict[str, str] = field(default_factory=dict)
+    connector_versions: dict[str, str] = field(default_factory=dict)
 
     # Evidence provenance
-    evidence_items: List[EvidenceItem] = field(default_factory=list)
-    evidence_retrieval_manifest: List[Dict[str, Any]] = field(default_factory=list)
+    evidence_items: list[EvidenceItem] = field(default_factory=list)
+    evidence_retrieval_manifest: list[dict[str, Any]] = field(default_factory=list)
 
     # Decomposition provenance (required for authoritative hash replay)
-    root_claim_expression: Optional[Any] = None
-    atomic_subclaims: Optional[List[Any]] = None
+    root_claim_expression: Any | None = None
+    atomic_subclaims: list[Any] | None = None
 
     # Synthesis provenance
     synthesis_rule_engine_version: str = "v1.5"
     synthesis_logic: SynthesisLogic = field(default_factory=SynthesisLogic)
-    display_summary: Optional[DisplaySummary] = None
+    display_summary: DisplaySummary | None = None
 
     # Output
     result: SubclaimResult = field(default_factory=_default_subclaim_result)
-    subclaim_results: List[SubclaimResult] = field(default_factory=list)
+    subclaim_results: list[SubclaimResult] = field(default_factory=list)
 
     # Full FactCheckResult for practical replay
-    fact_check_result: Optional[FactCheckResult] = None
+    fact_check_result: FactCheckResult | None = None
 
     # Tamper evidence
     authoritative_result_hash: str = ""
-    display_summary_hash: Optional[str] = None
+    display_summary_hash: str | None = None
     previous_audit_hash: str = ""
 
 
@@ -167,9 +165,9 @@ class ReplayManifest:
 
     manifest_id: str
     snapshot_id: str
-    parameter_pack: Dict[str, Any] = field(default_factory=dict)
-    input_hashes: Dict[str, str] = field(default_factory=dict)  # premise_id -> hash
-    authoritative_output_hashes: Dict[str, str] = field(
+    parameter_pack: dict[str, Any] = field(default_factory=dict)
+    input_hashes: dict[str, str] = field(default_factory=dict)  # premise_id -> hash
+    authoritative_output_hashes: dict[str, str] = field(
         default_factory=dict
     )  # premise_id -> authoritative_result_hash
     merkle_root: str = ""
@@ -186,7 +184,7 @@ def _hash_premise_text(text: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _extract_authoritative_fact_check_result(result: FactCheckResult) -> Dict[str, Any]:
+def _extract_authoritative_fact_check_result(result: FactCheckResult) -> dict[str, Any]:
     """
     Extract only authoritative fields from a FactCheckResult.
 
@@ -223,11 +221,13 @@ def _extract_authoritative_fact_check_result(result: FactCheckResult) -> Dict[st
             }
             for s in result.provenance_spans
         ],
-        "subclaim_results": [_extract_authoritative_subclaim_result(sr) for sr in result.subclaim_results],
+        "subclaim_results": [
+            _extract_authoritative_subclaim_result(sr) for sr in result.subclaim_results
+        ],
     }
 
 
-def _extract_authoritative_subclaim_result(sr: SubclaimResult) -> Dict[str, Any]:
+def _extract_authoritative_subclaim_result(sr: SubclaimResult) -> dict[str, Any]:
     """Extract authoritative fields from a SubclaimResult."""
     return {
         "subclaim_id": sr.subclaim_id,
@@ -258,7 +258,7 @@ def _extract_authoritative_subclaim_result(sr: SubclaimResult) -> Dict[str, Any]
     }
 
 
-def _extract_authoritative_synthesis_logic(logic: SynthesisLogic) -> Dict[str, Any]:
+def _extract_authoritative_synthesis_logic(logic: SynthesisLogic) -> dict[str, Any]:
     """Extract authoritative fields from SynthesisLogic."""
     return {
         "status_rule_applied": logic.status_rule_applied,
@@ -283,10 +283,10 @@ def compute_authoritative_result_hash(
     fact_check_result: FactCheckResult,
     input_premise_text: str,
     root_claim_expression: ClaimExpression,
-    atomic_subclaims: List[Any],
-    evidence_items: List[EvidenceItem],
+    atomic_subclaims: list[Any],
+    evidence_items: list[EvidenceItem],
     evidence_policy_version: str = "",
-    connector_versions: Optional[Dict[str, str]] = None,
+    connector_versions: dict[str, str] | None = None,
 ) -> str:
     """
     Compute the authoritative_result_hash for a fact-check operation.
@@ -307,7 +307,7 @@ def compute_authoritative_result_hash(
     - UI formatting
     - Transient latency/debug logs
     """
-    payload: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
 
     # Input provenance hash
     payload["input_premise_id"] = fact_check_result.premise_id
@@ -334,17 +334,19 @@ def compute_authoritative_result_hash(
     return canonical_json_hash(payload)
 
 
-def compute_display_summary_hash(display_summary: Optional[DisplaySummary]) -> Optional[str]:
+def compute_display_summary_hash(display_summary: DisplaySummary | None) -> str | None:
     """Compute a separate hash for non-authoritative display summary content."""
     if display_summary is None:
         return None
     return canonical_json_hash(display_summary)
 
 
-def _serialize_claim_expression(expr: ClaimExpression) -> Dict[str, Any]:
+def _serialize_claim_expression(expr: ClaimExpression) -> dict[str, Any]:
     """Serialize a ClaimExpression tree for hashing."""
-    result: Dict[str, Any] = {
-        "node_type": expr.node_type.value if hasattr(expr.node_type, "value") else str(expr.node_type),
+    result: dict[str, Any] = {
+        "node_type": expr.node_type.value
+        if hasattr(expr.node_type, "value")
+        else str(expr.node_type),
     }
     if expr.subclaim_id is not None:
         result["subclaim_id"] = expr.subclaim_id
@@ -361,27 +363,33 @@ def _serialize_claim_expression(expr: ClaimExpression) -> Dict[str, Any]:
     return result
 
 
-def _serialize_atomic_subclaim(sc: Any) -> Dict[str, Any]:
+def _serialize_atomic_subclaim(sc: Any) -> dict[str, Any]:
     """Serialize an AtomicSubclaim for hashing."""
     return {
         "subclaim_id": sc.subclaim_id,
         "text": sc.text,
         "text_hash": _hash_premise_text(sc.text),
-        "claim_type": sc.claim_type.value if hasattr(sc.claim_type, "value") else str(sc.claim_type),
+        "claim_type": sc.claim_type.value
+        if hasattr(sc.claim_type, "value")
+        else str(sc.claim_type),
         "operationalization_hint": sc.operationalization_hint,
         "verdict_scope_hint": sc.verdict_scope_hint,
     }
 
 
-def _serialize_evidence_item(ei: EvidenceItem) -> Dict[str, Any]:
+def _serialize_evidence_item(ei: EvidenceItem) -> dict[str, Any]:
     """Serialize an EvidenceItem for authoritative hashing."""
     return {
         "evidence_id": ei.evidence_id,
         "subclaim_id": ei.subclaim_id,
-        "source_type": ei.source_type.value if hasattr(ei.source_type, "value") else str(ei.source_type),
+        "source_type": ei.source_type.value
+        if hasattr(ei.source_type, "value")
+        else str(ei.source_type),
         "source_tier": ei.source_tier,
         "retrieval_path": (
-            ei.retrieval_path.value if hasattr(ei.retrieval_path, "value") else str(ei.retrieval_path)
+            ei.retrieval_path.value
+            if hasattr(ei.retrieval_path, "value")
+            else str(ei.retrieval_path)
         ),
         "source_url": ei.source_url,
         "source_title": ei.source_title,
@@ -392,7 +400,9 @@ def _serialize_evidence_item(ei: EvidenceItem) -> Dict[str, Any]:
         "direction": ei.direction.value if hasattr(ei.direction, "value") else str(ei.direction),
         "direction_confidence": ei.direction_confidence,
         "direction_method": (
-            ei.direction_method.value if hasattr(ei.direction_method, "value") else str(ei.direction_method)
+            ei.direction_method.value
+            if hasattr(ei.direction_method, "value")
+            else str(ei.direction_method)
         ),
         "connector_version": ei.connector_version,
         "connector_query_hash": ei.connector_query_hash,
@@ -430,7 +440,12 @@ def compute_audit_record_full_hash(record: AuditRecord) -> str:
         "input_topic_id": record.input_topic_id,
         "input_frame_id": record.input_frame_id,
         "input_provenance_spans": [
-            {"span_id": s.span_id, "post_id": s.post_id, "offsets": s.offsets, "span_text": s.span_text}
+            {
+                "span_id": s.span_id,
+                "post_id": s.post_id,
+                "offsets": s.offsets,
+                "span_text": s.span_text,
+            }
             for s in record.input_provenance_spans
         ],
         "decomposition_version": record.decomposition_version,
@@ -442,7 +457,9 @@ def compute_audit_record_full_hash(record: AuditRecord) -> str:
         "synthesis_rule_engine_version": record.synthesis_rule_engine_version,
         "synthesis_logic": _extract_authoritative_synthesis_logic(record.synthesis_logic),
         "result": _extract_authoritative_subclaim_result(record.result),
-        "subclaim_results": [_extract_authoritative_subclaim_result(sr) for sr in record.subclaim_results],
+        "subclaim_results": [
+            _extract_authoritative_subclaim_result(sr) for sr in record.subclaim_results
+        ],
         "authoritative_result_hash": record.authoritative_result_hash,
         "display_summary_hash": record.display_summary_hash,
         "previous_audit_hash": record.previous_audit_hash,
@@ -464,7 +481,7 @@ def _hash_pair(left: str, right: str) -> str:
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 
-def compute_merkle_root(authoritative_hashes: List[str]) -> str:
+def compute_merkle_root(authoritative_hashes: list[str]) -> str:
     """
     Compute a Merkle root over a list of authoritative_result_hash values.
 
@@ -506,16 +523,16 @@ def compute_merkle_root(authoritative_hashes: List[str]) -> str:
 
 def build_replay_manifest(
     snapshot_id: str,
-    audit_records: List[AuditRecord],
-    parameter_pack: Optional[Dict[str, Any]] = None,
+    audit_records: list[AuditRecord],
+    parameter_pack: dict[str, Any] | None = None,
 ) -> ReplayManifest:
     """
     Build a ReplayManifest from a list of AuditRecords for a snapshot.
 
     Computes input_hashes, authoritative_output_hashes, and merkle_root.
     """
-    input_hashes: Dict[str, str] = {}
-    authoritative_output_hashes: Dict[str, str] = {}
+    input_hashes: dict[str, str] = {}
+    authoritative_output_hashes: dict[str, str] = {}
 
     for record in audit_records:
         input_hashes[record.premise_id] = _hash_premise_text(record.input_premise_text)
@@ -585,7 +602,7 @@ class FrozenConnectorStorage:
     ) -> str:
         """Store a frozen connector response. Returns content_hash."""
         content_hash = hashlib.sha256(response_json.encode("utf-8")).hexdigest()
-        stored_at = datetime.now(timezone.utc).isoformat()
+        stored_at = datetime.now(UTC).isoformat()
         with self._lock:
             with self._connect() as conn:
                 conn.execute(
@@ -594,12 +611,19 @@ class FrozenConnectorStorage:
                     (query_hash, connector_name, connector_version, response_json, stored_at, content_hash)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (query_hash, connector_name, connector_version, response_json, stored_at, content_hash),
+                    (
+                        query_hash,
+                        connector_name,
+                        connector_version,
+                        response_json,
+                        stored_at,
+                        content_hash,
+                    ),
                 )
                 conn.commit()
         return content_hash
 
-    def retrieve(self, query_hash: str) -> Optional[Dict[str, Any]]:
+    def retrieve(self, query_hash: str) -> dict[str, Any] | None:
         """Retrieve a frozen connector response by query hash."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -725,7 +749,7 @@ class AuditStore:
                 )
                 conn.commit()
 
-    def get(self, audit_id: str) -> Optional[AuditRecord]:
+    def get(self, audit_id: str) -> AuditRecord | None:
         """Retrieve an AuditRecord by audit_id."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -738,7 +762,7 @@ class AuditStore:
                 return None
             return _deserialize_audit_record(row["record_json"])
 
-    def get_by_premise(self, premise_id: str, snapshot_id: Optional[str] = None) -> List[AuditRecord]:
+    def get_by_premise(self, premise_id: str, snapshot_id: str | None = None) -> list[AuditRecord]:
         """Retrieve all AuditRecords for a premise_id, optionally filtered by snapshot."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -763,7 +787,7 @@ class AuditStore:
             rows = cursor.fetchall()
             return [_deserialize_audit_record(row["record_json"]) for row in rows]
 
-    def get_by_snapshot(self, snapshot_id: str) -> List[AuditRecord]:
+    def get_by_snapshot(self, snapshot_id: str) -> list[AuditRecord]:
         """Retrieve all AuditRecords for a snapshot."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -828,7 +852,9 @@ class AuditStore:
                 )
                 conn.commit()
 
-    def get_invalidations_for_target(self, target_audit_id: str) -> List[AdditiveInvalidationRecord]:
+    def get_invalidations_for_target(
+        self, target_audit_id: str
+    ) -> list[AdditiveInvalidationRecord]:
         """Get all invalidations that target a given audit record."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -871,7 +897,7 @@ def _deserialize_invalidation_record(record_json: str) -> AdditiveInvalidationRe
     )
 
 
-def _dict_to_claim_expression(d: Dict[str, Any]) -> ClaimExpression:
+def _dict_to_claim_expression(d: dict[str, Any]) -> ClaimExpression:
     """Reconstruct a ClaimExpression from a deserialized dict."""
     from .v15_models import NodeType
 
@@ -888,7 +914,7 @@ def _dict_to_claim_expression(d: Dict[str, Any]) -> ClaimExpression:
     )
 
 
-def _dict_to_atomic_subclaim(d: Dict[str, Any]) -> Any:
+def _dict_to_atomic_subclaim(d: dict[str, Any]) -> Any:
     """Reconstruct an AtomicSubclaim from a deserialized dict (simplified)."""
     from .v15_models import AtomicSubclaim, ClaimType
 
@@ -908,7 +934,7 @@ def _dict_to_atomic_subclaim(d: Dict[str, Any]) -> Any:
     )
 
 
-def _dict_to_audit_record(d: Dict[str, Any]) -> AuditRecord:
+def _dict_to_audit_record(d: dict[str, Any]) -> AuditRecord:
     """Reconstruct an AuditRecord from a deserialized dict."""
     # Reconstruct ProvenanceSpan list
     spans = []
@@ -981,7 +1007,9 @@ def _dict_to_audit_record(d: Dict[str, Any]) -> AuditRecord:
                 relevance_score=ei.get("relevance_score", 0.0),
                 direction=Direction(ei.get("direction", "UNCLEAR")),
                 direction_confidence=ei.get("direction_confidence", 0.0),
-                direction_method=DirectionMethod(ei.get("direction_method", "DETERMINISTIC_STRUCTURED")),
+                direction_method=DirectionMethod(
+                    ei.get("direction_method", "DETERMINISTIC_STRUCTURED")
+                ),
                 retrieval_timestamp=ei.get("retrieval_timestamp"),
                 connector_version=ei.get("connector_version", ""),
                 connector_query_hash=ei.get("connector_query_hash", ""),
@@ -993,7 +1021,7 @@ def _dict_to_audit_record(d: Dict[str, Any]) -> AuditRecord:
         )
 
     # Reconstruct SubclaimResult
-    def _dict_to_subclaim_result(sr: Dict[str, Any]) -> SubclaimResult:
+    def _dict_to_subclaim_result(sr: dict[str, Any]) -> SubclaimResult:
         from .v15_models import HumanReviewFlag, NodeType
 
         flags = []
@@ -1043,7 +1071,9 @@ def _dict_to_audit_record(d: Dict[str, Any]) -> AuditRecord:
                 insufficiency_trigger=logic.get("insufficiency_trigger"),
                 human_review_flags=logic_flags,
                 authority_ranking_applied=logic.get("authority_ranking_applied", False),
-                claim_expression_node_type=NodeType(logic.get("claim_expression_node_type", "ATOMIC")),
+                claim_expression_node_type=NodeType(
+                    logic.get("claim_expression_node_type", "ATOMIC")
+                ),
             ),
             synthesis_rule_engine_version=sr.get("synthesis_rule_engine_version", "v1.5"),
         )
@@ -1103,7 +1133,9 @@ def _dict_to_audit_record(d: Dict[str, Any]) -> AuditRecord:
             verdict_scope=VerdictScope(**fcr.get("verdict_scope", {})),
             insufficiency_reason=fcr.get("insufficiency_reason"),
             human_review_flags=[
-                HumanReviewFlag(f) if f in [e.value for e in HumanReviewFlag] else HumanReviewFlag.NONE
+                HumanReviewFlag(f)
+                if f in [e.value for e in HumanReviewFlag]
+                else HumanReviewFlag.NONE
                 for f in fcr.get("human_review_flags", [])
             ],
             provenance_spans=[
@@ -1168,7 +1200,7 @@ class ArtifactReplayer:
         self,
         premise_id: str,
         snapshot_id: str,
-    ) -> Tuple[Optional[FactCheckResult], Dict[str, Any]]:
+    ) -> tuple[FactCheckResult | None, dict[str, Any]]:
         """
         Replay a single premise from frozen records.
 
@@ -1190,16 +1222,18 @@ class ArtifactReplayer:
         self,
         snapshot_id: str,
         manifest: ReplayManifest,
-    ) -> Dict[str, Tuple[Optional[FactCheckResult], Dict[str, Any]]]:
+    ) -> dict[str, tuple[FactCheckResult | None, dict[str, Any]]]:
         """
         Replay an entire snapshot from frozen records.
 
         Verifies the Merkle root against stored authoritative hashes.
         """
         records = self.audit_store.get_by_snapshot(snapshot_id)
-        results: Dict[str, Tuple[Optional[FactCheckResult], Dict[str, Any]]] = {}
+        results: dict[str, tuple[FactCheckResult | None, dict[str, Any]]] = {}
 
-        stored_hashes = [r.authoritative_result_hash for r in records if r.authoritative_result_hash]
+        stored_hashes = [
+            r.authoritative_result_hash for r in records if r.authoritative_result_hash
+        ]
         computed_root = compute_merkle_root(stored_hashes)
         merkle_valid = computed_root == manifest.merkle_root
 
@@ -1212,7 +1246,7 @@ class ArtifactReplayer:
 
         return results
 
-    def _latest_valid_record(self, records: List[AuditRecord]) -> Optional[AuditRecord]:
+    def _latest_valid_record(self, records: list[AuditRecord]) -> AuditRecord | None:
         """Return the latest record that has not been invalidated."""
         # Check invalidations for each record, working backwards
         for record in reversed(records):
@@ -1221,11 +1255,9 @@ class ArtifactReplayer:
                 return record
         return None
 
-    def _replay_record(
-        self, record: AuditRecord
-    ) -> Tuple[Optional[FactCheckResult], Dict[str, Any]]:
+    def _replay_record(self, record: AuditRecord) -> tuple[FactCheckResult | None, dict[str, Any]]:
         """Replay a single AuditRecord."""
-        diagnostics: Dict[str, Any] = {
+        diagnostics: dict[str, Any] = {
             "audit_id": record.audit_id,
             "replay_mode": "artifact",
             "hash_verified": False,
@@ -1241,9 +1273,8 @@ class ArtifactReplayer:
             recomputed_hash = compute_authoritative_result_hash(
                 fact_check_result=record.fact_check_result,
                 input_premise_text=record.input_premise_text,
-                root_claim_expression=record.root_claim_expression or ClaimExpression(
-                    node_type=NodeType.ATOMIC, subclaim_id="default"
-                ),
+                root_claim_expression=record.root_claim_expression
+                or ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id="default"),
                 atomic_subclaims=record.atomic_subclaims or [],
                 evidence_items=record.evidence_items or [],
                 evidence_policy_version=record.evidence_policy_version,
@@ -1274,28 +1305,30 @@ def build_audit_record(
     fact_check_result: FactCheckResult,
     input_premise_text: str,
     input_frame_id: str = "",
-    input_provenance_spans: Optional[List[ProvenanceSpan]] = None,
-    root_claim_expression: Optional[ClaimExpression] = None,
-    atomic_subclaims: Optional[List[Any]] = None,
-    evidence_items: Optional[List[EvidenceItem]] = None,
-    evidence_retrieval_manifest: Optional[List[Dict[str, Any]]] = None,
+    input_provenance_spans: list[ProvenanceSpan] | None = None,
+    root_claim_expression: ClaimExpression | None = None,
+    atomic_subclaims: list[Any] | None = None,
+    evidence_items: list[EvidenceItem] | None = None,
+    evidence_retrieval_manifest: list[dict[str, Any]] | None = None,
     decomposition_version: str = "v1.5",
     decomposition_prompt_hash: str = "",
-    linking_queries: Optional[List[Dict[str, str]]] = None,
+    linking_queries: list[dict[str, str]] | None = None,
     evidence_policy_version: str = "",
-    connector_versions: Optional[Dict[str, str]] = None,
-    display_summary: Optional[DisplaySummary] = None,
+    connector_versions: dict[str, str] | None = None,
+    display_summary: DisplaySummary | None = None,
     previous_audit_hash: str = "",
     synthesis_rule_engine_version: str = "v1.5",
 ) -> AuditRecord:
     """
     Build a fully populated AuditRecord with all hashes computed.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     audit_id = f"audit_{uuid.uuid4().hex}"
 
     # Provide sensible defaults for backward compatibility in tests
-    root_ce = root_claim_expression or ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id="default")
+    root_ce = root_claim_expression or ClaimExpression(
+        node_type=NodeType.ATOMIC, subclaim_id="default"
+    )
     atomic_sc = atomic_subclaims or []
     ev_items = evidence_items or []
 
@@ -1368,7 +1401,7 @@ def create_additive_invalidation(
     authority: str = "HUMAN_REVIEW",
 ) -> AdditiveInvalidationRecord:
     """Create an additive invalidation linking target to corrected record."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     inv = AdditiveInvalidationRecord(
         invalidation_id=f"inv_{uuid.uuid4().hex}",
         target_audit_id=target_record.audit_id,

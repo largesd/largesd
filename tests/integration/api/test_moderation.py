@@ -1,6 +1,7 @@
 """API integration tests for moderation, content filtering, and rate limiting."""
-import os
+
 import importlib
+import os
 
 import pytest
 
@@ -61,7 +62,8 @@ def test_submit_post_allowed(client, auth_headers, created_debate):
 # ---------------------------------------------------------------------------
 def test_rate_limit_submit_post(client, auth_headers, created_debate):
     """Enable rate limiter and exceed the per-hour limit on submit_post."""
-    import tempfile, shutil
+    import shutil
+    import tempfile
 
     old_env = {k: os.environ.get(k) for k in ["ENABLE_RATE_LIMITER", "DEBATE_DB_PATH"]}
     temp_dir = tempfile.mkdtemp()
@@ -141,6 +143,7 @@ def test_rate_limit_submit_post(client, auth_headers, created_debate):
 # ---------------------------------------------------------------------------
 def test_login_required_rejects_missing_token(client, created_debate):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     resp = client.post(
         f"/api/debate/{created_debate}/activate",
         headers={"X-CSRF-Token": _get_csrf_from_cookie(client)},
@@ -151,6 +154,7 @@ def test_login_required_rejects_missing_token(client, created_debate):
 
 def test_login_required_rejects_invalid_token(client, created_debate):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     resp = client.post(
         f"/api/debate/{created_debate}/activate",
         headers={

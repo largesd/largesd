@@ -6,7 +6,7 @@ claim families to an allowed Tier-1 path and otherwise records why the claim
 must remain INSUFFICIENT.
 """
 
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from .models import EvidenceTier, PlannerDecision, Subclaim
 
@@ -15,14 +15,18 @@ class ConnectorPlanner:
     """Choose a narrow, inspectable connector path for each subclaim."""
 
     @staticmethod
-    def plan_claim(subclaims: List[Subclaim], connectors: Iterable[object], mode: str) -> List[PlannerDecision]:
-        decisions: List[PlannerDecision] = []
+    def plan_claim(
+        subclaims: list[Subclaim], connectors: Iterable[object], mode: str
+    ) -> list[PlannerDecision]:
+        decisions: list[PlannerDecision] = []
         for subclaim in subclaims:
             decisions.append(ConnectorPlanner.plan_subclaim(subclaim, connectors, mode))
         return decisions
 
     @staticmethod
-    def plan_subclaim(subclaim: Subclaim, connectors: Iterable[object], mode: str) -> PlannerDecision:
+    def plan_subclaim(
+        subclaim: Subclaim, connectors: Iterable[object], mode: str
+    ) -> PlannerDecision:
         if subclaim.claim_family == "unsupported":
             return PlannerDecision(
                 supported=False,

@@ -1,11 +1,12 @@
 """Unit tests for pipeline extract stage."""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
+import pytest
+
+from backend.extraction import ExtractedFact
 from backend.pipeline.context import PipelineContext
 from backend.pipeline.extract import extract_stage
-from backend.extraction import ExtractedSpan, ExtractedFact
 
 
 class FakeTopic:
@@ -28,13 +29,44 @@ def engine():
     e = MagicMock()
     e.db = MagicMock()
     e.db.get_posts_by_debate.return_value = [
-        {"post_id": "p1", "modulation_outcome": "allowed", "side": "FOR", "facts": "f", "inference": "i"},
-        {"post_id": "p2", "modulation_outcome": "blocked", "side": "AGAINST", "block_reason": "spam", "facts": "f", "inference": "i"},
+        {
+            "post_id": "p1",
+            "modulation_outcome": "allowed",
+            "side": "FOR",
+            "facts": "f",
+            "inference": "i",
+        },
+        {
+            "post_id": "p2",
+            "modulation_outcome": "blocked",
+            "side": "AGAINST",
+            "block_reason": "spam",
+            "facts": "f",
+            "inference": "i",
+        },
     ]
     e.db.get_latest_snapshot.return_value = None
     e.db.get_spans_by_post.return_value = [
-        {"span_id": "s1", "post_id": "p1", "start_offset": 0, "end_offset": 2, "span_text": "ab", "topic_id": "t1", "side": "FOR", "span_type": "fact"},
-        {"span_id": "s2", "post_id": "p1", "start_offset": 3, "end_offset": 5, "span_text": "cd", "topic_id": "t1", "side": "FOR", "span_type": "inference"},
+        {
+            "span_id": "s1",
+            "post_id": "p1",
+            "start_offset": 0,
+            "end_offset": 2,
+            "span_text": "ab",
+            "topic_id": "t1",
+            "side": "FOR",
+            "span_type": "fact",
+        },
+        {
+            "span_id": "s2",
+            "post_id": "p1",
+            "start_offset": 3,
+            "end_offset": 5,
+            "span_text": "cd",
+            "topic_id": "t1",
+            "side": "FOR",
+            "span_type": "inference",
+        },
     ]
 
     e.topic_engine = MagicMock()
@@ -55,9 +87,13 @@ def engine():
 
 def test_extract_stage_populates_ctx(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        frame_id="f1", frame_context="scope",
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        frame_id="f1",
+        frame_context="scope",
     )
     ctx = extract_stage(ctx)
 
@@ -78,9 +114,13 @@ def test_extract_stage_no_posts(engine):
     engine.db.get_posts_by_debate.return_value = []
     engine.topic_engine.extract_topics_from_posts.return_value = []
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        frame_id="f1", frame_context="scope",
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        frame_id="f1",
+        frame_context="scope",
     )
     ctx = extract_stage(ctx)
     assert ctx.allowed_posts == []

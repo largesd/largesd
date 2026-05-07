@@ -1,0 +1,66 @@
+REMEDIATION TASK SET: Review Summary and Execution Order
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Source plan reviewed:
+implementation_tasks/remediation_post_review.txt
+
+Purpose:
+This folder contains an improved, paste-ready split of the post-review
+remediation plan. Each numbered file is designed to be pasted into a separate
+LLM implementation conversation.
+
+Important review corrections made to the original plan:
+1. The flasgger failure is a lock-file consistency issue. flasgger is present
+   in requirements.in but absent from requirements.txt, so the fix belongs in
+   dependency lock repair, not only local virtualenv installation.
+2. Strict CSP blocks all inline script logic. Do not keep inline window variable
+   bootstrap scripts as an exception. Use external scripts, data attributes,
+   non-script JSON/data elements, or fetch API data instead.
+3. The static file catch-all in backend/routes/api_bp.py already serves
+   frontend/static/js/... as /static/js/..., so do not add a duplicate static
+   route unless verification proves it is needed.
+4. Mobile table CSS already targets .table in frontend/css/media.css. The
+   remaining mobile-table risk is incomplete data-label attributes and visual
+   verification, not merely adding a .table-responsive class.
+5. The blueprint split must preserve current public URLs. The original plan's
+   suggested /api/frames, /api/posts, and /api/petitions prefixes would be a
+   breaking API change. Split modules, but keep route decorator paths exactly
+   the same unless the user explicitly approves an API migration.
+6. Moving submit_post out of debate_bp changes the Flask endpoint name used by
+   route-specific rate limiting. Update the rate-limit map when splitting
+   debate routes.
+7. The email_processor regex replacement shown in the original plan had a typo.
+   Keep the regex as r"<[^>]+>" and add a security clarification comment.
+8. Accessibility scanning should be project-local and reproducible. Avoid
+   global npm installs in the implementation.
+
+Recommended execution order:
+1. 01_repair_dependency_lock_and_flasgger.txt
+2. 03_complete_mobile_table_behavior.txt
+3. 02_remove_inline_scripts_for_strict_csp.txt
+4. 04_split_governance_routes_without_url_changes.txt
+5. 05_split_debate_routes_without_url_changes.txt
+6. 06_shrink_app_v3_factory.txt
+7. 07_move_backend_archive_legacy_files.txt
+8. 08_clarify_email_html_plain_text_fallback.txt
+9. 09_add_accessibility_scan.txt
+10. 10_measure_and_enforce_api_route_coverage.txt
+11. 11_final_regression_and_handoff.txt
+
+Parallelism guidance:
+- Tasks 01, 07, and 08 have small, mostly independent write scopes.
+- Tasks 02 and 03 both touch frontend HTML/CSS and should not be done at the
+  same time in separate branches unless someone will merge carefully.
+- Tasks 04, 05, and 06 all touch backend/app_v3.py or route registration. Run
+  them sequentially in the order listed.
+- Task 11 should be last.
+
+General instructions for every task:
+1. Start with git status --short and do not revert unrelated user changes.
+2. Read the named files before editing.
+3. Keep the task's write scope tight. Do not implement other task files.
+4. Preserve existing public API URLs unless the task explicitly says otherwise.
+5. Run the task-specific tests listed in the file.
+6. In the final response, list changed files and exact tests run.

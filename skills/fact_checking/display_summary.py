@@ -15,18 +15,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
 
 from .v15_audit import DisplaySummary
 from .v15_models import (
     FactCheckResult,
     HumanReviewFlag,
-    NodeType,
     SubclaimResult,
-    SynthesisLogic,
 )
-
 
 # ---------------------------------------------------------------------------
 # Consistency check result
@@ -38,7 +34,7 @@ class ConsistencyCheckResult:
     """Result of a display-summary consistency check."""
 
     passed: bool
-    violations: List[str] = field(default_factory=list)
+    violations: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -102,9 +98,9 @@ class DisplaySummaryGenerator:
     def generate(
         self,
         result: FactCheckResult,
-        custom_summary_text: Optional[str] = None,
-        custom_explanation: Optional[str] = None,
-    ) -> Tuple[DisplaySummary, ConsistencyCheckResult]:
+        custom_summary_text: str | None = None,
+        custom_explanation: str | None = None,
+    ) -> tuple[DisplaySummary, ConsistencyCheckResult]:
         """
         Generate a DisplaySummary for a FactCheckResult.
 
@@ -136,7 +132,7 @@ class DisplaySummaryGenerator:
                 consistency = ConsistencyCheckResult(passed=True, violations=[])
 
         # Populate generated-at timestamp and generation model info
-        candidate.generated_at = datetime.now(timezone.utc).isoformat()
+        candidate.generated_at = datetime.now(UTC).isoformat()
         candidate.generation_model = "synthesis_logic_template_v1"
 
         return candidate, consistency
@@ -148,8 +144,8 @@ class DisplaySummaryGenerator:
     def _build_candidate(
         self,
         result: FactCheckResult,
-        custom_summary_text: Optional[str],
-        custom_explanation: Optional[str],
+        custom_summary_text: str | None,
+        custom_explanation: str | None,
     ) -> DisplaySummary:
         """Build a candidate DisplaySummary."""
         if custom_summary_text is not None or custom_explanation is not None:
@@ -171,10 +167,10 @@ class DisplaySummaryGenerator:
 
 def generate_display_summary(
     result: FactCheckResult,
-    custom_summary_text: Optional[str] = None,
-    custom_explanation: Optional[str] = None,
+    custom_summary_text: str | None = None,
+    custom_explanation: str | None = None,
     strict: bool = True,
-) -> Tuple[DisplaySummary, ConsistencyCheckResult]:
+) -> tuple[DisplaySummary, ConsistencyCheckResult]:
     """
     Convenience function: generate and validate a DisplaySummary.
 
@@ -206,7 +202,7 @@ def check_summary_consistency(
     - tier consistency
     - insufficiency_reason consistency
     """
-    violations: List[str] = []
+    violations: list[str] = []
     summary_text = display_summary.summary_text.lower()
     full_text = (display_summary.summary_text + " " + display_summary.explanation).lower()
 
@@ -228,9 +224,7 @@ def check_summary_consistency(
         violations.append(tier_violation)
 
     # --- Insufficiency reason consistency (full text) ---
-    reason_violation = _check_insufficiency_reason_in_text(
-        result.insufficiency_reason, full_text
-    )
+    reason_violation = _check_insufficiency_reason_in_text(result.insufficiency_reason, full_text)
     if reason_violation:
         violations.append(reason_violation)
 
@@ -240,14 +234,14 @@ def check_summary_consistency(
     )
 
 
-def _check_status_in_text(status: str, text: str) -> Optional[str]:
+def _check_status_in_text(status: str, text: str) -> str | None:
     """Detect contradictions between status and summary text."""
     # Use word-boundary regex to avoid flagging phrases like "true or false"
     # Strong verdict words that clearly imply a status
     supported_words = ["supported", "confirmed", "verified"]
     refuted_words = ["refuted", "incorrect", "debunked"]
 
-    def _has_word(words: List[str]) -> Optional[str]:
+    def _has_word(words: list[str]) -> str | None:
         for w in words:
             if re.search(rf"\b{re.escape(w)}\b", text):
                 return w
@@ -272,7 +266,9 @@ def _check_status_in_text(status: str, text: str) -> Optional[str]:
             return f"status_inconsistency: result is INSUFFICIENT but text contains '{found_supported}'"
         found_refuted = _has_word(refuted_words)
         if found_refuted:
-            return f"status_inconsistency: result is INSUFFICIENT but text contains '{found_refuted}'"
+            return (
+                f"status_inconsistency: result is INSUFFICIENT but text contains '{found_refuted}'"
+            )
         # Also flag direct verdict phrases that clearly assert truth/falsity
         if re.search(r"\bis false\b", text):
             return "status_inconsistency: result is INSUFFICIENT but text contains 'is false'"
@@ -281,7 +277,7 @@ def _check_status_in_text(status: str, text: str) -> Optional[str]:
     return None
 
 
-def _check_p_in_text(p: float, text: str) -> Optional[str]:
+def _check_p_in_text(p: float, text: str) -> str | None:
     """Detect contradictions between p and summary text."""
     # Look for explicit probability mentions like "p=0.0", "p value is 0.0", etc.
     # This is a best-effort heuristic.
@@ -310,14 +306,16 @@ def _check_p_in_text(p: float, text: str) -> Optional[str]:
             # Only flag extreme mismatches (e.g., 100% when p=0.0)
             expected_pct = int(p * 100)
             if abs(stated_pct - expected_pct) > 25:
-                return f"p_inconsistency: text states {stated_pct}% but result p={p} ({expected_pct}%)"
+                return (
+                    f"p_inconsistency: text states {stated_pct}% but result p={p} ({expected_pct}%)"
+                )
         except ValueError:
             continue
 
     return None
 
 
-def _check_tier_in_text(tier: Optional[int], text: str) -> Optional[str]:
+def _check_tier_in_text(tier: int | None, text: str) -> str | None:
     """Detect contradictions between best_evidence_tier and summary text."""
     if tier is None:
         return None
@@ -330,9 +328,7 @@ def _check_tier_in_text(tier: Optional[int], text: str) -> Optional[str]:
     return None
 
 
-def _check_insufficiency_reason_in_text(
-    reason: Optional[str], text: str
-) -> Optional[str]:
+def _check_insufficiency_reason_in_text(reason: str | None, text: str) -> str | None:
     """Detect contradictions between insufficiency_reason and summary text."""
     if reason is None:
         # If there's no reason, text should not mention specific reasons
@@ -341,11 +337,15 @@ def _check_insufficiency_reason_in_text(
 
     # If reason exists, check that text doesn't state a *different* specific reason
     # This is best-effort: map known reasons to keyword sets
-    reason_keywords: Dict[str, List[str]] = {
+    reason_keywords: dict[str, list[str]] = {
         "entity_resolution_failure": ["entity resolution", "ambiguous entity"],
         "policy_gap": ["policy gap", "no policy"],
         "evidence_scope_narrower_than_claim": ["scope narrower", "narrower scope"],
-        "no_evidence_retrieved": ["no evidence was retrieved", "no evidence retrieved", "no evidence found"],
+        "no_evidence_retrieved": [
+            "no evidence was retrieved",
+            "no evidence retrieved",
+            "no evidence found",
+        ],
         "connector_failure": ["connector failure"],
         "connector_offline_placeholder": ["offline"],
         "only_tier3_evidence": ["only tier 3", "tier 3 only"],
@@ -391,7 +391,7 @@ def _generate_template_summary(result: FactCheckResult) -> DisplaySummary:
     summary_text = _STATUS_VERDICT_TEMPLATES.get(status, "Verdict unavailable.")
 
     # Explanation paragraphs
-    explanation_parts: List[str] = []
+    explanation_parts: list[str] = []
 
     # p value statement
     explanation_parts.append(_p_statement(status, p))
@@ -402,14 +402,14 @@ def _generate_template_summary(result: FactCheckResult) -> DisplaySummary:
 
     # Insufficiency reason
     if reason:
-        reason_explanation = _INSUFFICIENCY_REASON_EXPLANATIONS.get(
-            reason, f"Reason: {reason}."
-        )
+        reason_explanation = _INSUFFICIENCY_REASON_EXPLANATIONS.get(reason, f"Reason: {reason}.")
         explanation_parts.append(reason_explanation)
 
     # Human review flags
     if flags:
-        flag_notes = [_REVIEW_FLAG_EXPLANATIONS.get(f, str(f)) for f in flags if f != HumanReviewFlag.NONE]
+        flag_notes = [
+            _REVIEW_FLAG_EXPLANATIONS.get(f, str(f)) for f in flags if f != HumanReviewFlag.NONE
+        ]
         if flag_notes:
             explanation_parts.append("Review flags: " + "; ".join(flag_notes))
 
@@ -474,8 +474,8 @@ def _confidence_statement(confidence: float) -> str:
     return f"Very low confidence ({confidence:.2f})."
 
 
-def _subclaim_breakdown(subclaim_results: List[SubclaimResult]) -> str:
-    parts: List[str] = []
+def _subclaim_breakdown(subclaim_results: list[SubclaimResult]) -> str:
+    parts: list[str] = []
     for sr in subclaim_results:
         parts.append(f"{sr.subclaim_id}: {sr.status} (p={sr.p})")
     return "Subclaim breakdown: " + "; ".join(parts) + "."

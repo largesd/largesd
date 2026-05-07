@@ -14,9 +14,9 @@ connector contract.
 
 import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional
 
 from .connectors import SourceConnector
 from .models import EvidenceTier, SourceConfidence, SourceResult
@@ -27,36 +27,39 @@ class OfficeTerm:
     role: str
     jurisdiction: str
     start_year: int
-    end_year: Optional[int]
+    end_year: int | None
 
 
 @dataclass(frozen=True)
 class EntitySnapshot:
     qid: str
     canonical_name: str
-    aliases: List[str] = field(default_factory=list)
-    inception_year: Optional[int] = None
-    headquarters: Optional[str] = None
-    location: Optional[str] = None
-    birth_year: Optional[int] = None
-    death_year: Optional[int] = None
-    office_terms: List[OfficeTerm] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
+    inception_year: int | None = None
+    headquarters: str | None = None
+    location: str | None = None
+    birth_year: int | None = None
+    death_year: int | None = None
+    office_terms: list[OfficeTerm] = field(default_factory=list)
 
 
 class SnapshotWikidataBackend:
     """Small deterministic snapshot used for tests and offline runtime safety."""
 
-    def __init__(self, entities: Optional[Iterable[EntitySnapshot]] = None):
+    def __init__(self, entities: Iterable[EntitySnapshot] | None = None):
         snapshots = list(entities) if entities is not None else list(DEFAULT_ENTITY_SNAPSHOTS)
         self._entities = snapshots
-        self._alias_index: Dict[str, List[EntitySnapshot]] = {}
+        self._alias_index: dict[str, list[EntitySnapshot]] = {}
 
         for entity in snapshots:
-            alias_set = {entity.canonical_name.lower(), *(alias.lower() for alias in entity.aliases)}
+            alias_set = {
+                entity.canonical_name.lower(),
+                *(alias.lower() for alias in entity.aliases),
+            }
             for alias in alias_set:
                 self._alias_index.setdefault(alias, []).append(entity)
 
-    def resolve(self, alias: str) -> Optional[EntitySnapshot]:
+    def resolve(self, alias: str) -> EntitySnapshot | None:
         matches = self._alias_index.get(alias.strip().lower(), [])
         if len(matches) != 1:
             return None
@@ -103,7 +106,7 @@ class WikidataConnector(SourceConnector):
     Property-whitelisted structured connector for narrow public-entity claims.
     """
 
-    def __init__(self, backend: Optional[SnapshotWikidataBackend] = None):
+    def __init__(self, backend: SnapshotWikidataBackend | None = None):
         self._backend = backend or SnapshotWikidataBackend()
 
     @property
@@ -114,7 +117,7 @@ class WikidataConnector(SourceConnector):
     def tier(self) -> EvidenceTier:
         return EvidenceTier.TIER_1
 
-    def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
+    def query(self, normalized_claim: str, claim_hash: str) -> SourceResult | None:
         parser = (
             self._parse_inception_claim,
             self._parse_headquarters_claim,
@@ -149,13 +152,15 @@ class WikidataConnector(SourceConnector):
             source_title=f"Wikidata entity data for {entity.canonical_name.title()}",
             confidence=confidence,
             excerpt=excerpt,
-            content_hash=hashlib.sha256(f"{entity.qid}:{normalized_claim}".encode("utf-8")).hexdigest()[:32],
+            content_hash=hashlib.sha256(f"{entity.qid}:{normalized_claim}".encode()).hexdigest()[
+                :32
+            ],
             retrieved_at=datetime.now(),
             tier=self.tier,
         )
 
     @staticmethod
-    def _parse_inception_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_inception_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) was founded in (?P<year>\d{4})\.?$", claim)
         if not match:
             return None
@@ -166,7 +171,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_headquarters_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_headquarters_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) is headquartered in (?P<place>.+?)\.?$", claim)
         if not match:
             return None
@@ -177,7 +182,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_location_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_location_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) is (?:located )?in (?P<place>.+?)\.?$", claim)
         if not match:
             return None
@@ -188,7 +193,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_birth_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_birth_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) was born in (?P<year>\d{4})\.?$", claim)
         if not match:
             return None
@@ -199,7 +204,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_death_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_death_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) died in (?P<year>\d{4})\.?$", claim)
         if not match:
             return None
@@ -210,7 +215,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_life_status_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_life_status_claim(claim: str) -> dict[str, object] | None:
         match = re.match(r"^(?P<entity>.+?) (?:is|was) (?P<status>alive|dead)\.?$", claim)
         if not match:
             return None
@@ -221,7 +226,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _parse_office_claim(claim: str) -> Optional[Dict[str, object]]:
+    def _parse_office_claim(claim: str) -> dict[str, object] | None:
         match = re.match(
             r"^(?P<entity>.+?) (?:is|was) (?:the )?(?P<role>prime minister|president|mayor|governor|ceo|chief executive officer) of (?P<jurisdiction>.+?)(?: in (?P<year>\d{4}))?\.?$",
             claim,
@@ -237,7 +242,7 @@ class WikidataConnector(SourceConnector):
         }
 
     @staticmethod
-    def _resolve_inception_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_inception_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if entity.inception_year is None:
             return None
         claimed_year = parsed["year"]
@@ -246,10 +251,13 @@ class WikidataConnector(SourceConnector):
             if entity.inception_year == claimed_year
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata inception year for {entity.canonical_name.title()} is {entity.inception_year}."
+        return (
+            confidence,
+            f"Wikidata inception year for {entity.canonical_name.title()} is {entity.inception_year}.",
+        )
 
     @staticmethod
-    def _resolve_headquarters_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_headquarters_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if not entity.headquarters:
             return None
         claimed_place = str(parsed["place"]).lower()
@@ -258,10 +266,13 @@ class WikidataConnector(SourceConnector):
             if entity.headquarters.lower() == claimed_place
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata headquarters location for {entity.canonical_name.title()} is {entity.headquarters.title()}."
+        return (
+            confidence,
+            f"Wikidata headquarters location for {entity.canonical_name.title()} is {entity.headquarters.title()}.",
+        )
 
     @staticmethod
-    def _resolve_location_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_location_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if not entity.location:
             return None
         claimed_place = str(parsed["place"]).lower()
@@ -270,10 +281,13 @@ class WikidataConnector(SourceConnector):
             if entity.location.lower() == claimed_place
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata administrative location for {entity.canonical_name.title()} is {entity.location.title()}."
+        return (
+            confidence,
+            f"Wikidata administrative location for {entity.canonical_name.title()} is {entity.location.title()}.",
+        )
 
     @staticmethod
-    def _resolve_birth_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_birth_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if entity.birth_year is None:
             return None
         claimed_year = parsed["year"]
@@ -282,10 +296,13 @@ class WikidataConnector(SourceConnector):
             if entity.birth_year == claimed_year
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata birth year for {entity.canonical_name.title()} is {entity.birth_year}."
+        return (
+            confidence,
+            f"Wikidata birth year for {entity.canonical_name.title()} is {entity.birth_year}.",
+        )
 
     @staticmethod
-    def _resolve_death_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_death_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if entity.death_year is None:
             return None
         claimed_year = parsed["year"]
@@ -294,10 +311,13 @@ class WikidataConnector(SourceConnector):
             if entity.death_year == claimed_year
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata death year for {entity.canonical_name.title()} is {entity.death_year}."
+        return (
+            confidence,
+            f"Wikidata death year for {entity.canonical_name.title()} is {entity.death_year}.",
+        )
 
     @staticmethod
-    def _resolve_life_status_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_life_status_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         claimed_status = str(parsed["status"]).lower()
         actual_status = "dead" if entity.death_year is not None else "alive"
         confidence = (
@@ -305,10 +325,13 @@ class WikidataConnector(SourceConnector):
             if claimed_status == actual_status
             else SourceConfidence.CONTRADICTS
         )
-        return confidence, f"Wikidata life status for {entity.canonical_name.title()} is {actual_status}."
+        return (
+            confidence,
+            f"Wikidata life status for {entity.canonical_name.title()} is {actual_status}.",
+        )
 
     @staticmethod
-    def _resolve_office_claim(entity: EntitySnapshot, parsed: Dict[str, object]):
+    def _resolve_office_claim(entity: EntitySnapshot, parsed: dict[str, object]):
         if not entity.office_terms:
             return None
 

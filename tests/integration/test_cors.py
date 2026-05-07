@@ -6,10 +6,10 @@ Acceptance criteria:
   • No wildcard (*) origin in production
   • Integration tests verify origin blocking
 """
-import os
-import sys
-import warnings
+
 import importlib
+import os
+import warnings
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +24,7 @@ def _reload_app_v3_with_env(**env_overrides):
             os.environ[key] = value
 
     import backend.app_v3 as app_v3
+
     app_module = importlib.reload(app_v3)
     app_module.app.config["TESTING"] = True
     return app_module
@@ -71,6 +72,31 @@ def test_cors_preflight_disallowed_origin():
     # Flask-CORS does not add ACAO for disallowed origins
     assert "Access-Control-Allow-Origin" not in resp.headers
     print("✓ Disallowed origin preflight has no CORS headers")
+
+
+def test_cors_explicitly_empty_allowed_origins_disables_without_warning():
+    """An explicitly blank ALLOWED_ORIGINS should disable CORS without warning."""
+    os.environ["ALLOWED_ORIGINS"] = ""
+    os.environ["DISABLE_JOB_WORKER"] = "1"
+    os.environ["SECRET_KEY"] = "test-secret-key-auth-session-32-bytes"
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        app_module = _reload_app_v3_with_env()
+        assert not any(
+            "ALLOWED_ORIGINS not set" in str(warning.message) for warning in w
+        ), f"Did not expect a missing-ALLOWED_ORIGINS warning, got: {[str(wi.message) for wi in w]}"
+
+    client = app_module.app.test_client()
+    resp = client.options(
+        "/api/health",
+        headers={
+            "Origin": "http://localhost:5000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert "Access-Control-Allow-Origin" not in resp.headers
+    print("✓ Explicitly blank ALLOWED_ORIGINS disables CORS without warning")
 
 
 def test_cors_missing_allowed_origins_warning():

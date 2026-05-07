@@ -21,14 +21,12 @@ Usage:
   # Custom server URL
   API_BASE=http://localhost:5000 python scripts/smoke_test_api.py
 """
+
 from __future__ import annotations
 
-import json
 import os
 import sys
 import time
-from datetime import datetime
-from typing import Any
 
 import requests
 
@@ -187,7 +185,7 @@ class SmokeTestClient:
             data = self._get(f"/api/debate/snapshot-jobs/{job_id}")
             status = data.get("status")
             progress = data.get("progress")
-            if isinstance(progress, (int, float)):
+            if isinstance(progress, int | float):
                 pct = f" ({int(progress * 100)}%)"
             else:
                 pct = ""
@@ -261,7 +259,9 @@ def main() -> int:
     local_provider = os.getenv("LLM_PROVIDER")
     local_model = os.getenv("OPENROUTER_MODEL")
     if local_provider or local_model:
-        print(f"Local env hint: provider={local_provider or '(unset)'} model={local_model or '(unset)'}")
+        print(
+            f"Local env hint: provider={local_provider or '(unset)'} model={local_model or '(unset)'}"
+        )
         print("Actual server runtime is reported from snapshot metadata after generation.")
     print()
 
@@ -301,6 +301,7 @@ def main() -> int:
         print()
         print(_c(Colors.FAIL, f"SMOKE TEST FAILED: {e}"))
         import traceback
+
         traceback.print_exc()
         return 1
 

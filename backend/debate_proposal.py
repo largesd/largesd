@@ -6,8 +6,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
-
+from typing import Any
 
 DEFAULT_MODERATION_CRITERIA = (
     "Allow good-faith arguments that engage the motion directly. Block harassment, "
@@ -57,7 +56,7 @@ DEFAULT_SCOPE_CONSTRAINTS = [
     "Prioritize arguments that materially affect a neutral decision-maker's conclusion.",
 ]
 
-REQUIRED_DEBATE_FIELDS: Tuple[Tuple[str, str], ...] = (
+REQUIRED_DEBATE_FIELDS: tuple[tuple[str, str], ...] = (
     ("motion", "motion"),
     ("moderation_criteria", "moderation criteria"),
     ("frame", "debate frame"),
@@ -68,7 +67,7 @@ def _clean_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _clean_list_of_strings(value: Any) -> List[str]:
+def _clean_list_of_strings(value: Any) -> list[str]:
     if isinstance(value, list):
         return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
@@ -88,7 +87,7 @@ def _normalize_side_id(label: str) -> str:
     return normalized or "SIDE"
 
 
-def _normalize_sides(value: Any) -> List[Dict[str, str]]:
+def _normalize_sides(value: Any) -> list[dict[str, str]]:
     if isinstance(value, str):
         raw_items = []
         for line in value.splitlines():
@@ -105,7 +104,7 @@ def _normalize_sides(value: Any) -> List[Dict[str, str]]:
     else:
         raw_items = []
 
-    normalized: List[Dict[str, str]] = []
+    normalized: list[dict[str, str]] = []
     seen_ids = set()
     for item in raw_items:
         if isinstance(item, str):
@@ -115,7 +114,9 @@ def _normalize_sides(value: Any) -> List[Dict[str, str]]:
         elif isinstance(item, dict):
             label = _clean_text(item.get("label") or item.get("name") or item.get("side"))
             description = _clean_text(item.get("description") or item.get("stance"))
-            side_id = _clean_text(item.get("side_id") or item.get("id")) or _normalize_side_id(label)
+            side_id = _clean_text(item.get("side_id") or item.get("id")) or _normalize_side_id(
+                label
+            )
         else:
             continue
 
@@ -140,7 +141,7 @@ def _normalize_sides(value: Any) -> List[Dict[str, str]]:
     return normalized or [dict(side) for side in DEFAULT_FRAME_SIDES]
 
 
-def _normalize_definitions(value: Any) -> List[Dict[str, str]]:
+def _normalize_definitions(value: Any) -> list[dict[str, str]]:
     if isinstance(value, str):
         raw_items = []
         for line in value.splitlines():
@@ -176,14 +177,15 @@ def _normalize_definitions(value: Any) -> List[Dict[str, str]]:
         normalized.append(
             {
                 "term": term,
-                "definition": definition or "Interpret this term according to the frame context and ordinary usage.",
+                "definition": definition
+                or "Interpret this term according to the frame context and ordinary usage.",
             }
         )
 
     return normalized or [dict(item) for item in DEFAULT_DEFINITIONS]
 
 
-def build_frame_summary(frame: Dict[str, Any]) -> str:
+def build_frame_summary(frame: dict[str, Any]) -> str:
     summary = _clean_text(frame.get("frame_summary") or frame.get("summary"))
     if summary:
         return summary
@@ -202,7 +204,7 @@ def build_frame_summary(frame: Dict[str, Any]) -> str:
 def build_internal_scope(
     motion: str,
     moderation_criteria: str,
-    frame: Dict[str, Any],
+    frame: dict[str, Any],
 ) -> str:
     """Compose the evaluation context used by extraction, scoring, and audits."""
     sides_text = "; ".join(
@@ -230,17 +232,17 @@ def build_internal_scope(
 
 
 def _normalize_frame_payload(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     motion: str,
-    prior_frame: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    prior_frame: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     prior_frame = prior_frame or {}
 
     explicit_frame = payload.get("frame")
     if isinstance(payload.get("debate_frame"), dict):
         explicit_frame = payload.get("debate_frame")
 
-    frame_source: Dict[str, Any] = explicit_frame if isinstance(explicit_frame, dict) else {}
+    frame_source: dict[str, Any] = explicit_frame if isinstance(explicit_frame, dict) else {}
 
     stage = _clean_text(
         frame_source.get("stage")
@@ -282,9 +284,7 @@ def _normalize_frame_payload(
         scope_constraints = list(DEFAULT_SCOPE_CONSTRAINTS)
 
     notes = _clean_text(
-        frame_source.get("notes")
-        or payload.get("frame_notes")
-        or prior_frame.get("notes")
+        frame_source.get("notes") or payload.get("frame_notes") or prior_frame.get("notes")
     )
     frame_summary = _clean_text(
         frame_source.get("frame_summary")
@@ -296,7 +296,9 @@ def _normalize_frame_payload(
 
     frame = {
         "stage": stage,
-        "label": _clean_text(frame_source.get("label") or payload.get("frame_label") or prior_frame.get("label")),
+        "label": _clean_text(
+            frame_source.get("label") or payload.get("frame_label") or prior_frame.get("label")
+        ),
         "motion": motion,
         "frame_summary": frame_summary,
         "sides": sides,
@@ -309,18 +311,41 @@ def _normalize_frame_payload(
             or payload.get("framing_debate_id")
             or prior_frame.get("framing_debate_id")
         ),
-        "frame_mode": _clean_text(frame_source.get("frame_mode") or payload.get("frame_mode") or prior_frame.get("frame_mode") or "single"),
-        "review_date": _clean_text(frame_source.get("review_date") or payload.get("review_date") or prior_frame.get("review_date")),
-        "review_cadence_months": int(frame_source.get("review_cadence_months") or payload.get("review_cadence_months") or prior_frame.get("review_cadence_months") or 6),
-        "emergency_override_reason": _clean_text(frame_source.get("emergency_override_reason") or prior_frame.get("emergency_override_reason")),
-        "emergency_override_by": _clean_text(frame_source.get("emergency_override_by") or prior_frame.get("emergency_override_by")),
-        "governance_decision_id": _clean_text(frame_source.get("governance_decision_id") or payload.get("governance_decision_id") or prior_frame.get("governance_decision_id")),
+        "frame_mode": _clean_text(
+            frame_source.get("frame_mode")
+            or payload.get("frame_mode")
+            or prior_frame.get("frame_mode")
+            or "single"
+        ),
+        "review_date": _clean_text(
+            frame_source.get("review_date")
+            or payload.get("review_date")
+            or prior_frame.get("review_date")
+        ),
+        "review_cadence_months": int(
+            frame_source.get("review_cadence_months")
+            or payload.get("review_cadence_months")
+            or prior_frame.get("review_cadence_months")
+            or 6
+        ),
+        "emergency_override_reason": _clean_text(
+            frame_source.get("emergency_override_reason")
+            or prior_frame.get("emergency_override_reason")
+        ),
+        "emergency_override_by": _clean_text(
+            frame_source.get("emergency_override_by") or prior_frame.get("emergency_override_by")
+        ),
+        "governance_decision_id": _clean_text(
+            frame_source.get("governance_decision_id")
+            or payload.get("governance_decision_id")
+            or prior_frame.get("governance_decision_id")
+        ),
     }
     frame["frame_summary"] = build_frame_summary(frame)
     return frame
 
 
-def serialize_frame_record(frame: Dict[str, Any]) -> Dict[str, Any]:
+def serialize_frame_record(frame: dict[str, Any]) -> dict[str, Any]:
     return {
         "frame_id": frame.get("frame_id"),
         "debate_id": frame.get("debate_id"),
@@ -347,7 +372,7 @@ def serialize_frame_record(frame: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def hydrate_frame_record(record: Dict[str, Any] | None) -> Dict[str, Any] | None:
+def hydrate_frame_record(record: dict[str, Any] | None) -> dict[str, Any] | None:
     if record is None:
         return None
 
@@ -371,16 +396,18 @@ def hydrate_frame_record(record: Dict[str, Any] | None) -> Dict[str, Any] | None
 
 
 def parse_debate_proposal_payload(
-    payload: Dict[str, Any] | None,
-    prior_frame: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], List[str]]:
+    payload: dict[str, Any] | None,
+    prior_frame: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
     """
     Parse a user-supplied debate proposal payload.
 
     Returns a normalized proposal dictionary plus a list of human-readable missing fields.
     """
     data = payload or {}
-    motion = _clean_text(data.get("motion") or data.get("resolution") or prior_frame and prior_frame.get("motion"))
+    motion = _clean_text(
+        data.get("motion") or data.get("resolution") or prior_frame and prior_frame.get("motion")
+    )
     moderation_criteria = _clean_text(data.get("moderation_criteria")) or (
         prior_frame.get("moderation_criteria") if prior_frame else ""
     )
@@ -418,7 +445,7 @@ def parse_debate_proposal_payload(
     return proposal, missing_fields
 
 
-def hydrate_debate_record(record: Dict[str, Any] | None) -> Dict[str, Any] | None:
+def hydrate_debate_record(record: dict[str, Any] | None) -> dict[str, Any] | None:
     """Fill compatibility aliases on a debate record loaded from storage."""
     if record is None:
         return None

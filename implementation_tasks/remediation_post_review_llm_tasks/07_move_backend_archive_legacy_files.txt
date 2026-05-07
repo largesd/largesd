@@ -1,0 +1,49 @@
+TASK 07: Move backend/archive Legacy Files
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Remove stale active-looking code from backend/archive while preserving it under
+the top-level archive/ folder for historical reference.
+
+Current files:
+- backend/archive/app.py
+- backend/archive/app_v2.py
+- backend/archive/debate_engine.py
+
+Write scope:
+- backend/archive/*
+- archive/*
+- docs or comments only if needed to clarify where legacy files went
+
+Implementation steps:
+1. Confirm no imports depend on backend/archive:
+   - rg -n 'backend\\.archive|from backend.archive|import backend.archive' .
+   - rg -n 'from archive|import archive' backend scripts tests
+2. If there are no active imports, move files with git mv when possible:
+   - git mv backend/archive/app.py archive/backend_app_legacy.py
+   - git mv backend/archive/app_v2.py archive/backend_app_v2_legacy.py
+   - git mv backend/archive/debate_engine.py archive/backend_debate_engine_legacy.py
+3. Remove backend/archive only if it is empty:
+   - rmdir backend/archive
+4. If imports exist, do not move blindly. First determine whether they are real
+   runtime imports or archive references, then update or report the blocker.
+
+Acceptance criteria:
+- backend/archive no longer exists, or exists only if a real blocker was found
+  and documented.
+- Legacy files are preserved under top-level archive/.
+- Application imports still work.
+- Security scans no longer need to exclude backend/archive because it is gone.
+
+Required tests:
+- python -c "from backend.app_v3 import create_app; app = create_app(); print(app.name)"
+- python -m pytest tests/unit/test_sanitize.py -q
+- python scripts/smoke_test_api.py
+
+Guardrails:
+- Do not delete legacy files unless the user explicitly asks.
+- Do not use git reset or checkout to clean up.
+- If top-level archive/ already has conflicting filenames, choose clear unique
+  names and document them in the final response.

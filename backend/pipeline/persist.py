@@ -27,7 +27,9 @@ def persist_stage(ctx: PipelineContext) -> PipelineContext:
     replay_manifest = ctx.replay_manifest or {}
     recipe_versions = ctx.recipe_versions or {}
 
-    snapshot_id = f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{__import__('uuid').uuid4().hex[:4]}"
+    snapshot_id = (
+        f"snap_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{__import__('uuid').uuid4().hex[:4]}"
+    )
     snapshot_data = {
         "snapshot_id": snapshot_id,
         "debate_id": debate_id,
@@ -70,14 +72,16 @@ def persist_stage(ctx: PipelineContext) -> PipelineContext:
     engine._debate_cache[debate_id] = engine._attach_active_frame(debate)
 
     for audit_type, audit_data in (ctx.audit_records or {}).items():
-        engine.db.save_audit({
-            "audit_id": f"audit_{snapshot_id}_{audit_type}",
-            "snapshot_id": snapshot_id,
-            "audit_type": audit_type,
-            "result_data": audit_data,
-            "created_at": datetime.now().isoformat(),
-            "request_id": ctx.request_id,
-        })
+        engine.db.save_audit(
+            {
+                "audit_id": f"audit_{snapshot_id}_{audit_type}",
+                "snapshot_id": snapshot_id,
+                "audit_type": audit_type,
+                "result_data": audit_data,
+                "created_at": datetime.now().isoformat(),
+                "request_id": ctx.request_id,
+            }
+        )
 
     frame_info = engine.get_frame_info()
     result = {
@@ -87,11 +91,17 @@ def persist_stage(ctx: PipelineContext) -> PipelineContext:
         "runner_up": verdict_result.get("runner_up"),
         "topics": [
             {
-                "topic_id": t.topic_id, "name": t.name, "scope": t.scope,
-                "relevance": t.relevance, "drift_score": t.drift_score,
-                "coherence": t.coherence, "distinctness": t.distinctness,
-                "summary_for": t.summary_for, "summary_against": t.summary_against,
-                "operation": t.operation, "parent_topic_ids": t.parent_topic_ids,
+                "topic_id": t.topic_id,
+                "name": t.name,
+                "scope": t.scope,
+                "relevance": t.relevance,
+                "drift_score": t.drift_score,
+                "coherence": t.coherence,
+                "distinctness": t.distinctness,
+                "summary_for": t.summary_for,
+                "summary_against": t.summary_against,
+                "operation": t.operation,
+                "parent_topic_ids": t.parent_topic_ids,
             }
             for t in topics
         ],

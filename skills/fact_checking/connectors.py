@@ -11,8 +11,8 @@ import hashlib
 import json
 import os
 import random
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from .models import (
     EvidenceRecord,
@@ -26,7 +26,7 @@ from .v15_models import EvidenceItem
 class SourceConnector:
     """Protocol-like base class for source connectors."""
 
-    def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
+    def query(self, normalized_claim: str, claim_hash: str) -> SourceResult | None:
         raise NotImplementedError
 
     @property
@@ -38,7 +38,7 @@ class SourceConnector:
         raise NotImplementedError
 
 
-def _coerce_datetime(value: Any) -> Optional[datetime]:
+def _coerce_datetime(value: Any) -> datetime | None:
     if value in (None, ""):
         return None
     if isinstance(value, datetime):
@@ -86,7 +86,7 @@ class GroundTruthDB:
 
     def __init__(self, db_path: str = "data/ground_truth.json"):
         self.db_path = db_path
-        self._entries: Dict[str, Dict[str, Any]] = {}
+        self._entries: dict[str, dict[str, Any]] = {}
         self._load()
 
     def _load(self):
@@ -95,7 +95,7 @@ class GroundTruthDB:
             return
 
         try:
-            with open(self.db_path, "r", encoding="utf-8") as handle:
+            with open(self.db_path, encoding="utf-8") as handle:
                 raw = handle.read().strip()
         except OSError:
             self._entries = {}
@@ -118,22 +118,22 @@ class GroundTruthDB:
         with open(self.db_path, "w", encoding="utf-8") as handle:
             json.dump(self._entries, handle, indent=2, sort_keys=True)
 
-    def lookup(self, claim_hash: str) -> Optional[Dict[str, Any]]:
+    def lookup(self, claim_hash: str) -> dict[str, Any] | None:
         entry = self._entries.get(claim_hash)
         if not isinstance(entry, dict):
             return None
         return entry
 
-    def build_source_results(self, claim_hash: str) -> List[SourceResult]:
+    def build_source_results(self, claim_hash: str) -> list[SourceResult]:
         entry = self.lookup(claim_hash)
         return self.entry_to_source_results(entry) if entry else []
 
-    def build_evidence_records(self, claim_hash: str) -> List[EvidenceRecord]:
+    def build_evidence_records(self, claim_hash: str) -> list[EvidenceRecord]:
         entry = self.lookup(claim_hash)
         return self.entry_to_evidence_records(entry) if entry else []
 
     @staticmethod
-    def entry_to_source_results(entry: Optional[Dict[str, Any]]) -> List[SourceResult]:
+    def entry_to_source_results(entry: dict[str, Any] | None) -> list[SourceResult]:
         if not entry:
             return []
 
@@ -149,10 +149,10 @@ class GroundTruthDB:
         fallback_timestamp = (
             _coerce_datetime(entry.get("reviewed_at"))
             or _coerce_datetime(entry.get("stored_at"))
-            or datetime.now(timezone.utc)
+            or datetime.now(UTC)
         )
 
-        results: List[SourceResult] = []
+        results: list[SourceResult] = []
         for index, row in enumerate(evidence_rows):
             if not isinstance(row, dict):
                 continue
@@ -166,8 +166,7 @@ class GroundTruthDB:
             source_title = str(row.get("source_title") or "Ground Truth Entry")
             snippet = str(row.get("snippet") or row.get("excerpt") or "")
             content_hash = str(
-                row.get("content_hash")
-                or hashlib.sha256(snippet.encode("utf-8")).hexdigest()[:32]
+                row.get("content_hash") or hashlib.sha256(snippet.encode("utf-8")).hexdigest()[:32]
             )
 
             results.append(
@@ -201,9 +200,9 @@ class GroundTruthDB:
         ]
 
     @staticmethod
-    def entry_to_evidence_records(entry: Optional[Dict[str, Any]]) -> List[EvidenceRecord]:
+    def entry_to_evidence_records(entry: dict[str, Any] | None) -> list[EvidenceRecord]:
         source_results = GroundTruthDB.entry_to_source_results(entry)
-        evidence: List[EvidenceRecord] = []
+        evidence: list[EvidenceRecord] = []
 
         for index, result in enumerate(source_results):
             evidence.append(
@@ -217,7 +216,9 @@ class GroundTruthDB:
                     retrieved_at=result.retrieved_at,
                     relevance_score=1.0,
                     support_score=1.0 if result.confidence == SourceConfidence.CONFIRMS else 0.0,
-                    contradiction_score=1.0 if result.confidence == SourceConfidence.CONTRADICTS else 0.0,
+                    contradiction_score=1.0
+                    if result.confidence == SourceConfidence.CONTRADICTS
+                    else 0.0,
                     selected_rank=index + 1,
                     evidence_tier=result.tier,
                 )
@@ -231,13 +232,13 @@ class GroundTruthDB:
         verdict: str,
         p_true: float,
         operationalization: str,
-        tier_counts: Dict[str, int],
-        evidence: List[Dict[str, Any]],
-        reviewed_by: Optional[str] = None,
-        review_rationale: Optional[str] = None,
-        reviewed_at: Optional[str] = None,
+        tier_counts: dict[str, int],
+        evidence: list[dict[str, Any]],
+        reviewed_by: str | None = None,
+        review_rationale: str | None = None,
+        reviewed_at: str | None = None,
     ):
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         self._entries[claim_hash] = {
             "schema_version": self.SCHEMA_VERSION,
             "verdict": verdict,
@@ -277,7 +278,7 @@ class SimulatedSourceConnector(SourceConnector):
             return EvidenceTier.TIER_2
         return EvidenceTier.TIER_3
 
-    def query(self, normalized_claim: str, claim_hash: str) -> Optional[SourceResult]:
+    def query(self, normalized_claim: str, claim_hash: str) -> SourceResult | None:
         combined = f"{self._source_id}:{claim_hash}"
         hash_int = int(hashlib.sha256(combined.encode()).hexdigest()[:16], 16)
         has_evidence = (hash_int % 100) > 30
@@ -318,12 +319,12 @@ class MockEvidenceConnector:
     Intended for Phase 1 deterministic testing without live retrieval.
     """
 
-    def __init__(self, fixture_map: Dict[str, List[EvidenceItem]]):
+    def __init__(self, fixture_map: dict[str, list[EvidenceItem]]):
         """
         fixture_map: dict mapping subclaim_id -> list of EvidenceItem objects.
         """
         self._fixture_map = fixture_map
 
-    def retrieve(self, subclaim_id: str) -> List[EvidenceItem]:
+    def retrieve(self, subclaim_id: str) -> list[EvidenceItem]:
         """Return the fixture evidence for a given subclaim_id."""
         return list(self._fixture_map.get(subclaim_id, []))

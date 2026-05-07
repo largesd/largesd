@@ -1,4 +1,5 @@
 """Unit tests for request_id tracing across middleware, job queue, engine, and DB."""
+
 import json
 import logging
 import os
@@ -8,9 +9,9 @@ import uuid
 import pytest
 from flask import Flask
 
-from backend.job_queue import JobQueue, JobStatus
 from backend.database import DebateDatabase
 from backend.database_v3 import Database
+from backend.job_queue import JobQueue
 from backend.utils.middleware import setup_middleware
 
 
@@ -121,6 +122,7 @@ class TestDebateEngineV2RequestId:
 
     def test_generate_snapshot_uses_provided_request_id(self):
         from backend.debate_engine_v2 import DebateEngineV2
+
         tmp = tempfile.mkdtemp()
         db_path = os.path.join(tmp, "test.db")
         engine = DebateEngineV2(
@@ -145,6 +147,7 @@ class TestDebateEngineV2RequestId:
 
     def test_generate_snapshot_generates_request_id_when_none(self):
         from backend.debate_engine_v2 import DebateEngineV2
+
         tmp = tempfile.mkdtemp()
         db_path = os.path.join(tmp, "test.db")
         engine = DebateEngineV2(
@@ -174,14 +177,16 @@ class TestDatabaseAuditRequestId:
         tmp = tempfile.mkdtemp()
         db = DebateDatabase(os.path.join(tmp, "test.db"))
         rid = str(uuid.uuid4())
-        db.save_audit({
-            "audit_id": "audit_test_1",
-            "snapshot_id": "snap_test",
-            "audit_type": "test_audit",
-            "result_data": {"foo": "bar"},
-            "created_at": "2024-01-01T00:00:00",
-            "request_id": rid,
-        })
+        db.save_audit(
+            {
+                "audit_id": "audit_test_1",
+                "snapshot_id": "snap_test",
+                "audit_type": "test_audit",
+                "result_data": {"foo": "bar"},
+                "created_at": "2024-01-01T00:00:00",
+                "request_id": rid,
+            }
+        )
         audits = db.get_audits_by_snapshot("snap_test")
         assert len(audits) == 1
         assert audits[0]["request_id"] == rid
@@ -189,13 +194,15 @@ class TestDatabaseAuditRequestId:
     def test_save_audit_without_request_id(self):
         tmp = tempfile.mkdtemp()
         db = DebateDatabase(os.path.join(tmp, "test.db"))
-        db.save_audit({
-            "audit_id": "audit_test_2",
-            "snapshot_id": "snap_test2",
-            "audit_type": "test_audit",
-            "result_data": {"foo": "bar"},
-            "created_at": "2024-01-01T00:00:00",
-        })
+        db.save_audit(
+            {
+                "audit_id": "audit_test_2",
+                "snapshot_id": "snap_test2",
+                "audit_type": "test_audit",
+                "result_data": {"foo": "bar"},
+                "created_at": "2024-01-01T00:00:00",
+            }
+        )
         audits = db.get_audits_by_snapshot("snap_test2")
         assert len(audits) == 1
 
@@ -205,6 +212,7 @@ class TestJSONFormatterRequestId:
 
     def test_formatter_includes_request_id(self):
         from backend.app_v3 import JSONFormatter
+
         formatter = JSONFormatter()
         record = logging.LogRecord(
             name="debate_system",
@@ -222,6 +230,7 @@ class TestJSONFormatterRequestId:
 
     def test_formatter_omits_request_id_when_missing(self):
         from backend.app_v3 import JSONFormatter
+
         formatter = JSONFormatter()
         record = logging.LogRecord(
             name="debate_system",

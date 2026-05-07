@@ -2,6 +2,7 @@
 """
 Remove debates without a user_id and all related records.
 """
+
 import sqlite3
 import sys
 from pathlib import Path
@@ -47,7 +48,9 @@ def main():
     )
     counts["spans"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM snapshots WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM snapshots WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["snapshots"] = cursor.fetchone()[0]
 
     cursor.execute(
@@ -62,22 +65,34 @@ def main():
     cursor.execute(f"SELECT COUNT(*) FROM facts WHERE debate_id IN ({placeholders})", debate_ids)
     counts["facts"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM canonical_facts WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM canonical_facts WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["canonical_facts"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM arguments WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM arguments WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["arguments"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM canonical_arguments WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM canonical_arguments WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["canonical_arguments"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM debate_frames WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM debate_frames WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["debate_frames"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM failed_publishes WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM failed_publishes WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["failed_publishes"] = cursor.fetchone()[0]
 
-    cursor.execute(f"SELECT COUNT(*) FROM frame_petitions WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"SELECT COUNT(*) FROM frame_petitions WHERE debate_id IN ({placeholders})", debate_ids
+    )
     counts["frame_petitions"] = cursor.fetchone()[0]
 
     print("\nRelated records to be deleted:")
@@ -116,7 +131,9 @@ def main():
     cursor.execute(f"DELETE FROM facts WHERE debate_id IN ({placeholders})", debate_ids)
     cursor.execute(f"DELETE FROM canonical_facts WHERE debate_id IN ({placeholders})", debate_ids)
     cursor.execute(f"DELETE FROM arguments WHERE debate_id IN ({placeholders})", debate_ids)
-    cursor.execute(f"DELETE FROM canonical_arguments WHERE debate_id IN ({placeholders})", debate_ids)
+    cursor.execute(
+        f"DELETE FROM canonical_arguments WHERE debate_id IN ({placeholders})", debate_ids
+    )
 
     # 7. debate_frames
     cursor.execute(f"DELETE FROM debate_frames WHERE debate_id IN ({placeholders})", debate_ids)

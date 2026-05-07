@@ -1,0 +1,73 @@
+TASK 06: Shrink app_v3.py Factory
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Reduce backend/app_v3.py from 339 lines to <= 250 lines without changing app
+behavior.
+
+Write scope:
+- backend/app_v3.py
+- backend/utils/logging.py or another small logging helper
+- backend/jobs/__init__.py
+- backend/jobs/handlers.py
+- backend/utils/rate_limits.py or backend/utils/middleware.py
+- tests only if import paths need small updates
+
+Recommended extraction:
+1. Logging:
+   - Move JSONFormatter, handler setup, and app_logger creation out of
+     backend/app_v3.py.
+   - Suggested file: backend/utils/logging.py
+   - Keep behavior identical: JSON fields, stdout handler, logger name
+     "debate_system", INFO level, propagate False.
+   - Avoid duplicate handlers on repeated imports.
+2. Job handlers:
+   - Move _handle_snapshot_job and _handle_verify_job to
+     backend/jobs/handlers.py.
+   - Keep imports that can cause cycles inside the handler functions.
+   - Avoid relying on app_v3.DB_PATH from the new module. Prefer
+     extensions.db_path or os.getenv("DEBATE_DB_PATH", "data/debate_system.db").
+3. Rate-limit helpers:
+   - Move _should_exempt_default_rate_limits and the route-specific rate-limit
+     map/application into a focused helper.
+   - If Task 05 already moved submit_post, make sure the endpoint name is
+     posts.submit_post, not debate.submit_post.
+
+Implementation steps:
+1. Read backend/app_v3.py before editing.
+2. Extract one concern at a time and run the import check after each extraction:
+   - python -c "from backend.app_v3 import create_app; app = create_app(); print(app.name)"
+3. Keep create_app easy to read. It should still clearly show:
+   - CORS setup
+   - configuration
+   - rate limiter creation
+   - Talisman CSP
+   - extension initialization
+   - job handler registration
+   - blueprint registration
+   - Swagger setup
+   - middleware setup
+4. Verify line count:
+   - wc -l backend/app_v3.py
+
+Acceptance criteria:
+- backend/app_v3.py is <= 250 lines.
+- App factory behavior remains unchanged.
+- Logging output remains JSON formatted.
+- Snapshot and verify jobs still register.
+- Route-specific rate limits still apply.
+- No circular import errors.
+
+Required tests:
+- python -c "from backend.app_v3 import create_app; app = create_app(); print(len(app.url_map._rules))"
+- python -m pytest tests/unit/test_job_queue.py -q
+- python -m pytest tests/integration/api/test_request_id_tracing.py -q
+- python scripts/smoke_test_api.py
+
+Guardrails:
+- Do not change CSP settings in this task.
+- Do not change public routes in this task.
+- Do not start a broader refactor of extension initialization unless needed to
+  keep imports working.

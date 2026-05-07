@@ -1,0 +1,47 @@
+TASK 08: Clarify Email HTML Plain-Text Fallback
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Clarify that backend/email_processor.py uses regex tag stripping only as a
+last-resort plain-text extraction fallback, not as an XSS sanitizer.
+
+Current code area:
+- backend/email_processor.py
+- EmailProcessor._html_to_text
+- fallback currently uses:
+  text = re.sub(r"<[^>]+>", "", html)
+
+Write scope:
+- backend/email_processor.py
+- tests/unit/test_email_processor.py only if you add a focused regression test
+
+Implementation steps:
+1. Read _html_to_text in backend/email_processor.py.
+2. Keep the regex behavior unless a test proves it is wrong.
+3. Replace the vague fallback comment with an explicit security note:
+
+   # SECURITY NOTE: This fallback is for plain-text extraction from malformed
+   # email HTML only. It is not an HTML sanitizer and its output must not be
+   # rendered as trusted HTML. User-facing HTML sanitization is handled by
+   # backend.sanitize.sanitize_html using the nh3 allowlist.
+
+4. Keep the regex as:
+   re.sub(r"<[^>]+>", "", html)
+5. Optionally add a small unit test that malformed HTML falls back to readable
+   plain text and does not claim to sanitize HTML.
+
+Acceptance criteria:
+- The comment clearly distinguishes plain-text extraction from sanitization.
+- The fallback regex has no typo and remains r"<[^>]+>".
+- Email processor tests pass.
+
+Required tests:
+- python -m pytest tests/unit/test_email_processor.py -q
+- python -m pytest tests/unit/test_sanitize.py -q
+
+Guardrails:
+- Do not replace the project sanitizer in this task.
+- Do not render email HTML as trusted HTML.
+- Do not add BeautifulSoup or another dependency just for this clarification.

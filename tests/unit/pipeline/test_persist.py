@@ -1,7 +1,8 @@
 """Unit tests for pipeline persist stage."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from backend.pipeline.context import PipelineContext
 from backend.pipeline.persist import persist_stage
@@ -38,22 +39,41 @@ def engine():
 
 def test_persist_stage(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        debate={"debate_id": "d1"}, active_frame={"frame_id": "f1"},
-        frame_id="f1", side_order=["FOR", "AGAINST"],
-        allowed_posts=[], blocked_posts=[], block_reasons={},
-        borderline_rate=0.0, suppression_policy={},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        debate={"debate_id": "d1"},
+        active_frame={"frame_id": "f1"},
+        frame_id="f1",
+        side_order=["FOR", "AGAINST"],
+        allowed_posts=[],
+        blocked_posts=[],
+        block_reasons={},
+        borderline_rate=0.0,
+        suppression_policy={},
         topics=[FakeTopic()],
-        scores={"overall_scores": {}, "overall_for": 0.6, "overall_against": 0.4, "margin_d": 0.2, "topic_scores": {}},
+        scores={
+            "overall_scores": {},
+            "overall_for": 0.6,
+            "overall_against": 0.4,
+            "margin_d": 0.2,
+            "topic_scores": {},
+        },
         verdict_result={"verdict": "FOR", "ci_lower": 0.1, "ci_upper": 0.3, "confidence": 0.9},
         audit_records={"extraction_stability": {}},
-        replay_manifest={}, recipe_versions={},
-        input_hash_root="abc", output_hash_root="def",
+        replay_manifest={},
+        recipe_versions={},
+        input_hash_root="abc",
+        output_hash_root="def",
         provider_metadata={"provider": "mock"},
-        canonical_facts={}, canonical_args={},
-        selected_facts={}, selected_args={},
-        counterfactuals=[], decision_dossier={},
+        canonical_facts={},
+        canonical_args={},
+        selected_facts={},
+        selected_args={},
+        counterfactuals=[],
+        decision_dossier={},
     )
     ctx = persist_stage(ctx)
 
@@ -69,22 +89,41 @@ def test_persist_stage(engine):
 
 def test_persist_stage_saves_multiple_audits(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        debate={"debate_id": "d1"}, active_frame={"frame_id": "f1"},
-        frame_id="f1", side_order=["FOR", "AGAINST"],
-        allowed_posts=[], blocked_posts=[], block_reasons={},
-        borderline_rate=0.0, suppression_policy={},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        debate={"debate_id": "d1"},
+        active_frame={"frame_id": "f1"},
+        frame_id="f1",
+        side_order=["FOR", "AGAINST"],
+        allowed_posts=[],
+        blocked_posts=[],
+        block_reasons={},
+        borderline_rate=0.0,
+        suppression_policy={},
         topics=[FakeTopic()],
-        scores={"overall_scores": {}, "overall_for": 0.6, "overall_against": 0.4, "margin_d": 0.2, "topic_scores": {}},
+        scores={
+            "overall_scores": {},
+            "overall_for": 0.6,
+            "overall_against": 0.4,
+            "margin_d": 0.2,
+            "topic_scores": {},
+        },
         verdict_result={"verdict": "FOR", "ci_lower": 0.1, "ci_upper": 0.3, "confidence": 0.9},
         audit_records={"a1": {}, "a2": {}},
-        replay_manifest={}, recipe_versions={},
-        input_hash_root="abc", output_hash_root="def",
+        replay_manifest={},
+        recipe_versions={},
+        input_hash_root="abc",
+        output_hash_root="def",
         provider_metadata={"provider": "mock"},
-        canonical_facts={}, canonical_args={},
-        selected_facts={}, selected_args={},
-        counterfactuals=[], decision_dossier={},
+        canonical_facts={},
+        canonical_args={},
+        selected_facts={},
+        selected_args={},
+        counterfactuals=[],
+        decision_dossier={},
     )
     ctx = persist_stage(ctx)
     assert engine.db.save_audit.call_count == 2

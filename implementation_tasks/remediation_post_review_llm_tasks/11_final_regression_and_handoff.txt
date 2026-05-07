@@ -1,0 +1,78 @@
+TASK 11: Final Regression and Handoff
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Run the full post-remediation verification suite and produce a concise handoff
+that identifies what is production-ready and what still needs attention.
+
+Write scope:
+- docs/current/IMPLEMENTATION_STATUS.md if the project uses it for current
+  status
+- CHANGELOG.md only if the user wants changelog updates
+- no application code unless a verification failure exposes a small clear fix
+
+Prerequisites:
+Run this after Tasks 01 through 10 have been completed or intentionally skipped
+with documented reasons.
+
+Verification checklist:
+1. Dependency and import checks:
+   - python -c "import flask, flasgger, nh3, redis, bcrypt, sqlalchemy"
+   - python -c "from backend.app_v3 import create_app; app = create_app(); print(app.name)"
+2. Line-count checks:
+   - wc -l backend/app_v3.py backend/routes/*.py
+   Confirm:
+   - backend/app_v3.py <= 250 lines
+   - backend/routes/governance_bp.py <= 400 lines
+   - backend/routes/debate_bp.py <= 400 lines
+   - all new route modules <= 400 lines
+3. Static frontend checks:
+   - rg --pcre2 -n '<script(?![^>]*\bsrc=)' frontend/*.html
+   - rg -n 'onclick=|onchange=|onsubmit=|style="' frontend/*.html
+   Investigate any findings and document whether they are acceptable.
+4. Unit tests:
+   - python -m pytest tests/unit/ -q
+5. Integration tests:
+   - python -m pytest tests/integration/ -q --tb=short
+6. Route coverage:
+   - python -m pytest tests/integration/api/ --cov=backend.routes --cov-report=term-missing --cov-fail-under=70
+7. Type checks:
+   - mypy backend/pipeline/ backend/routes/ backend/utils/
+8. Pre-commit:
+   - pre-commit run --all-files
+9. Security scans:
+   - bandit -r backend/ -lll
+   - pip-audit --local
+10. Smoke and acceptance:
+   - python scripts/dev_workflow.py smoke --scenario server-check --port 5055 --timeout 45
+   - python scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+11. Accessibility:
+   - run the command added by Task 09
+12. Optional Docker verification:
+   - docker-compose up --build
+   - verify services become healthy
+
+Manual browser checks:
+- No CSP violations in DevTools on login, admin, appeals, governance, and
+  new_debate pages.
+- Login and registration forms submit.
+- Admin data loads.
+- Appeals table loads.
+- Mobile viewport around 375px shows stacked table rows with labels and no
+  horizontal scrolling.
+
+Handoff output:
+Produce a short final report with:
+- changed file summary by task
+- exact commands run and pass/fail result
+- any skipped checks and why
+- remaining known risks
+- suggested next production-readiness steps
+
+Acceptance criteria:
+- All required checks pass, or failures are documented with clear owner and
+  reproduction steps.
+- No unresolved critical or high remediation item remains hidden.
+- The handoff is concise enough for the user to act on.

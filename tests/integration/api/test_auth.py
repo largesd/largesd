@@ -1,10 +1,11 @@
 """API integration tests for authentication endpoints."""
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+from datetime import UTC
+
+
 def test_register_success(client, csrf_token):
     resp = client.post(
         "/api/auth/register",
@@ -24,6 +25,7 @@ def test_register_success(client, csrf_token):
 
 def test_register_duplicate_email(client, csrf_token):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     payload = {
         "email": "dup@example.com",
         "password": "password123",
@@ -72,6 +74,7 @@ def test_register_password_too_short(client, csrf_token):
 # ---------------------------------------------------------------------------
 def test_login_success(client, admin_user):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     resp = client.post(
         "/api/auth/login",
         headers={"X-CSRF-Token": _get_csrf_from_cookie(client)},
@@ -85,6 +88,7 @@ def test_login_success(client, admin_user):
 
 def test_login_invalid_credentials(client, admin_user):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     resp = client.post(
         "/api/auth/login",
         headers={"X-CSRF-Token": _get_csrf_from_cookie(client)},
@@ -142,16 +146,17 @@ def test_me_invalid_token(client):
 
 
 def test_me_expired_token(client, auth_headers, admin_user):
-    from datetime import datetime, timedelta, timezone
-    import jwt
     import os
+    from datetime import datetime, timedelta
+
+    import jwt
 
     expired_payload = {
         "user_id": admin_user["user_id"],
         "email": admin_user["email"],
         "display_name": "Admin",
-        "exp": datetime.now(timezone.utc) - timedelta(minutes=5),
-        "iat": datetime.now(timezone.utc) - timedelta(hours=1),
+        "exp": datetime.now(UTC) - timedelta(minutes=5),
+        "iat": datetime.now(UTC) - timedelta(hours=1),
         "type": "access",
     }
     secret = os.environ["SECRET_KEY"]

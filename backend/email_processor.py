@@ -26,6 +26,7 @@ Environment variables:
     PROCESSOR_DEST_EMAIL — The destination email address that submissions are sent to.
                            Used to filter emails addressed to this account.
 """
+
 import argparse
 import email
 import imaplib
@@ -35,14 +36,12 @@ import re
 import smtplib
 import sys
 import time
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional
 
 from backend.debate_engine_v2 import DebateEngineV2
-from backend.email_submission_parser import EmailSubmissionParser, EmailSubmissionError
+from backend.email_submission_parser import EmailSubmissionError, EmailSubmissionParser
 from backend.github_publisher import GitHubPublisher, GitHubPublishError
 from backend.published_results import PublishedResultsBuilder
 
@@ -87,18 +86,21 @@ class EmailProcessorConfig:
 
     def is_valid(self) -> bool:
         return bool(
-            self.imap_host and self.imap_user and self.imap_password
-            and self.github_repo and self.github_token
+            self.imap_host
+            and self.imap_user
+            and self.imap_password
+            and self.github_repo
+            and self.github_token
         )
 
     @staticmethod
-    def _parse_whitelist(value: str) -> List[str]:
+    def _parse_whitelist(value: str) -> list[str]:
         if not value:
             return []
         return [e.strip().lower() for e in value.split(",") if e.strip()]
 
     @staticmethod
-    def _parse_email_list(value: str) -> List[str]:
+    def _parse_email_list(value: str) -> list[str]:
         if not value:
             return []
 
@@ -124,10 +126,10 @@ class EmailProcessorConfig:
     @classmethod
     def _build_expected_recipient_emails(
         cls,
-        dest_emails: List[str],
-        imap_user: Optional[str],
-        smtp_user: Optional[str],
-    ) -> List[str]:
+        dest_emails: list[str],
+        imap_user: str | None,
+        smtp_user: str | None,
+    ) -> list[str]:
         expected = []
         seen = set()
 
@@ -181,7 +183,7 @@ class EmailProcessor:
             engine=self.debate_engine,
         )
 
-    def _log_startup(self, interval: Optional[int] = None) -> None:
+    def _log_startup(self, interval: int | None = None) -> None:
         """Print the active processor configuration for diagnostics."""
         if interval is None:
             print("[EmailProcessor] Running single poll")
@@ -197,7 +199,7 @@ class EmailProcessor:
                 + ", ".join(self.config.accepted_recipient_emails)
             )
 
-    def run(self, poll_interval: Optional[int] = None) -> None:
+    def run(self, poll_interval: int | None = None) -> None:
         """Run the polling loop indefinitely."""
         interval = poll_interval or self.config.poll_interval
         self._log_startup(interval=interval)
@@ -231,15 +233,11 @@ class EmailProcessor:
 
             raw_matches = messages[0] if messages else b""
             if not raw_matches:
-                print(
-                    f"[EmailProcessor] No messages matched search criteria: {search_criteria}"
-                )
+                print(f"[EmailProcessor] No messages matched search criteria: {search_criteria}")
                 return
 
             msg_ids = raw_matches.split()
-            print(
-                f"[EmailProcessor] Found {len(msg_ids)} message(s) for search: {search_criteria}"
-            )
+            print(f"[EmailProcessor] Found {len(msg_ids)} message(s) for search: {search_criteria}")
 
             # Backpressure: if >100 unread, batch process and slow down
             backpressure_threshold = int(os.getenv("EMAIL_BACKPRESSURE_THRESHOLD", "100"))
@@ -272,15 +270,13 @@ class EmailProcessor:
         if not (mailbox.startswith('"') and mailbox.endswith('"')):
             candidates.append(f'"{mailbox}"')
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for candidate in candidates:
             try:
                 status, _ = mail.select(candidate)
                 if status == "OK":
                     if candidate != mailbox:
-                        print(
-                            f"[EmailProcessor] Selected mailbox via quoted fallback: {candidate}"
-                        )
+                        print(f"[EmailProcessor] Selected mailbox via quoted fallback: {candidate}")
                     return
             except imaplib.IMAP4.error as exc:
                 last_error = exc
@@ -335,15 +331,14 @@ class EmailProcessor:
                 expected = ", ".join(self.config.accepted_recipient_emails)
                 found = ", ".join(recipient_emails) if recipient_emails else "(none found)"
                 print(
-                    f"[EmailProcessor] Skipping — not addressed to {expected}"
-                    f" (found: {found})"
+                    f"[EmailProcessor] Skipping — not addressed to {expected}" f" (found: {found})"
                 )
                 return
 
         # Sender whitelist
         if self.config.sender_whitelist:
             if submitter_email.lower() not in self.config.sender_whitelist:
-                print(f"[EmailProcessor] Skipping — sender not in whitelist")
+                print("[EmailProcessor] Skipping — sender not in whitelist")
                 self._send_ack(submitter_email, subject, False, "Sender not in whitelist.")
                 return
 
@@ -363,9 +358,7 @@ class EmailProcessor:
             return
 
         # DEDUPLICATION CHECK
-        existing = self.debate_engine.db.get_post_by_submission_id(
-            submission.submission_id
-        )
+        existing = self.debate_engine.db.get_post_by_submission_id(submission.submission_id)
         if existing:
             print(f"[EmailProcessor] Duplicate submission detected: {submission.submission_id}")
             self._send_ack(
@@ -396,7 +389,9 @@ class EmailProcessor:
                 counter_arguments=submission.counter_arguments or "",
                 submission_id=submission.submission_id,
             )
-            print(f"[EmailProcessor] Post submitted: {post['post_id']} ({post['modulation_outcome']})")
+            print(
+                f"[EmailProcessor] Post submitted: {post['post_id']} ({post['modulation_outcome']})"
+            )
         except Exception as exc:
             print(f"[EmailProcessor] Engine error: {exc}")
             self._send_ack(submitter_email, subject, False, f"Engine error: {exc}")
@@ -435,12 +430,12 @@ class EmailProcessor:
                 print(f"[EmailProcessor] GitHub publish attempt {attempt} failed: {exc}")
                 if attempt == MAX_RETRIES:
                     # Queue for later retry
-                    self._queue_failed_publish(
-                        submission.debate_id, snapshot, bundle, str(exc)
-                    )
+                    self._queue_failed_publish(submission.debate_id, snapshot, bundle, str(exc))
                     self._send_ack(
-                        submitter_email, subject, False,
-                        f"GitHub publish failed after {MAX_RETRIES} attempts. It will be retried automatically."
+                        submitter_email,
+                        subject,
+                        False,
+                        f"GitHub publish failed after {MAX_RETRIES} attempts. It will be retried automatically.",
                     )
                     return
                 time.sleep(BASE_DELAY * (2 ** (attempt - 1)))
@@ -448,9 +443,7 @@ class EmailProcessor:
                 print(f"[EmailProcessor] Bundle/build error: {exc}")
                 # Unexpected error, also queue if we have a bundle
                 if bundle is not None:
-                    self._queue_failed_publish(
-                        submission.debate_id, snapshot, bundle, str(exc)
-                    )
+                    self._queue_failed_publish(submission.debate_id, snapshot, bundle, str(exc))
                 self._send_ack(submitter_email, subject, False, f"Bundle error: {exc}")
                 return
 
@@ -508,7 +501,7 @@ class EmailProcessor:
         return candidate
 
     @classmethod
-    def _extract_recipient_emails(cls, msg: email.message.Message) -> List[str]:
+    def _extract_recipient_emails(cls, msg: email.message.Message) -> list[str]:
         decoded_values = []
         for header in cls.RECIPIENT_HEADERS:
             for raw_value in msg.get_all(header, []):
@@ -527,13 +520,13 @@ class EmailProcessor:
 
     @staticmethod
     def _is_addressed_to_expected_recipient(
-        recipient_emails: List[str],
-        expected_emails: List[str],
+        recipient_emails: list[str],
+        expected_emails: list[str],
     ) -> bool:
         return bool(set(recipient_emails) & set(expected_emails))
 
     @staticmethod
-    def _get_html_body(msg: email.message.Message) -> Optional[str]:
+    def _get_html_body(msg: email.message.Message) -> str | None:
         """Extract HTML body from an email message."""
         html = None
         if msg.is_multipart():
@@ -555,26 +548,32 @@ class EmailProcessor:
     @staticmethod
     def _html_to_text(html: str) -> str:
         """Convert HTML to plain text using a lightweight parser."""
+
         class _HTMLToText(HTMLParser):
             def __init__(self):
                 super().__init__()
                 self.text = []
+
             def handle_data(self, data):
                 self.text.append(data)
+
             def get_text(self):
-                return re.sub(r'\n\s*\n+', '\n\n', ''.join(self.text)).strip()
+                return re.sub(r"\n\s*\n+", "\n\n", "".join(self.text)).strip()
 
         parser = _HTMLToText()
         try:
             parser.feed(html)
             return parser.get_text()
         except Exception:
-            # Ultimate fallback: regex strip
-            text = re.sub(r'<[^>]+>', '', html)
-            return re.sub(r'\n\s*\n+', '\n\n', text).strip()
+            # SECURITY NOTE: This fallback is for plain-text extraction from malformed
+            # email HTML only. It is not an HTML sanitizer and its output must not be
+            # rendered as trusted HTML. User-facing HTML sanitization is handled by
+            # backend.sanitize.sanitize_html using the nh3 allowlist.
+            text = re.sub(r"<[^>]+>", "", html)
+            return re.sub(r"\n\s*\n+", "\n\n", text).strip()
 
     @staticmethod
-    def _get_text_body(msg: email.message.Message) -> Optional[str]:
+    def _get_text_body(msg: email.message.Message) -> str | None:
         """Extract the plain-text body from an email message, falling back to HTML."""
         # Try plain text first
         if msg.is_multipart():
@@ -600,11 +599,11 @@ class EmailProcessor:
 
     def _queue_failed_publish(self, debate_id, snapshot, bundle, error_msg):
         """Queue a failed GitHub publish for later retry."""
-        if not hasattr(self.debate_engine.db, 'queue_failed_publish'):
+        if not hasattr(self.debate_engine.db, "queue_failed_publish"):
             return
         self.debate_engine.db.queue_failed_publish(
             debate_id=debate_id,
-            snapshot_id=snapshot.get('snapshot_id') if snapshot else None,
+            snapshot_id=snapshot.get("snapshot_id") if snapshot else None,
             payload_json=json.dumps(bundle) if bundle else "{}",
             commit_message=bundle["commit_message"] if bundle else "",
             last_error=error_msg,
@@ -612,22 +611,20 @@ class EmailProcessor:
 
     def _retry_failed_publishes(self):
         """Retry any queued failed publishes from previous poll cycles."""
-        if not hasattr(self.debate_engine.db, 'get_failed_publishes'):
+        if not hasattr(self.debate_engine.db, "get_failed_publishes"):
             return
         pending = self.debate_engine.db.get_failed_publishes(limit=10)
         for item in pending:
             try:
-                payload = json.loads(item['payload_json'])
+                payload = json.loads(item["payload_json"])
                 result = self.publisher.publish_json(
                     payload=payload,
-                    commit_message=item['commit_message'],
+                    commit_message=item["commit_message"],
                 )
-                self.debate_engine.db.mark_publish_success(item['id'])
+                self.debate_engine.db.mark_publish_success(item["id"])
                 print(f"[EmailProcessor] Retried publish succeeded: {result.commit_sha}")
             except Exception as exc:
-                self.debate_engine.db.increment_publish_retry(
-                    item['id'], str(exc)
-                )
+                self.debate_engine.db.increment_publish_retry(item["id"], str(exc))
                 print(f"[EmailProcessor] Retried publish failed again: {exc}")
 
     def _send_ack(
@@ -642,7 +639,11 @@ class EmailProcessor:
             return
 
         try:
-            subject = f"Re: {original_subject}" if not original_subject.startswith("Re:") else original_subject
+            subject = (
+                f"Re: {original_subject}"
+                if not original_subject.startswith("Re:")
+                else original_subject
+            )
             status = "Success" if success else "Failed"
 
             msg = EmailMessage()
@@ -655,7 +656,7 @@ class EmailProcessor:
                 f"Status: {status}\n"
                 f"Message: {message}\n\n"
                 f"Original subject: {original_subject}\n"
-                f"Processed at: {datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}Z\n"
+                f"Processed at: {datetime.now(UTC).replace(tzinfo=None).isoformat()}Z\n"
             )
 
             with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port) as server:

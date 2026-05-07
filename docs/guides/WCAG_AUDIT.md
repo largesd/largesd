@@ -1,8 +1,8 @@
 # WCAG 2.1 AA Accessibility Audit Report
 
-**Date:** 2026-05-01  
-**Scope:** All 18 HTML pages + CSS  
-**Baseline Score:** ~72/100 (Partially Compliant)  
+**Date:** 2026-05-01
+**Scope:** All 18 HTML pages + CSS
+**Baseline Score:** ~72/100 (Partially Compliant)
 **Post-Fix Estimate:** ~88/100 (Largely Compliant)
 
 ---

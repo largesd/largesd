@@ -3,7 +3,7 @@ Pipeline stage: compute selection, scores, confidence, and verdict prerequisites
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any
 
 from backend.pipeline.context import PipelineContext
 
@@ -32,9 +32,9 @@ def score_stage(ctx: PipelineContext) -> PipelineContext:
     engine._update_canonical_metrics(canonical_facts, canonical_args)
 
     # Deterministic stratified selection per topic-side
-    selected_facts: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    selected_args: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    selection_diagnostics: Dict[str, Any] = {}
+    selected_facts: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    selected_args: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    selection_diagnostics: dict[str, Any] = {}
     selection_seed = ctx.selection_seed
 
     for topic in topics:
@@ -43,14 +43,20 @@ def score_stage(ctx: PipelineContext) -> PipelineContext:
         args_pool = canonical_args.get(tid, [])
 
         for side in side_order:
-            normative_count = len([
-                f for f in facts_pool
-                if f.get("side") == side and f.get("fact_type") == "normative"
-            ])
-            empirical_count = len([
-                f for f in facts_pool
-                if f.get("side") == side and f.get("fact_type", "empirical") == "empirical"
-            ])
+            normative_count = len(
+                [
+                    f
+                    for f in facts_pool
+                    if f.get("side") == side and f.get("fact_type") == "normative"
+                ]
+            )
+            empirical_count = len(
+                [
+                    f
+                    for f in facts_pool
+                    if f.get("side") == side and f.get("fact_type", "empirical") == "empirical"
+                ]
+            )
             budgets = {
                 "K_E": max(3, min(empirical_count, 10)) if empirical_count else 0,
                 "K_N": max(1, min(normative_count, 5)) if normative_count else 0,
@@ -84,7 +90,9 @@ def score_stage(ctx: PipelineContext) -> PipelineContext:
                         .get("rarity_ids", [])
                     )
 
-            selection_diagnostics[f"{tid}_{side}"] = engine.selection_engine.get_diagnostics(selected_set)
+            selection_diagnostics[f"{tid}_{side}"] = engine.selection_engine.get_diagnostics(
+                selected_set
+            )
 
     # Generate steelman summaries
     for topic in topics:

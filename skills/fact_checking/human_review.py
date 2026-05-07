@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
-from .v15_audit import AuditStore, AdditiveInvalidationRecord, create_additive_invalidation
 from .v15_models import HumanReviewFlag, HumanReviewRecord, ReviewOutcome
 
 # ---------------------------------------------------------------------------
@@ -43,8 +42,8 @@ class QueuedReviewItem:
     premise_id: str
     snapshot_id: str
     premise_text: str
-    flags: List[HumanReviewFlag]
-    assigned_reviewer: Optional[str] = None
+    flags: list[HumanReviewFlag]
+    assigned_reviewer: str | None = None
     queue_timestamp: str = ""
     status: str = "pending"  # pending, in_review, completed
 
@@ -102,11 +101,11 @@ class HumanReviewQueue:
         premise_id: str,
         snapshot_id: str,
         premise_text: str,
-        flags: List[HumanReviewFlag],
+        flags: list[HumanReviewFlag],
     ) -> str:
         """Add a fact-check result to the review queue."""
         queue_id = f"queue_{audit_id}"
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         flags_str = ",".join(f.value for f in flags)
 
         with self._lock:
@@ -135,9 +134,9 @@ class HumanReviewQueue:
 
     def list_pending(
         self,
-        snapshot_id: Optional[str] = None,
+        snapshot_id: str | None = None,
         limit: int = 100,
-    ) -> List[QueuedReviewItem]:
+    ) -> list[QueuedReviewItem]:
         """List pending review items, optionally filtered by snapshot."""
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -205,7 +204,7 @@ class HumanReviewQueue:
         outcome: ReviewOutcome,
         reviewer_role: str = "reviewer",
         note: str = "",
-    ) -> Optional[HumanReviewRecord]:
+    ) -> HumanReviewRecord | None:
         """Complete a review and persist an immutable HumanReviewRecord."""
         with self._lock:
             with self._connect() as conn:
@@ -240,7 +239,7 @@ class HumanReviewQueue:
         return record
 
 
-def _row_to_queued_item(row: Dict[str, Any]) -> QueuedReviewItem:
+def _row_to_queued_item(row: dict[str, Any]) -> QueuedReviewItem:
     flags = []
     for f in row.get("flags", "").split(","):
         if f:
@@ -267,9 +266,9 @@ def _row_to_queued_item(row: Dict[str, Any]) -> QueuedReviewItem:
 
 
 def compute_aggregate_counts(
-    records: List[Any],
+    records: list[Any],
     small_count_threshold: int = SMALL_COUNT_THRESHOLD,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compute aggregate public counts by review flag with small-count suppression.
 
@@ -287,12 +286,14 @@ def compute_aggregate_counts(
             flag_name = flag.value if hasattr(flag, "value") else str(flag)
             flag_counter[flag_name] += 1
 
-    flag_counts: Dict[str, int] = {}
-    suppression_notes: List[str] = []
+    flag_counts: dict[str, int] = {}
+    suppression_notes: list[str] = []
     for flag_name, count in flag_counter.most_common():
         if count < small_count_threshold:
             flag_counts[flag_name] = 0
-            suppression_notes.append(f"{flag_name}: suppressed (count={count} < threshold={small_count_threshold})")
+            suppression_notes.append(
+                f"{flag_name}: suppressed (count={count} < threshold={small_count_threshold})"
+            )
         else:
             flag_counts[flag_name] = count
 
@@ -354,11 +355,10 @@ class ReviewRecordStore:
             )
             conn.commit()
 
-    def get_by_audit(self, audit_id: str) -> List[HumanReviewRecord]:
+    def get_by_audit(self, audit_id: str) -> list[HumanReviewRecord]:
         with sqlite3.connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM review_records WHERE target_audit_id = ?",
-                (audit_id,)
+                "SELECT * FROM review_records WHERE target_audit_id = ?", (audit_id,)
             ).fetchall()
             return [self._row_to_record(r) for r in rows]
 
@@ -385,7 +385,7 @@ def create_human_review_record(
     """Create an immutable HumanReviewRecord."""
     from .v15_cache import canonical_json_hash
 
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
     review_id = f"review_{target_audit_id}_{timestamp}"
 
     record = HumanReviewRecord(

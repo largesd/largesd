@@ -1,7 +1,8 @@
 """Unit tests for pipeline score stage."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from backend.pipeline.context import PipelineContext
 from backend.pipeline.score import score_stage
@@ -40,15 +41,22 @@ def engine():
     e.llm_client.generate_steelman_summary.return_value = {"summary": "s"}
     e.scoring_engine = MagicMock()
     e.scoring_engine.compute_debate_scores.return_value = {
-        "overall_scores": {}, "overall_for": 0.6, "overall_against": 0.4, "margin_d": 0.2, "topic_scores": {}
+        "overall_scores": {},
+        "overall_for": 0.6,
+        "overall_against": 0.4,
+        "margin_d": 0.2,
+        "topic_scores": {},
     }
     return e
 
 
 def test_score_stage(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
         topics=[FakeTopic()],
         side_order=["FOR", "AGAINST"],
         frame_context="scope",
@@ -67,10 +75,17 @@ def test_score_stage(engine):
 
 def test_score_stage_no_topics(engine):
     ctx = PipelineContext(
-        debate_id="d1", job_id="j1", request_id="r1",
-        trigger_type="manual", engine=engine,
-        topics=[], side_order=["FOR", "AGAINST"], frame_context="scope",
-        canonical_facts={}, canonical_args={}, topic_content_mass={},
+        debate_id="d1",
+        job_id="j1",
+        request_id="r1",
+        trigger_type="manual",
+        engine=engine,
+        topics=[],
+        side_order=["FOR", "AGAINST"],
+        frame_context="scope",
+        canonical_facts={},
+        canonical_args={},
+        topic_content_mass={},
     )
     ctx = score_stage(ctx)
     engine._update_canonical_metrics.assert_called_once()

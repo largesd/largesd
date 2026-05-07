@@ -16,12 +16,11 @@ import json
 import re
 import unicodedata
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .v15_models import (
     AtomicSubclaim,
     CacheKey,
-    ClaimType,
     EvidencePolicy,
     FactMode,
     FrameDependencyKey,
@@ -136,25 +135,25 @@ def compute_operationalization_hash(operationalization: str) -> str:
     return hashlib.sha256(operationalization.lower().strip().encode("utf-8")).hexdigest()
 
 
-def compute_entity_ids_hash(entity_ids: List[str]) -> str:
+def compute_entity_ids_hash(entity_ids: list[str]) -> str:
     """Hash a list of resolved entity IDs (e.g., Wikidata QIDs)."""
     sorted_ids = sorted(unicodedata.normalize("NFC", eid) for eid in entity_ids)
     payload = json.dumps(sorted_ids, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def compute_connector_snapshot_versions_hash(versions: Dict[str, str]) -> str:
+def compute_connector_snapshot_versions_hash(versions: dict[str, str]) -> str:
     return canonical_json_hash(versions)
 
 
 def build_cache_key(
     subclaim: AtomicSubclaim,
-    resolved_entity_ids: List[str],
+    resolved_entity_ids: list[str],
     evidence_policy: EvidencePolicy,
     decomposition_version: str,
-    connector_snapshot_versions: Dict[str, str],
+    connector_snapshot_versions: dict[str, str],
     fact_mode: FactMode = FactMode.OFFLINE,
-    frame_dependency_key: Optional[FrameDependencyKey] = None,
+    frame_dependency_key: FrameDependencyKey | None = None,
 ) -> CacheKey:
     """
     Build a full CacheKey v1.5 for an AtomicSubclaim.
@@ -219,9 +218,9 @@ class ImmutableMemoryCache:
     """
 
     def __init__(self):
-        self._store: Dict[str, Any] = {}
+        self._store: dict[str, Any] = {}
 
-    def get(self, key: CacheKey) -> Optional[Any]:
+    def get(self, key: CacheKey) -> Any | None:
         """Return the stored result for an exact CacheKey match, or None."""
         key_str = cache_key_to_string(key)
         # Return a copy to prevent accidental mutation

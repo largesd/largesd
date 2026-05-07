@@ -1,10 +1,11 @@
 """pytest fixtures for integration API tests."""
+
+import importlib
 import os
 import shutil
 import tempfile
 
 import pytest
-import importlib
 
 
 @pytest.fixture

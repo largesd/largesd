@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
 from .decomposition import CanonicalPremise, validate_decomposition
 from .v15_models import (
@@ -19,16 +19,16 @@ from .v15_models import (
     ClaimType,
     NodeType,
     PremiseDecomposition,
-    ProvenanceSpan,
     Side,
-    ValidationResult,
 )
 
 
 class LLMBackend(Protocol):
     """Protocol for LLM decomposition backends."""
 
-    def decompose_claim(self, claim_text: str, claim_type: ClaimType) -> Optional[PremiseDecomposition]:
+    def decompose_claim(
+        self, claim_text: str, claim_type: ClaimType
+    ) -> PremiseDecomposition | None:
         """Return a PremiseDecomposition or None if the LLM cannot decompose."""
         ...
 
@@ -45,8 +45,10 @@ class SimpleLLMBackend:
         self.client = client
         self.model = model
 
-    def decompose_claim(self, claim_text: str, claim_type: ClaimType) -> Optional[PremiseDecomposition]:
-        prompt = f'''Decompose this claim into atomic subclaims.
+    def decompose_claim(
+        self, claim_text: str, claim_type: ClaimType
+    ) -> PremiseDecomposition | None:
+        prompt = f"""Decompose this claim into atomic subclaims.
 
 Claim: "{claim_text}"
 Claim type: {claim_type.value}
@@ -55,18 +57,18 @@ Return a JSON object with:
 - subclaims: list of {{"id": "sc_...", "text": "...", "node_type": "ATOMIC|AND|OR"}}
 - relationships: how subclaims combine (AND, OR, IF_THEN)
 
-If the claim is already atomic, return a single subclaim.'''
+If the claim is already atomic, return a single subclaim."""
 
         try:
             response = self.client.complete(prompt, model=self.model)
             parsed = json.loads(response)
-            return self._parsed_to_decomposition(parsed, claim_text, claim_type)
+            return self._parsed_to_decomposition(parsed, claim_text, claim_type, prompt)
         except Exception:
             return None
 
     def _parsed_to_decomposition(
-        self, parsed: Dict[str, Any], claim_text: str, claim_type: ClaimType
-    ) -> Optional[PremiseDecomposition]:
+        self, parsed: dict[str, Any], claim_text: str, claim_type: ClaimType, prompt: str
+    ) -> PremiseDecomposition | None:
         premise_id = f"premise_{uuid.uuid4().hex[:12]}"
         subclaims_data = parsed.get("subclaims", [])
         if not subclaims_data:
@@ -90,7 +92,9 @@ If the claim is already atomic, return a single subclaim.'''
         # Build root expression from relationships
         relationships = parsed.get("relationships", "ATOMIC")
         if len(atomic_subclaims) == 1:
-            root = ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id)
+            root = ClaimExpression(
+                node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id
+            )
         elif relationships == "OR":
             root = ClaimExpression(
                 node_type=NodeType.OR,
@@ -104,12 +108,18 @@ If the claim is already atomic, return a single subclaim.'''
                 root = ClaimExpression(
                     node_type=NodeType.IF_THEN,
                     children=[
-                        ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id),
-                        ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[1].subclaim_id),
+                        ClaimExpression(
+                            node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id
+                        ),
+                        ClaimExpression(
+                            node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[1].subclaim_id
+                        ),
                     ],
                 )
             else:
-                root = ClaimExpression(node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id)
+                root = ClaimExpression(
+                    node_type=NodeType.ATOMIC, subclaim_id=atomic_subclaims[0].subclaim_id
+                )
         else:
             # Default AND
             root = ClaimExpression(
@@ -120,9 +130,7 @@ If the claim is already atomic, return a single subclaim.'''
                 ],
             )
 
-        prompt_hash = hashlib.sha256(
-            (prompt + self.model).encode("utf-8")
-        ).hexdigest()[:16]
+        prompt_hash = hashlib.sha256((prompt + self.model).encode("utf-8")).hexdigest()[:16]
 
         decomposition = PremiseDecomposition(
             premise_id=premise_id,

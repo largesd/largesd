@@ -27,9 +27,10 @@ import re
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Protocol
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from .v15_models import (
     AtomicSubclaim,
@@ -38,31 +39,27 @@ from .v15_models import (
     Direction,
     DirectionMethod,
     EvidenceItem,
-    RetrievalPath,
     ResolvedValue,
+    RetrievalPath,
     SourceType,
     ValueType,
-    VerdictScope,
 )
-
 
 # ---------------------------------------------------------------------------
 # Protocol / base class
 # ---------------------------------------------------------------------------
 
+
 class EvidenceConnector(Protocol):
     """Protocol for v1.5 evidence connectors."""
 
     @property
-    def connector_id(self) -> str:
-        ...
+    def connector_id(self) -> str: ...
 
     @property
-    def connector_version(self) -> str:
-        ...
+    def connector_version(self) -> str: ...
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
-        ...
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]: ...
 
 
 class BaseEvidenceConnector(ABC):
@@ -70,20 +67,17 @@ class BaseEvidenceConnector(ABC):
 
     @property
     @abstractmethod
-    def connector_id(self) -> str:
-        ...
+    def connector_id(self) -> str: ...
 
     @property
     @abstractmethod
-    def connector_version(self) -> str:
-        ...
+    def connector_version(self) -> str: ...
 
     @abstractmethod
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
-        ...
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]: ...
 
     def _now_iso(self) -> str:
-        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     def _query_hash(self, query_text: str) -> str:
         return hashlib.sha256(query_text.encode("utf-8")).hexdigest()[:32]
@@ -102,9 +96,9 @@ class BaseEvidenceConnector(ABC):
         direction_confidence: float,
         direction_method: DirectionMethod,
         relevance_score: float,
-        group_id: Optional[str] = None,
-        claimed_value: Optional[ResolvedValue] = None,
-        source_value: Optional[ResolvedValue] = None,
+        group_id: str | None = None,
+        claimed_value: ResolvedValue | None = None,
+        source_value: ResolvedValue | None = None,
         deterministic_comparison_result: DeterministicComparisonResult = DeterministicComparisonResult.NOT_RUN,
     ) -> EvidenceItem:
         raw = f"{self.connector_id}:{subclaim.subclaim_id}:{quote_or_span}"
@@ -136,16 +130,17 @@ class BaseEvidenceConnector(ABC):
 # 1. Wikidata entity/static fact connector
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _WikidataEntity:
     qid: str
     canonical_name: str
     aliases: tuple[str, ...] = ()
-    inception_year: Optional[int] = None
-    headquarters: Optional[str] = None
-    location: Optional[str] = None
-    birth_year: Optional[int] = None
-    death_year: Optional[int] = None
+    inception_year: int | None = None
+    headquarters: str | None = None
+    location: str | None = None
+    birth_year: int | None = None
+    death_year: int | None = None
     office_terms: tuple = ()
 
 
@@ -154,7 +149,7 @@ class _OfficeTerm:
     role: str
     jurisdiction: str
     start_year: int
-    end_year: Optional[int] = None
+    end_year: int | None = None
 
 
 DEFAULT_WIKIDATA_ENTITIES = (
@@ -181,7 +176,9 @@ DEFAULT_WIKIDATA_ENTITIES = (
         qid="Q309972",
         canonical_name="justin trudeau",
         office_terms=(
-            _OfficeTerm(role="prime minister", jurisdiction="canada", start_year=2015, end_year=2025),
+            _OfficeTerm(
+                role="prime minister", jurisdiction="canada", start_year=2015, end_year=2025
+            ),
         ),
     ),
 )
@@ -197,10 +194,10 @@ class WikidataEntityConnector(BaseEvidenceConnector):
     then routes to INSUFFICIENT per Rule I.
     """
 
-    def __init__(self, entities: Optional[Iterable[_WikidataEntity]] = None):
+    def __init__(self, entities: Iterable[_WikidataEntity] | None = None):
         snapshots = list(entities) if entities is not None else list(DEFAULT_WIKIDATA_ENTITIES)
         self._entities = snapshots
-        self._alias_index: Dict[str, List[_WikidataEntity]] = {}
+        self._alias_index: dict[str, list[_WikidataEntity]] = {}
         for entity in snapshots:
             alias_set = {entity.canonical_name.lower(), *(a.lower() for a in entity.aliases)}
             for alias in alias_set:
@@ -214,13 +211,13 @@ class WikidataEntityConnector(BaseEvidenceConnector):
     def connector_version(self) -> str:
         return "v1.5.0"
 
-    def _resolve_entity(self, alias: str) -> Optional[_WikidataEntity]:
+    def _resolve_entity(self, alias: str) -> _WikidataEntity | None:
         matches = self._alias_index.get(alias.strip().lower(), [])
         if len(matches) != 1:
             return None
         return matches[0]
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         parsed = self._parse_claim(subclaim.text)
         if parsed is None:
             return []
@@ -259,7 +256,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
     # Parsers
     # ------------------------------------------------------------------
 
-    def _parse_claim(self, claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_claim(self, claim: str) -> dict[str, Any] | None:
         for handler in (
             self._parse_inception,
             self._parse_headquarters,
@@ -275,7 +272,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         return None
 
     @staticmethod
-    def _parse_inception(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_inception(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) was founded in (?P<year>\d{4})\.?$", claim)
         if not m:
             return None
@@ -286,7 +283,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_headquarters(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_headquarters(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) is headquartered in (?P<place>.+?)\.?$", claim)
         if not m:
             return None
@@ -297,7 +294,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_location(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_location(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) is (?:located )?in (?P<place>.+?)\.?$", claim)
         if not m:
             return None
@@ -308,7 +305,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_birth(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_birth(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) was born in (?P<year>\d{4})\.?$", claim)
         if not m:
             return None
@@ -319,7 +316,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_death(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_death(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) died in (?P<year>\d{4})\.?$", claim)
         if not m:
             return None
@@ -330,7 +327,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_life_status(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_life_status(claim: str) -> dict[str, Any] | None:
         m = re.match(r"^(?P<entity>.+?) (?:is|was) (?P<status>alive|dead)\.?$", claim)
         if not m:
             return None
@@ -341,7 +338,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         }
 
     @staticmethod
-    def _parse_office(claim: str) -> Optional[Dict[str, Any]]:
+    def _parse_office(claim: str) -> dict[str, Any] | None:
         m = re.match(
             r"^(?P<entity>.+?) (?:is|was) (?:the )?(?P<role>prime minister|president|mayor|governor|ceo|chief executive officer) of (?P<jurisdiction>.+?)(?: in (?P<year>\d{4}))?\.?$",
             claim,
@@ -361,7 +358,7 @@ class WikidataEntityConnector(BaseEvidenceConnector):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _resolve_inception(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_inception(entity: _WikidataEntity, parsed: dict[str, Any]):
         if entity.inception_year is None:
             return None
         claimed = parsed["year"]
@@ -369,12 +366,16 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         direction = Direction.SUPPORTS if match else Direction.REFUTES
         excerpt = f"Wikidata inception year for {entity.canonical_name.title()} is {entity.inception_year}."
         claimed_val = ResolvedValue(value=claimed, value_type=ValueType.NUMBER, unit="year")
-        source_val = ResolvedValue(value=entity.inception_year, value_type=ValueType.NUMBER, unit="year")
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        source_val = ResolvedValue(
+            value=entity.inception_year, value_type=ValueType.NUMBER, unit="year"
+        )
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_headquarters(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_headquarters(entity: _WikidataEntity, parsed: dict[str, Any]):
         if not entity.headquarters:
             return None
         claimed_place = str(parsed["place"]).lower()
@@ -383,11 +384,13 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         excerpt = f"Wikidata headquarters location for {entity.canonical_name.title()} is {entity.headquarters.title()}."
         claimed_val = ResolvedValue(value=claimed_place, value_type=ValueType.TEXT)
         source_val = ResolvedValue(value=entity.headquarters.lower(), value_type=ValueType.TEXT)
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_location(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_location(entity: _WikidataEntity, parsed: dict[str, Any]):
         if not entity.location:
             return None
         claimed_place = str(parsed["place"]).lower()
@@ -396,11 +399,13 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         excerpt = f"Wikidata administrative location for {entity.canonical_name.title()} is {entity.location.title()}."
         claimed_val = ResolvedValue(value=claimed_place, value_type=ValueType.TEXT)
         source_val = ResolvedValue(value=entity.location.lower(), value_type=ValueType.TEXT)
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_birth(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_birth(entity: _WikidataEntity, parsed: dict[str, Any]):
         if entity.birth_year is None:
             return None
         claimed = parsed["year"]
@@ -408,12 +413,16 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         direction = Direction.SUPPORTS if match else Direction.REFUTES
         excerpt = f"Wikidata birth year for {entity.canonical_name.title()} is {entity.birth_year}."
         claimed_val = ResolvedValue(value=claimed, value_type=ValueType.NUMBER, unit="year")
-        source_val = ResolvedValue(value=entity.birth_year, value_type=ValueType.NUMBER, unit="year")
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        source_val = ResolvedValue(
+            value=entity.birth_year, value_type=ValueType.NUMBER, unit="year"
+        )
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_death(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_death(entity: _WikidataEntity, parsed: dict[str, Any]):
         if entity.death_year is None:
             return None
         claimed = parsed["year"]
@@ -421,12 +430,16 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         direction = Direction.SUPPORTS if match else Direction.REFUTES
         excerpt = f"Wikidata death year for {entity.canonical_name.title()} is {entity.death_year}."
         claimed_val = ResolvedValue(value=claimed, value_type=ValueType.NUMBER, unit="year")
-        source_val = ResolvedValue(value=entity.death_year, value_type=ValueType.NUMBER, unit="year")
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        source_val = ResolvedValue(
+            value=entity.death_year, value_type=ValueType.NUMBER, unit="year"
+        )
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_life_status(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_life_status(entity: _WikidataEntity, parsed: dict[str, Any]):
         claimed_status = str(parsed["status"]).lower()
         actual_status = "dead" if entity.death_year is not None else "alive"
         match = claimed_status == actual_status
@@ -434,11 +447,13 @@ class WikidataEntityConnector(BaseEvidenceConnector):
         excerpt = f"Wikidata life status for {entity.canonical_name.title()} is {actual_status}."
         claimed_val = ResolvedValue(value=claimed_status, value_type=ValueType.TEXT)
         source_val = ResolvedValue(value=actual_status, value_type=ValueType.TEXT)
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
     @staticmethod
-    def _resolve_office(entity: _WikidataEntity, parsed: Dict[str, Any]):
+    def _resolve_office(entity: _WikidataEntity, parsed: dict[str, Any]):
         if not entity.office_terms:
             return None
         role = str(parsed["role"]).lower()
@@ -470,13 +485,16 @@ class WikidataEntityConnector(BaseEvidenceConnector):
             lower_bound=float(matching_term.start_year),
             upper_bound=float(end_year),
         )
-        comparison = DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        comparison = (
+            DeterministicComparisonResult.MATCH if match else DeterministicComparisonResult.MISMATCH
+        )
         return direction, excerpt, claimed_val, source_val, comparison
 
 
 # ---------------------------------------------------------------------------
 # 2. BLS official statistics connector
 # ---------------------------------------------------------------------------
+
 
 class BLSStatisticsConnector(BaseEvidenceConnector):
     """
@@ -490,13 +508,13 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
     BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 
     # Small fixture of well-known series IDs for deterministic offline behaviour
-    _SERIES_FIXTURES: Dict[str, Dict[str, Any]] = {
+    _SERIES_FIXTURES: dict[str, dict[str, Any]] = {
         "unemployment rate": {"series_id": "LNS14000000", "unit": "percent"},
         "cpi": {"series_id": "CUUR0000SA0", "unit": "index"},
         "nonfarm payroll": {"series_id": "CES0000000001", "unit": "thousands"},
     }
 
-    def __init__(self, api_key: Optional[str] = None, timeout_seconds: float = 10.0):
+    def __init__(self, api_key: str | None = None, timeout_seconds: float = 10.0):
         self._api_key = api_key or os.environ.get("BLS_API_KEY", "")
         self._timeout = timeout_seconds
 
@@ -511,12 +529,12 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
     def _bls_api_enabled(self) -> bool:
         return bool(self._api_key)
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         # Heuristic: look for numeric-statistical claims about US labour / price data
         text_lower = subclaim.text.lower()
 
-        matched_series: Optional[str] = None
-        for keyword, meta in self._SERIES_FIXTURES.items():
+        matched_series: str | None = None
+        for keyword, _meta in self._SERIES_FIXTURES.items():
             if keyword in text_lower:
                 matched_series = keyword
                 break
@@ -540,7 +558,7 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
         return self._offline_placeholder(subclaim, matched_series)
 
     @staticmethod
-    def _extract_claimed_value(text: str) -> Optional[ResolvedValue]:
+    def _extract_claimed_value(text: str) -> ResolvedValue | None:
         """Extract a numeric claimed value from subclaim text."""
         import re
 
@@ -552,7 +570,9 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
         return ResolvedValue(value=val, value_type=ValueType.NUMBER, unit=unit)
 
     @staticmethod
-    def _compare_values(claimed: Optional[ResolvedValue], source: ResolvedValue) -> DeterministicComparisonResult:
+    def _compare_values(
+        claimed: ResolvedValue | None, source: ResolvedValue
+    ) -> DeterministicComparisonResult:
         if claimed is None or claimed.value is None or source.value is None:
             return DeterministicComparisonResult.NOT_COMPARABLE
         try:
@@ -565,7 +585,7 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
         except Exception:
             return DeterministicComparisonResult.NOT_COMPARABLE
 
-    def _query_live_api(self, subclaim: AtomicSubclaim, series_keyword: str) -> List[EvidenceItem]:
+    def _query_live_api(self, subclaim: AtomicSubclaim, series_keyword: str) -> list[EvidenceItem]:
         meta = self._SERIES_FIXTURES[series_keyword]
         series_id = meta["series_id"]
 
@@ -594,7 +614,9 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
             for dp in s.get("data", []):
                 if latest is None or dp.get("year", "0") > latest.get("year", "0"):
                     latest = dp
-                elif dp.get("year") == latest.get("year") and dp.get("period", "M00") > latest.get("period", "M00"):
+                elif dp.get("year") == latest.get("year") and dp.get("period", "M00") > latest.get(
+                    "period", "M00"
+                ):
                     latest = dp
 
         if latest is None:
@@ -604,7 +626,13 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
         source_val = ResolvedValue(value=value, value_type=ValueType.NUMBER, unit=meta["unit"])
         claimed_val = self._extract_claimed_value(subclaim.text)
         comparison = self._compare_values(claimed_val, source_val)
-        direction = Direction.SUPPORTS if comparison == DeterministicComparisonResult.MATCH else Direction.REFUTES if comparison == DeterministicComparisonResult.MISMATCH else Direction.NEUTRAL
+        direction = (
+            Direction.SUPPORTS
+            if comparison == DeterministicComparisonResult.MATCH
+            else Direction.REFUTES
+            if comparison == DeterministicComparisonResult.MISMATCH
+            else Direction.NEUTRAL
+        )
         item = self._make_item(
             subclaim=subclaim,
             source_type=SourceType.OFFICIAL_STAT,
@@ -625,7 +653,9 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
         )
         return [item]
 
-    def _offline_placeholder(self, subclaim: AtomicSubclaim, series_keyword: str) -> List[EvidenceItem]:
+    def _offline_placeholder(
+        self, subclaim: AtomicSubclaim, series_keyword: str
+    ) -> list[EvidenceItem]:
         meta = self._SERIES_FIXTURES[series_keyword]
         series_id = meta["series_id"]
         # Build a canonical, deterministic payload so raw_response_hash is stable across runs.
@@ -671,6 +701,7 @@ class BLSStatisticsConnector(BaseEvidenceConnector):
 # 3. Crossref scientific metadata connector
 # ---------------------------------------------------------------------------
 
+
 class CrossrefConnector(BaseEvidenceConnector):
     """
     Crossref REST API connector for DOI-based scientific metadata.
@@ -681,7 +712,7 @@ class CrossrefConnector(BaseEvidenceConnector):
 
     CROSSREF_WORKS_URL = "https://api.crossref.org/works"
 
-    def __init__(self, timeout_seconds: float = 10.0, email: Optional[str] = None):
+    def __init__(self, timeout_seconds: float = 10.0, email: str | None = None):
         self._timeout = timeout_seconds
         self._email = email or os.environ.get("CROSSREF_EMAIL", "")
 
@@ -693,7 +724,7 @@ class CrossrefConnector(BaseEvidenceConnector):
     def connector_version(self) -> str:
         return "v1.5.0"
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         text_lower = subclaim.text.lower()
 
         # Heuristic 1: explicit DOI in claim text
@@ -708,7 +739,7 @@ class CrossrefConnector(BaseEvidenceConnector):
 
         return []
 
-    def _query_doi(self, subclaim: AtomicSubclaim, doi: str, tier: int) -> List[EvidenceItem]:
+    def _query_doi(self, subclaim: AtomicSubclaim, doi: str, tier: int) -> list[EvidenceItem]:
         if not self._email:
             # Without polite header, still attempt but may be rate-limited
             pass
@@ -755,11 +786,13 @@ class CrossrefConnector(BaseEvidenceConnector):
             direction_method=DirectionMethod.DETERMINISTIC_STRUCTURED,
             relevance_score=0.9,
             group_id=f"crossref:{doi}",
-            source_value=ResolvedValue(value=year, value_type=ValueType.NUMBER, unit="year") if year else None,
+            source_value=ResolvedValue(value=year, value_type=ValueType.NUMBER, unit="year")
+            if year
+            else None,
         )
         return [item]
 
-    def _query_search(self, subclaim: AtomicSubclaim, query: str) -> List[EvidenceItem]:
+    def _query_search(self, subclaim: AtomicSubclaim, query: str) -> list[EvidenceItem]:
         if not self._email:
             return []
         qs = urllib.parse.urlencode({"query": query, "rows": "3"})
@@ -772,7 +805,7 @@ class CrossrefConnector(BaseEvidenceConnector):
         except Exception:
             return []
 
-        items: List[EvidenceItem] = []
+        items: list[EvidenceItem] = []
         for work in data.get("message", {}).get("items", [])[:3]:
             doi = work.get("DOI", "")
             title = " ".join(work.get("title", ["Unknown"]))
@@ -791,7 +824,7 @@ class CrossrefConnector(BaseEvidenceConnector):
                     direction_confidence=1.0,
                     direction_method=DirectionMethod.DETERMINISTIC_STRUCTURED,
                     relevance_score=0.7,
-                    group_id=f"crossref:{doi}" if doi else f"crossref:search",
+                    group_id=f"crossref:{doi}" if doi else "crossref:search",
                 )
             )
         return items
@@ -801,6 +834,7 @@ class CrossrefConnector(BaseEvidenceConnector):
 # 4. Tier 2 curated source connector
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _CuratedDocument:
     doc_id: str
@@ -808,7 +842,7 @@ class _CuratedDocument:
     url: str
     excerpt: str
     authority: str
-    date: Optional[str] = None
+    date: str | None = None
 
 
 DEFAULT_CURATED_DOCUMENTS = (
@@ -845,7 +879,7 @@ class CuratedRAGConnector(BaseEvidenceConnector):
     a bundled fixture so tests remain reproducible without network access.
     """
 
-    def __init__(self, documents: Optional[Iterable[_CuratedDocument]] = None):
+    def __init__(self, documents: Iterable[_CuratedDocument] | None = None):
         self._docs = list(documents) if documents is not None else list(DEFAULT_CURATED_DOCUMENTS)
 
     @property
@@ -856,9 +890,9 @@ class CuratedRAGConnector(BaseEvidenceConnector):
     def connector_version(self) -> str:
         return "v1.5.0"
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         text_lower = subclaim.text.lower()
-        items: List[EvidenceItem] = []
+        items: list[EvidenceItem] = []
         for doc in self._docs:
             score = self._relevance(doc, text_lower)
             if score < 0.3:
@@ -897,7 +931,9 @@ class CuratedRAGConnector(BaseEvidenceConnector):
             overlap = min(1.0, overlap + 0.3)
         return round(overlap, 2)
 
-    def _classify_direction(self, doc: _CuratedDocument, query_lower: str) -> tuple[Direction, float]:
+    def _classify_direction(
+        self, doc: _CuratedDocument, query_lower: str
+    ) -> tuple[Direction, float]:
         # Very conservative: only SUPPORTS if strong keyword overlap,
         # otherwise NEUTRAL/UNCLEAR so Tier 2 cross-verification is required.
         score = self._relevance(doc, query_lower)
@@ -912,6 +948,7 @@ class CuratedRAGConnector(BaseEvidenceConnector):
 # 5. Tier 3 search/discovery connector
 # ---------------------------------------------------------------------------
 
+
 class BraveSearchConnector(BaseEvidenceConnector):
     """
     Tier 3 search/discovery connector using the Brave Search API.
@@ -925,7 +962,7 @@ class BraveSearchConnector(BaseEvidenceConnector):
 
     BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search"
 
-    def __init__(self, api_key: Optional[str] = None, timeout_seconds: float = 10.0):
+    def __init__(self, api_key: str | None = None, timeout_seconds: float = 10.0):
         self._api_key = api_key or os.environ.get("BRAVE_API_KEY", "")
         self._timeout = timeout_seconds
 
@@ -937,7 +974,7 @@ class BraveSearchConnector(BaseEvidenceConnector):
     def connector_version(self) -> str:
         return "v1.5.0"
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         if not self._api_key:
             # No key -> no evidence.  This is a clean skip, not a failure.
             return []
@@ -949,7 +986,7 @@ class BraveSearchConnector(BaseEvidenceConnector):
             # connector_failure_subclaim_ids if desired.
             return []
 
-    def _query_api(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def _query_api(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         qs = urllib.parse.urlencode({"q": subclaim.text, "count": "5"})
         url = f"{self.BRAVE_API_URL}?{qs}"
         req = urllib.request.Request(
@@ -962,7 +999,7 @@ class BraveSearchConnector(BaseEvidenceConnector):
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
 
-        items: List[EvidenceItem] = []
+        items: list[EvidenceItem] = []
         for idx, result in enumerate(data.get("web", {}).get("results", [])[:5]):
             title = result.get("title", "")
             snippet = result.get("description", "")
@@ -991,11 +1028,12 @@ class BraveSearchConnector(BaseEvidenceConnector):
 # Connector registry / factory
 # ---------------------------------------------------------------------------
 
+
 class ConnectorRegistry:
     """Convenience registry for instantiating the Phase 4 connector set."""
 
     @staticmethod
-    def default_connectors() -> List[BaseEvidenceConnector]:
+    def default_connectors() -> list[BaseEvidenceConnector]:
         return [
             WikidataEntityConnector(),
             BLSStatisticsConnector(),
@@ -1005,7 +1043,7 @@ class ConnectorRegistry:
         ]
 
     @staticmethod
-    def offline_connectors() -> List[BaseEvidenceConnector]:
+    def offline_connectors() -> list[BaseEvidenceConnector]:
         """Connectors that work without API keys or network access."""
         return [
             WikidataEntityConnector(),

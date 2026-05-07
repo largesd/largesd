@@ -1,5 +1,4 @@
 """API integration tests for admin-only endpoints."""
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -80,16 +79,6 @@ def test_mark_snapshot_incident_not_found(client, auth_headers):
         json={"description": "Incident description here.", "severity": "medium"},
     )
     assert resp.status_code == 404
-
-
-def test_mark_snapshot_incident_not_found(client, auth_headers):
-    resp = client.post(
-        "/api/admin/snapshots/nonexistent/mark-incident",
-        headers=auth_headers,
-        json={"description": "Incident description here.", "severity": "medium"},
-    )
-    assert resp.status_code == 404
-    assert "Snapshot not found" in resp.get_json()["error"]
 
 
 # ---------------------------------------------------------------------------

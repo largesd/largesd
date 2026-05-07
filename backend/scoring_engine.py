@@ -6,7 +6,7 @@ Generalizes scoring to frame-defined sides while preserving binary compatibility
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from backend.lsd_v1_2 import (
 @dataclass
 class TopicSideScores:
     """Scores for a topic-side."""
+
     topic_id: str
     side: str
     factuality: float = 0.0
@@ -37,13 +38,14 @@ class TopicSideScores:
 @dataclass
 class ReplicateResult:
     """Result from a single replicate run."""
+
     overall_for: float
     overall_against: float
     margin_d: float
-    topic_scores: Dict[str, Dict[str, Dict[str, Any]]]
-    overall_scores: Dict[str, float]
-    side_order: List[str]
-    metadata: Dict[str, Any] = None
+    topic_scores: dict[str, dict[str, dict[str, Any]]]
+    overall_scores: dict[str, float]
+    side_order: list[str]
+    metadata: dict[str, Any] = None
 
     def __post_init__(self):
         if self.metadata is None:
@@ -55,16 +57,19 @@ class ScoringEngine:
     Implements the MSD scoring pipeline with support for frame-defined side sets.
     """
 
-    def __init__(self, llm_client: Optional[LLMClient] = None,
-                 num_judges: int = 5, num_replicates: int = 100):
+    def __init__(
+        self, llm_client: LLMClient | None = None, num_judges: int = 5, num_replicates: int = 100
+    ):
         self.llm_client = llm_client or LLMClient(num_judges=num_judges)
         self.num_judges = num_judges
         self.num_replicates = num_replicates
 
     @staticmethod
-    def _normalize_side_order(side_order: Optional[List[str]],
-                              topic_facts: Dict[str, List[Dict]],
-                              topic_arguments: Dict[str, List[Dict]]) -> List[str]:
+    def _normalize_side_order(
+        side_order: list[str] | None,
+        topic_facts: dict[str, list[dict]],
+        topic_arguments: dict[str, list[dict]],
+    ) -> list[str]:
         if side_order:
             cleaned = [side for side in side_order if side]
             if cleaned:
@@ -85,14 +90,14 @@ class ScoringEngine:
         return ["FOR", "AGAINST"]
 
     @staticmethod
-    def _is_binary_for_against(side_order: List[str]) -> bool:
+    def _is_binary_for_against(side_order: list[str]) -> bool:
         return len(side_order) == 2 and set(side_order) == {"FOR", "AGAINST"}
 
     @staticmethod
-    def _sorted_scores(overall_scores: Dict[str, float]) -> List[Tuple[str, float]]:
+    def _sorted_scores(overall_scores: dict[str, float]) -> list[tuple[str, float]]:
         return sorted(overall_scores.items(), key=lambda item: (-item[1], item[0]))
 
-    def compute_factuality_diagnostics(self, facts: List[Dict]) -> Dict[str, Any]:
+    def compute_factuality_diagnostics(self, facts: list[dict]) -> dict[str, Any]:
         """Compute factuality F_{t,s} plus LSD insufficiency diagnostics.
 
         Per LSD_FactCheck_v1_5_1 §8 (Aggregation Edge Cases):
@@ -114,7 +119,7 @@ class ScoringEngine:
 
         # v1.5 ternary semantics: SUPPORTED and REFUTED are equally decisive;
         # INSUFFICIENT is indecisive (p=0.5).
-        def _is_decisive_v15(f: Dict) -> bool:
+        def _is_decisive_v15(f: dict) -> bool:
             # Prefer first-class v1.5 fields (LSD_FactCheck_v1_5_1 integration)
             status = f.get("v15_status")
             if status:
@@ -131,14 +136,14 @@ class ScoringEngine:
         insufficient_facts = [f for f in facts if not _is_decisive_v15(f)]
 
         if decisive_facts:
-            f_supported_only = (
-                sum(f.get("p_true", 0.5) for f in decisive_facts) / len(decisive_facts)
+            f_supported_only = sum(f.get("p_true", 0.5) for f in decisive_facts) / len(
+                decisive_facts
             )
         else:
             f_supported_only = None
 
         # Tier counts from v1.5 first-class fields or diagnostics
-        tier_counts: Dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
+        tier_counts: dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
         for f in facts:
             # Prefer first-class v1.5 field
             v15_tier = f.get("v15_best_evidence_tier")
@@ -164,16 +169,16 @@ class ScoringEngine:
             "tier_counts": tier_counts,
         }
 
-    def compute_factuality(self, facts: List[Dict]) -> Optional[float]:
+    def compute_factuality(self, facts: list[dict]) -> float | None:
         """Compute factuality F_{t,s} as a legacy scalar API.
 
         Returns None when no empirical premises exist (per v1.5 spec).
         """
         return self.compute_factuality_diagnostics(facts)["f_all"]
 
-    def compute_reasoning_strength(self, arguments: List[Dict],
-                                   side: str,
-                                   frame_context: str = "") -> Tuple[float, float, List[Dict]]:
+    def compute_reasoning_strength(
+        self, arguments: list[dict], side: str, frame_context: str = ""
+    ) -> tuple[float, float, list[dict]]:
         """Compute reasoning strength Reason_{t,s}."""
         if not arguments:
             return 0.5, 0.0, []
@@ -193,13 +198,15 @@ class ScoringEngine:
             )
             agg = self.llm_client.aggregate_judge_scores(evaluations)
 
-            judge_details.append({
-                "arg_id": arg.get("canon_arg_id", arg.get("au_id", "unknown")),
-                "all_scores": agg["all_scores"],
-                "median": agg["median"],
-                "iqr": agg["iqr"],
-                "disagreement_level": agg["disagreement_level"],
-            })
+            judge_details.append(
+                {
+                    "arg_id": arg.get("canon_arg_id", arg.get("au_id", "unknown")),
+                    "all_scores": agg["all_scores"],
+                    "median": agg["median"],
+                    "iqr": agg["iqr"],
+                    "disagreement_level": agg["disagreement_level"],
+                }
+            )
             argument_scores.append(agg["median"])
 
         median_reasoning = np.median(argument_scores)
@@ -208,13 +215,16 @@ class ScoringEngine:
 
         return float(median_reasoning), float(iqr), judge_details
 
-    def compute_coverage(self, own_arguments: List[Dict],
-                         opposing_arguments: List[Dict],
-                         all_facts: List[Dict],
-                         side: str,
-                         frame_context: str = "") -> Tuple[float, float, Dict[str, int]]:
+    def compute_coverage(
+        self,
+        own_arguments: list[dict],
+        opposing_arguments: list[dict],
+        all_facts: list[dict],
+        side: str,
+        frame_context: str = "",
+    ) -> tuple[float, float, dict[str, int]]:
         """Compute coverage Cov_{t,s} against all non-self arguments.
-        
+
         Returns (coverage, iqr, rebuttal_type_distribution).
         """
         if not opposing_arguments:
@@ -229,8 +239,7 @@ class ScoringEngine:
             )
 
         fact_p = {
-            f.get("canon_fact_id", f.get("fact_id", "")): f.get("p_true", 0.5)
-            for f in all_facts
+            f.get("canon_fact_id", f.get("fact_id", "")): f.get("p_true", 0.5) for f in all_facts
         }
 
         def get_decisiveness(fact_id: str) -> float:
@@ -251,7 +260,9 @@ class ScoringEngine:
 
         rebuttal_text = " ".join(a.get("inference_text", "") for a in own_arguments)
         judge_coverages = []
-        type_votes: Dict[str, List[str]] = {opp.get("canon_arg_id", opp.get("au_id", "")): [] for opp in opposing_arguments}
+        type_votes: dict[str, list[str]] = {
+            opp.get("canon_arg_id", opp.get("au_id", "")): [] for opp in opposing_arguments
+        }
 
         for judge_idx in range(self.num_judges):
             addressed_leverage = 0.0
@@ -285,14 +296,19 @@ class ScoringEngine:
         type_distribution = self._aggregate_rebuttal_types(type_votes)
         return float(median_coverage), float(iqr), type_distribution
 
-    def _compute_binary_coverage(self, own_arguments: List[Dict],
-                                 opposing_arguments: List[Dict],
-                                 side: str,
-                                 frame_context: str = "") -> Tuple[float, float, Dict[str, int]]:
+    def _compute_binary_coverage(
+        self,
+        own_arguments: list[dict],
+        opposing_arguments: list[dict],
+        side: str,
+        frame_context: str = "",
+    ) -> tuple[float, float, dict[str, int]]:
         """LSD v1.2 binary coverage: mean ADDRESSED labels over opposing targets."""
         rebuttal_text = " ".join(a.get("inference_text", "") for a in own_arguments)
         judge_coverages = []
-        type_votes: Dict[str, List[str]] = {opp.get("canon_arg_id", opp.get("au_id", "")): [] for opp in opposing_arguments}
+        type_votes: dict[str, list[str]] = {
+            opp.get("canon_arg_id", opp.get("au_id", "")): [] for opp in opposing_arguments
+        }
 
         for judge_idx in range(self.num_judges):
             labels = []
@@ -309,7 +325,9 @@ class ScoringEngine:
                 )
                 labels.append(1.0 if addressed else 0.0)
                 type_votes[opp_arg.get("canon_arg_id", opp_arg.get("au_id", ""))].append(
-                    determinations[judge_idx].get("rebuttal_type", "UNKNOWN") if judge_idx < len(determinations) else "UNKNOWN"
+                    determinations[judge_idx].get("rebuttal_type", "UNKNOWN")
+                    if judge_idx < len(determinations)
+                    else "UNKNOWN"
                 )
             judge_coverages.append(sum(labels) / len(labels) if labels else 1.0)
 
@@ -319,10 +337,10 @@ class ScoringEngine:
         return float(median_coverage), float(q75 - q25), type_distribution
 
     @staticmethod
-    def _aggregate_rebuttal_types(type_votes: Dict[str, List[str]]) -> Dict[str, int]:
+    def _aggregate_rebuttal_types(type_votes: dict[str, list[str]]) -> dict[str, int]:
         """Aggregate judge rebuttal-type tags into a distribution."""
         distribution = {"EMPIRICAL": 0, "NORMATIVE": 0, "INFERENCE": 0, "SCOPE/DEFINITION": 0}
-        for arg_id, votes in type_votes.items():
+        for _arg_id, votes in type_votes.items():
             if not votes:
                 continue
             # Majority vote per argument
@@ -335,9 +353,9 @@ class ScoringEngine:
                 distribution[winner] += 1
         return distribution
 
-    def compute_normative_acceptability(self, premise_text: str,
-                                        frame_values: List[str],
-                                        frame_context: str = "") -> Dict[str, Any]:
+    def compute_normative_acceptability(
+        self, premise_text: str, frame_values: list[str], frame_context: str = ""
+    ) -> dict[str, Any]:
         """Deterministic q = P(acceptable | Frame) hook for normative premises."""
         text = (premise_text or "").lower()
         values = [value for value in frame_values if value]
@@ -358,8 +376,7 @@ class ScoringEngine:
             },
         }
 
-    def compute_quality(self, factuality: Optional[float], reasoning: float,
-                        coverage: float) -> float:
+    def compute_quality(self, factuality: float | None, reasoning: float, coverage: float) -> float:
         """Compute quality Q_{t,s}.
 
         If factuality is None (no empirical premises), omit it from the
@@ -381,23 +398,27 @@ class ScoringEngine:
             product *= value
         return product ** (1.0 / len(components))
 
-    def compute_topic_relevance(self, topics: List[Dict],
-                                topic_content_mass: Dict[str, int]) -> Dict[str, float]:
+    def compute_topic_relevance(
+        self, topics: list[dict], topic_content_mass: dict[str, int]
+    ) -> dict[str, float]:
         """Compute topic relevance weights."""
         return compute_topic_relevance_from_masses(topic_content_mass, scoring_formula_mode())
 
-    def compute_debate_scores(self, topics: List[Dict],
-                              topic_facts: Dict[str, List[Dict]],
-                              topic_arguments: Dict[str, List[Dict]],
-                              topic_content_mass: Dict[str, int],
-                              side_order: Optional[List[str]] = None,
-                              frame_context: str = "") -> Dict[str, Any]:
+    def compute_debate_scores(
+        self,
+        topics: list[dict],
+        topic_facts: dict[str, list[dict]],
+        topic_arguments: dict[str, list[dict]],
+        topic_content_mass: dict[str, int],
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+    ) -> dict[str, Any]:
         """Compute debate scores under the current active frame."""
         side_order = self._normalize_side_order(side_order, topic_facts, topic_arguments)
         relevance = self.compute_topic_relevance(topics, topic_content_mass)
 
-        topic_scores: Dict[str, Dict[str, Dict[str, Any]]] = {}
-        legacy_topic_scores: Dict[str, Dict[str, Any]] = {}
+        topic_scores: dict[str, dict[str, dict[str, Any]]] = {}
+        legacy_topic_scores: dict[str, dict[str, Any]] = {}
         overall_scores = {side: 0.0 for side in side_order}
 
         for topic in topics:
@@ -427,7 +448,9 @@ class ScoringEngine:
                 )
                 quality = self.compute_quality(factuality["f_all"], reasoning, coverage)
                 sensitivity = component_sensitivity(factuality["f_all"], reasoning, coverage)
-                normative_facts = [fact for fact in side_facts if fact.get("fact_type") == "normative"]
+                normative_facts = [
+                    fact for fact in side_facts if fact.get("fact_type") == "normative"
+                ]
                 normative = [
                     self.compute_normative_acceptability(
                         fact.get("canon_fact_text", ""),
@@ -440,9 +463,15 @@ class ScoringEngine:
                 side_scores = {
                     "topic_id": topic_id,
                     "side": side,
-                    "factuality": round(factuality["f_all"], 2) if factuality["f_all"] is not None else None,
-                    "f_supported_only": round(factuality["f_supported_only"], 2) if factuality["f_supported_only"] is not None else None,
-                    "insufficiency_rate": round(factuality["insufficiency_rate"], 2) if factuality["insufficiency_rate"] is not None else None,
+                    "factuality": round(factuality["f_all"], 2)
+                    if factuality["f_all"] is not None
+                    else None,
+                    "f_supported_only": round(factuality["f_supported_only"], 2)
+                    if factuality["f_supported_only"] is not None
+                    else None,
+                    "insufficiency_rate": round(factuality["insufficiency_rate"], 2)
+                    if factuality["insufficiency_rate"] is not None
+                    else None,
                     "tier_counts": factuality.get("tier_counts", {}),
                     "reasoning": round(reasoning, 2),
                     "coverage": round(coverage, 2),
@@ -458,16 +487,20 @@ class ScoringEngine:
                     "coverage_iqr": round(coverage_iqr, 2),
                     "normative_acceptability": {
                         "count": len(normative),
-                        "average_q": round(float(np.mean([item["q"] for item in normative])), 4) if normative else None,
+                        "average_q": round(float(np.mean([item["q"] for item in normative])), 4)
+                        if normative
+                        else None,
                         "items": normative,
                     },
                     "rebuttal_type_distribution": type_distribution,
                     "judge_disagreement": {
                         "reasoning": judge_details,
                         "disagreement_level": (
-                            "high" if reasoning_iqr > 0.2 else
-                            "moderate" if reasoning_iqr > 0.1 else
-                            "low"
+                            "high"
+                            if reasoning_iqr > 0.2
+                            else "moderate"
+                            if reasoning_iqr > 0.1
+                            else "low"
                         ),
                     },
                 }
@@ -480,7 +513,13 @@ class ScoringEngine:
         ordered = self._sorted_scores(overall_scores)
         leader = ordered[0][0] if ordered else None
         runner_up = ordered[1][0] if len(ordered) > 1 else None
-        lead_margin = (ordered[0][1] - ordered[1][1]) if len(ordered) > 1 else ordered[0][1] if ordered else 0.0
+        lead_margin = (
+            (ordered[0][1] - ordered[1][1])
+            if len(ordered) > 1
+            else ordered[0][1]
+            if ordered
+            else 0.0
+        )
 
         overall_for = rounded_scores.get("FOR", 0.0)
         overall_against = rounded_scores.get("AGAINST", 0.0)
@@ -510,7 +549,9 @@ class ScoringEngine:
         }
 
     @staticmethod
-    def _rebuttal_type_distribution(own_arguments: List[Dict], opposing_arguments: List[Dict]) -> Dict[str, int]:
+    def _rebuttal_type_distribution(
+        own_arguments: list[dict], opposing_arguments: list[dict]
+    ) -> dict[str, int]:
         """
         DEPRECATED: Fallback heuristic when actual judge tags are unavailable.
         LSD v1.2 uses actual judge_coverage rebuttal_type tags instead.
@@ -530,12 +571,17 @@ class ScoringEngine:
             distribution["SCOPE/DEFINITION"] += len(opposing_arguments)
         return distribution
 
-    def run_replicates(self, topics, topic_facts, topic_arguments,
-                       topic_content_mass,
-                       side_order: Optional[List[str]] = None,
-                       frame_context: str = "",
-                       extraction_reruns: int = 2,
-                       bootstrap: bool = False) -> List[ReplicateResult]:
+    def run_replicates(
+        self,
+        topics,
+        topic_facts,
+        topic_arguments,
+        topic_content_mass,
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+        extraction_reruns: int = 2,
+        bootstrap: bool = False,
+    ) -> list[ReplicateResult]:
         """Run replicate score calculations with extraction reruns and optional bootstrap.
 
         LSD §18: replicates = multiple judges + extraction/dedupe reruns + optional bootstrap.
@@ -599,8 +645,12 @@ class ScoringEngine:
                 final_scores = self._average_scores(variant_scores, side_order)
             else:
                 final_scores = self.compute_debate_scores(
-                    topics, topic_facts, topic_arguments, topic_content_mass,
-                    side_order=side_order, frame_context=frame_context,
+                    topics,
+                    topic_facts,
+                    topic_arguments,
+                    topic_content_mass,
+                    side_order=side_order,
+                    frame_context=frame_context,
                 )
 
             replicate_metadata = {
@@ -625,7 +675,7 @@ class ScoringEngine:
         return replicates
 
     @staticmethod
-    def _average_scores(score_list: List[Dict[str, Any]], side_order: List[str]) -> Dict[str, Any]:
+    def _average_scores(score_list: list[dict[str, Any]], side_order: list[str]) -> dict[str, Any]:
         """Average scores across extraction variants."""
         if not score_list:
             return {}
@@ -636,12 +686,15 @@ class ScoringEngine:
         result["overall_against"] = round(sum(s["overall_against"] for s in score_list) / n, 2)
         result["margin_d"] = round(sum(s["margin_d"] for s in score_list) / n, 4)
         result["lead_margin"] = round(sum(s.get("lead_margin", 0) for s in score_list) / n, 4)
-        avg_overall = {side: round(sum(s["overall_scores"].get(side, 0) for s in score_list) / n, 2) for side in side_order}
+        avg_overall = {
+            side: round(sum(s["overall_scores"].get(side, 0) for s in score_list) / n, 2)
+            for side in side_order
+        }
         result["overall_scores"] = avg_overall
         return result
 
     @staticmethod
-    def _replicate_scores(replicate: Any) -> Dict[str, float]:
+    def _replicate_scores(replicate: Any) -> dict[str, float]:
         if getattr(replicate, "overall_scores", None):
             return dict(replicate.overall_scores)
         return {
@@ -649,8 +702,9 @@ class ScoringEngine:
             "AGAINST": float(getattr(replicate, "overall_against", 0.0)),
         }
 
-    def compute_verdict(self, replicates: List[Any],
-                        side_order: Optional[List[str]] = None) -> Dict[str, Any]:
+    def compute_verdict(
+        self, replicates: list[Any], side_order: list[str] | None = None
+    ) -> dict[str, Any]:
         """Compute verdict from replicate score distributions."""
         if not replicates:
             return {
@@ -667,7 +721,9 @@ class ScoringEngine:
             }
 
         if not side_order:
-            side_order = getattr(replicates[0], "side_order", None) or list(self._replicate_scores(replicates[0]).keys())
+            side_order = getattr(replicates[0], "side_order", None) or list(
+                self._replicate_scores(replicates[0]).keys()
+            )
 
         per_side_values = {side: [] for side in side_order}
         leader_counts = {side: 0 for side in side_order}
@@ -695,8 +751,7 @@ class ScoringEngine:
                 lead_margins.append(0.0)
 
         overall_scores_median = {
-            side: round(float(np.median(values)), 4)
-            for side, values in per_side_values.items()
+            side: round(float(np.median(values)), 4) for side, values in per_side_values.items()
         }
         ordered_by_median = self._sorted_scores(overall_scores_median)
         leader = ordered_by_median[0][0] if ordered_by_median else None
@@ -738,10 +793,15 @@ class ScoringEngine:
             "overall_scores_median": overall_scores_median,
         }
 
-    def compute_counterfactuals(self, topics, topic_facts, topic_arguments,
-                                topic_content_mass,
-                                side_order: Optional[List[str]] = None,
-                                frame_context: str = "") -> Dict[str, Any]:
+    def compute_counterfactuals(
+        self,
+        topics,
+        topic_facts,
+        topic_arguments,
+        topic_content_mass,
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+    ) -> dict[str, Any]:
         """Compute what the verdict margin would look like if each topic were removed."""
         base_scores = self.compute_debate_scores(
             topics,
@@ -780,16 +840,23 @@ class ScoringEngine:
             counterfactuals[topic_id] = {
                 "d_without_topic": round(float(new_margin), 4),
                 "change_in_d": round(float(new_margin - base_margin), 4),
-                "would_flip_verdict": bool(base_leader and new_leader and base_leader != new_leader),
+                "would_flip_verdict": bool(
+                    base_leader and new_leader and base_leader != new_leader
+                ),
                 "new_leader": new_leader,
             }
 
         return counterfactuals
 
-    def run_side_label_symmetry_audit(self, topics, topic_facts,
-                                      topic_arguments, topic_content_mass,
-                                      side_order: Optional[List[str]] = None,
-                                      frame_context: str = "") -> Dict[str, Any]:
+    def run_side_label_symmetry_audit(
+        self,
+        topics,
+        topic_facts,
+        topic_arguments,
+        topic_content_mass,
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+    ) -> dict[str, Any]:
         """Swap side labels for binary debates and measure the effect on scores."""
         side_order = self._normalize_side_order(side_order, topic_facts, topic_arguments)
         if len(side_order) != 2:
@@ -839,20 +906,30 @@ class ScoringEngine:
             frame_context=frame_context,
         )
 
-        original_margin = normal_scores["overall_scores"].get(side_a, 0) - normal_scores["overall_scores"].get(side_b, 0)
-        swapped_margin = swapped_scores["overall_scores"].get(side_a, 0) - swapped_scores["overall_scores"].get(side_b, 0)
+        original_margin = normal_scores["overall_scores"].get(side_a, 0) - normal_scores[
+            "overall_scores"
+        ].get(side_b, 0)
+        swapped_margin = swapped_scores["overall_scores"].get(side_a, 0) - swapped_scores[
+            "overall_scores"
+        ].get(side_b, 0)
         delta_margin = swapped_margin - (-original_margin)
 
         topic_deltas = {}
         for tid in topic_facts.keys():
             orig_a = normal_scores["topic_scores"].get(tid, {}).get(side_a, {}).get("quality", 0)
             orig_b = normal_scores["topic_scores"].get(tid, {}).get(side_b, {}).get("quality", 0)
-            swapped_a = swapped_scores["topic_scores"].get(tid, {}).get(side_a, {}).get("quality", 0)
-            swapped_b = swapped_scores["topic_scores"].get(tid, {}).get(side_b, {}).get("quality", 0)
+            swapped_a = (
+                swapped_scores["topic_scores"].get(tid, {}).get(side_a, {}).get("quality", 0)
+            )
+            swapped_b = (
+                swapped_scores["topic_scores"].get(tid, {}).get(side_b, {}).get("quality", 0)
+            )
             topic_deltas[tid] = {
                 "q_side_a_delta": round(float(swapped_a - orig_b), 3),
                 "q_side_b_delta": round(float(swapped_b - orig_a), 3),
-                "asymmetry_score": round(float(abs(swapped_a - orig_b) + abs(swapped_b - orig_a)), 3),
+                "asymmetry_score": round(
+                    float(abs(swapped_a - orig_b) + abs(swapped_b - orig_a)), 3
+                ),
             }
 
         return {
@@ -864,10 +941,13 @@ class ScoringEngine:
             "interpretation": self._interpret_symmetry_result(abs(delta_margin)),
         }
 
-    def run_symmetry_tests(self, selected_topic_facts: Dict[str, List[Dict]],
-                           frame_values: List[str],
-                           side_order: Optional[List[str]] = None,
-                           frame_context: str = "") -> Dict[str, Any]:
+    def run_symmetry_tests(
+        self,
+        selected_topic_facts: dict[str, list[dict]],
+        frame_values: list[str],
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+    ) -> dict[str, Any]:
         """LSD §14: Mandatory normative symmetry tests for selected normative premises.
 
         For each selected normative premise under the active Frame:
@@ -902,7 +982,14 @@ class ScoringEngine:
 
                 # Comparable-case test: create structural analog by flipping markers
                 analog_text = premise_text
-                positive_markers = ("fair", "transparent", "accountable", "evidence", "safety", "accuracy")
+                positive_markers = (
+                    "fair",
+                    "transparent",
+                    "accountable",
+                    "evidence",
+                    "safety",
+                    "accuracy",
+                )
                 conflict_markers = ("unfair", "opaque", "harm", "coerce", "ignore")
                 for marker in positive_markers:
                     analog_text = analog_text.replace(marker, f"NOT_{marker}")
@@ -914,24 +1001,26 @@ class ScoringEngine:
                 q_analog = analog_result["q"]
                 comparable_delta = round(q_analog - q_base, 4)
 
-                results.append({
-                    "canon_fact_id": fact.get("canon_fact_id", ""),
-                    "topic_id": tid,
-                    "side": side,
-                    "premise_text": premise_text[:200],
-                    "q_baseline": q_base,
-                    "role_swap": {
-                        "swapped_side": swapped_side,
-                        "q_swapped": q_swapped,
-                        "delta": role_swap_delta,
-                    },
-                    "comparable_case": {
-                        "analog_text": analog_text[:200],
-                        "q_analog": q_analog,
-                        "delta": comparable_delta,
-                    },
-                    "max_delta": round(max(abs(role_swap_delta), abs(comparable_delta)), 4),
-                })
+                results.append(
+                    {
+                        "canon_fact_id": fact.get("canon_fact_id", ""),
+                        "topic_id": tid,
+                        "side": side,
+                        "premise_text": premise_text[:200],
+                        "q_baseline": q_base,
+                        "role_swap": {
+                            "swapped_side": swapped_side,
+                            "q_swapped": q_swapped,
+                            "delta": role_swap_delta,
+                        },
+                        "comparable_case": {
+                            "analog_text": analog_text[:200],
+                            "q_analog": q_analog,
+                            "delta": comparable_delta,
+                        },
+                        "max_delta": round(max(abs(role_swap_delta), abs(comparable_delta)), 4),
+                    }
+                )
                 overall_deltas.append(max(abs(role_swap_delta), abs(comparable_delta)))
 
         max_delta = max(overall_deltas) if overall_deltas else 0.0
@@ -944,10 +1033,13 @@ class ScoringEngine:
             "avg_delta": round(avg_delta, 4),
             "results": results,
             "interpretation": (
-                "Excellent normative symmetry" if max_delta < 0.05 else
-                "Good normative symmetry" if max_delta < 0.10 else
-                "Moderate asymmetry: review normative premises" if max_delta < 0.20 else
-                "Significant asymmetry: confidence in normative scores reduced"
+                "Excellent normative symmetry"
+                if max_delta < 0.05
+                else "Good normative symmetry"
+                if max_delta < 0.10
+                else "Moderate asymmetry: review normative premises"
+                if max_delta < 0.20
+                else "Significant asymmetry: confidence in normative scores reduced"
             ),
         }
 
@@ -961,11 +1053,16 @@ class ScoringEngine:
             return "Moderate asymmetry: may indicate some bias"
         return "Significant asymmetry: strong bias detected, confidence reduced"
 
-    def compute_relevance_sensitivity(self, topics, topic_facts,
-                                      topic_arguments, topic_content_mass,
-                                      side_order: Optional[List[str]] = None,
-                                      frame_context: str = "",
-                                      num_perturbations: int = 50) -> Dict[str, Any]:
+    def compute_relevance_sensitivity(
+        self,
+        topics,
+        topic_facts,
+        topic_arguments,
+        topic_content_mass,
+        side_order: list[str] | None = None,
+        frame_context: str = "",
+        num_perturbations: int = 50,
+    ) -> dict[str, Any]:
         """Perturb relevance weights and track verdict stability."""
         side_order = self._normalize_side_order(side_order, topic_facts, topic_arguments)
         margins = []
@@ -999,5 +1096,7 @@ class ScoringEngine:
             "d_max": round(float(max(margins)), 4),
             "verdict_distribution": verdicts,
             "stability_ratio": round(max(verdicts.values()) / len(margins), 2),
-            "interpretation": "Stable" if max(verdicts.values()) / len(margins) > 0.8 else "Unstable",
+            "interpretation": "Stable"
+            if max(verdicts.values()) / len(margins) > 0.8
+            else "Unstable",
         }

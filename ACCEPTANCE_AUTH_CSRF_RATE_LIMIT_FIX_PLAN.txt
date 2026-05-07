@@ -1,0 +1,270 @@
+Acceptance Auth / CSRF / Rate-Limit Fix Plan
+============================================
+
+Context
+-------
+Command:
+
+  python scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+
+Observed failures:
+
+  - AC-1 through AC-6 fail while registering the acceptance setup user:
+      Failed to register acceptance user: HTTP 403
+
+  - AC-7 reaches register.html, but #success-alert stays empty:
+      Expected #success-alert to contain "Account created"
+
+  - AC-8 through AC-11 fail while registering the acceptance setup user:
+      Failed to register acceptance user: HTTP 429
+
+These failures are unrelated to table-cell data-label attributes. They are in the
+auth/acceptance harness and local acceptance-server setup.
+
+
+Root Cause
+----------
+The acceptance runner has two registration paths:
+
+  1. Direct API setup registration in acceptance/run_ui_acceptance.py.
+  2. Real UI registration in AC-7 through frontend/register.html.
+
+The direct API setup path posts to /api/auth/register without first obtaining a
+CSRF cookie and without sending X-CSRF-Token. The backend CSRF middleware
+correctly rejects mutating unauthenticated API requests when the double-submit
+cookie/header pair is missing or mismatched.
+
+After enough failed mutating auth requests, later registration attempts can hit
+the default rate limiter and return HTTP 429. AC-7's empty success alert is a
+symptom: the UI registration request is failing, so the error alert is populated
+instead of the success alert.
+
+
+Relevant Files
+--------------
+  - acceptance/run_ui_acceptance.py
+      Direct API auth helper and AC-7 UI flow.
+
+  - scripts/dev_workflow.py
+      Starts the temporary acceptance server and runs the Playwright suite.
+
+  - backend/utils/middleware.py
+      CSRF double-submit validation and rate-limit error response shape.
+
+  - backend/app_v3.py
+      Flask-Limiter configuration and acceptance server runtime behavior.
+
+  - frontend/static/js/register.js
+      Browser registration form behavior, including CSRF header and alerts.
+
+  - backend/routes/api_bp.py
+      Static HTML serving; HTML responses set the readable csrf_token cookie.
+
+
+Implementation Plan
+-------------------
+
+1. Add a CSRF-aware Playwright helper
+
+   File:
+     acceptance/run_ui_acceptance.py
+
+   Add a helper that primes the browser context by visiting an HTML page, then
+   reads the csrf_token cookie from the Playwright browser context.
+
+   Suggested shape:
+
+     def get_csrf_token(page: Page, base_url: str) -> str:
+         page.goto(f"{base_url}/login.html", wait_until="networkidle")
+         cookies = page.context.cookies(base_url)
+         token = next((c["value"] for c in cookies if c["name"] == "csrf_token"), "")
+         if not token:
+             raise AssertionError("Could not obtain csrf_token cookie from login.html.")
+         return token
+
+   Use this helper before direct API calls to:
+
+     - /api/auth/register
+     - /api/auth/login
+
+   Include the token in headers:
+
+     headers={
+         "Content-Type": "application/json",
+         "X-CSRF-Token": csrf,
+     }
+
+   This preserves production CSRF protection while making the acceptance harness
+   behave like the real browser.
+
+
+2. Improve direct API auth failure messages
+
+   File:
+     acceptance/run_ui_acceptance.py
+
+   Add a small response-debug helper:
+
+     def response_debug(response) -> object:
+         try:
+             return response.json()
+         except Exception:
+             return response.text()
+
+   When registration or login fails, include both the status and body:
+
+     raise AssertionError(
+         f"Failed to register acceptance user: HTTP {register_response.status}: "
+         f"{response_debug(register_response)}"
+     )
+
+   Expected improvement:
+
+     - Instead of only "HTTP 403", the report should show CSRF_INVALID.
+     - Instead of only "HTTP 429", the report should show RATE_LIMITED and any
+       retry_after metadata.
+
+
+3. Make acceptance startup reject stale servers
+
+   File:
+     scripts/dev_workflow.py
+
+   Before starting the temporary server in run_acceptance(), check whether the
+   selected host/port is already accepting connections.
+
+   If the port is occupied, fail fast with a clear message:
+
+     Port 5080 is already in use. Stop the existing server or choose a different
+     port with --port.
+
+   Why this matters:
+
+     A stale server on port 5080 can make the workflow believe the new temporary
+     server is healthy, while the acceptance suite is actually talking to an old
+     process with live rate-limit state.
+
+   Implementation options:
+
+     - Add a small socket-based helper such as assert_port_available(host, port).
+     - Call it before subprocess.Popen() in run_acceptance().
+     - Optionally reuse it for run_smoke().
+
+
+4. Harden the acceptance server environment
+
+   File:
+     scripts/dev_workflow.py
+
+   In run_acceptance(), keep:
+
+     ENABLE_RATE_LIMITER=false
+
+   Also explicitly set:
+
+     ENV=development
+     DISABLE_JOB_WORKER=1
+     ALLOWED_ORIGINS=
+
+   Rationale:
+
+     - ENV=development ensures local HTTP CSRF cookies are not marked Secure.
+     - DISABLE_JOB_WORKER=1 removes unrelated async background noise.
+     - ALLOWED_ORIGINS= keeps same-origin local acceptance predictable.
+     - ENABLE_RATE_LIMITER=false prevents test setup traffic from exhausting
+       global mutating API limits.
+
+
+5. Make AC-7 fail on the real registration error
+
+   File:
+     acceptance/run_ui_acceptance.py
+
+   In register_user_via_ui(), wrap the submit click with a response wait for
+   /api/auth/register.
+
+   Suggested flow:
+
+     with page.expect_response(lambda r: "/api/auth/register" in r.url) as response_info:
+         page.locator("#submit-btn").click()
+     response = response_info.value
+
+   Then:
+
+     - If response.status is not 200 or 201, read the response body and
+       #error-alert text and raise an AssertionError immediately.
+     - Only assert #success-alert contains "Account created" after confirming
+       the network response succeeded.
+
+   Expected improvement:
+
+     AC-7 should no longer wait 45 seconds on an empty success alert when the
+     actual problem is a 403 or 429 response.
+
+
+6. Keep backend CSRF behavior unchanged
+
+   Files:
+     backend/utils/middleware.py
+     backend/routes/auth_bp.py
+
+   Do not exempt /api/auth/register or /api/auth/login from CSRF protection.
+   The backend behavior is correct:
+
+     - Safe methods skip CSRF.
+     - Bearer-authenticated mutating API calls skip CSRF.
+     - Unauthenticated mutating API calls require matching csrf_token cookie and
+       X-CSRF-Token header.
+
+   The fix belongs in the acceptance client and workflow isolation, not in a
+   production security bypass.
+
+
+7. Add focused regression coverage
+
+   Suggested tests:
+
+     - Existing CSRF tests should continue to pass:
+         python -m pytest tests/integration/test_csrf.py -q
+
+     - Existing auth endpoint tests should continue to pass:
+         python -m pytest tests/integration/api/test_auth.py -q
+
+     - Add or update a small test around scripts/dev_workflow.py to verify that
+       acceptance refuses to start when the selected port is already occupied.
+
+     - Add an acceptance-level assertion that direct Playwright API registration
+       succeeds after priming CSRF.
+
+     - Add an AC-7 assertion path that reports response status/body and
+       #error-alert text when registration fails.
+
+
+8. Verification commands
+
+   Run targeted backend checks first:
+
+     python -m pytest tests/integration/test_csrf.py tests/integration/api/test_auth.py -q
+
+   Then run the full browser acceptance workflow:
+
+     python scripts/dev_workflow.py acceptance --port 5080 --timeout 60
+
+   If port 5080 is occupied after adding the guard, either stop the old server or
+   run with another port:
+
+     python scripts/dev_workflow.py acceptance --port 5081 --timeout 60
+
+
+Expected Outcome
+----------------
+After this fix:
+
+  - AC-1 through AC-6 should no longer fail with HTTP 403 during setup auth.
+  - AC-7 should either pass or fail with a precise auth response error instead
+    of timing out on an empty #success-alert.
+  - AC-8 through AC-11 should no longer fail due to cascaded HTTP 429 responses
+    from repeated invalid registration attempts.
+  - CSRF protection remains enforced in production behavior.
+  - The acceptance workflow becomes isolated from stale local servers and
+    previous rate-limit state.

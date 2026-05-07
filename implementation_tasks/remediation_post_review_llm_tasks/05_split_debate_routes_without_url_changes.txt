@@ -1,0 +1,107 @@
+TASK 05: Split Debate Routes Without URL Changes
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Reduce backend/routes/debate_bp.py from 608 lines to <= 400 lines by moving
+post and frame-petition routes into focused modules while preserving every
+current public URL exactly.
+
+Important hidden dependency:
+Moving a route to a new Flask blueprint changes its endpoint name even when the
+URL is unchanged. Examples:
+- debate.submit_post -> posts.submit_post
+- debate.get_posts -> posts.get_posts
+- debate.list_frame_petitions -> frame_petition.list_frame_petitions
+- debate.create_frame_petition -> frame_petition.create_frame_petition
+
+Endpoint names can be used outside route decorators by url_for(), rate-limit
+maps, logging, metrics, tests, or helper code. Treat endpoint-name changes as a
+real compatibility surface. Public URLs must stay the same; internal endpoint
+name references must be found and updated deliberately.
+
+Current routes in backend/routes/debate_bp.py:
+- GET  /api/debates
+- POST /api/debates
+- GET  /api/debate
+- GET  /api/debate/<debate_id>
+- POST /api/debate/<debate_id>/activate
+- POST /api/debate/posts
+- GET  /api/debate/posts
+- GET  /api/debate/<debate_id>/frame-petitions
+- POST /api/debate/<debate_id>/frame-petitions
+- GET  /api/debate/<debate_id>/incidents
+
+Write scope:
+- backend/routes/debate_bp.py
+- new backend/routes/posts_bp.py
+- new backend/routes/frame_petition_bp.py
+- backend/routes/__init__.py
+- backend/app_v3.py
+- tests only if they depend on Flask endpoint names
+
+Implementation steps:
+1. Read the current debate_bp.py completely before editing.
+2. Before editing, run these blast-radius searches and keep the results in mind:
+   - rg -n 'url_for\(' backend/ tests/ scripts/
+   - rg -n '\.submit_post|\.activate|\.accept|\.reject' backend/ tests/
+   - rg -n 'debate\.(submit_post|get_posts|list_frame_petitions|create_frame_petition)' backend/ tests/ scripts/
+   The first search finds generated-URL dependencies. The second catches broad
+   review-suggested endpoint suffixes. The third catches the concrete debate
+   endpoints that will move. Activation stays in debate_bp, so do not rewrite
+   debate.activate_debate if the search finds it.
+3. Capture a baseline URL map for the affected routes before moving code:
+   - python -c "from backend.app_v3 import create_app; app=create_app(); [print(rule.rule, sorted(rule.methods - {'HEAD','OPTIONS'}), '->', rule.endpoint) for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule) if rule.rule in {'/api/debate/posts'} or rule.rule.endswith('/frame-petitions')]"
+4. Create posts_bp:
+   - posts_bp = Blueprint("posts", __name__)
+   - Move submit_post and get_posts into it.
+   - Keep decorators exactly:
+     - /api/debate/posts
+5. Create frame_petition_bp:
+   - frame_petition_bp = Blueprint("frame_petition", __name__)
+   - Move list_frame_petitions and create_frame_petition into it.
+   - Keep decorators exactly:
+     - /api/debate/<debate_id>/frame-petitions
+6. Leave debate_bp.py with debate CRUD, active-debate lookup, activation, and
+   debate incidents.
+7. Update backend/routes/__init__.py exports.
+8. Update backend/app_v3.py registrations. Do not use url_prefix because the
+   route decorators already include full /api/... paths.
+9. Update app_v3.py route-specific rate limits:
+   - The original endpoint is debate.submit_post.
+   - After moving submit_post to posts_bp with blueprint name "posts", the
+     endpoint is posts.submit_post.
+   - Update the _RATE_LIMITS map or the helper introduced in Task 06
+     accordingly.
+10. Re-run the preflight endpoint-name searches. Update only references to
+   endpoints that actually moved. Do not update URL strings.
+11. Compare the post-move URL map with the baseline. The endpoint names for
+   moved routes should change to posts.* or frame_petition.*, but the path and
+   method pairs must match exactly.
+12. Do not defer new regression coverage to Task 10. If this split exposes a
+   missing route integration test, endpoint-name assertion, or submit-post
+   rate-limit dependency, add the focused test in this task.
+13. Verify line counts:
+   - wc -l backend/routes/debate_bp.py backend/routes/posts_bp.py backend/routes/frame_petition_bp.py
+
+Acceptance criteria:
+- backend/routes/debate_bp.py is <= 400 lines.
+- New route modules are <= 400 lines.
+- All public URLs listed above still work.
+- Submit-post rate limiting still applies to POST /api/debate/posts.
+- Any changed Flask endpoint-name references are updated intentionally.
+- No frontend fetch URL changes are needed.
+
+Required tests:
+- python -c "from backend.app_v3 import create_app; app = create_app(); print(app.url_map); print(app.view_functions.keys())"
+- python -m pytest tests/integration/api/test_debates.py -q
+- python -m pytest tests/integration/api/test_moderation.py -q
+- python scripts/smoke_test_api.py
+
+Guardrails:
+- Do not migrate /api/debate/posts to /api/posts.
+- Do not migrate frame petitions to /api/petitions.
+- Do not change request or response shapes.
+- Do not add endpoint aliases or compatibility shims unless a concrete
+  endpoint-name dependency requires it and a targeted test proves the behavior.

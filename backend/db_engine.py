@@ -2,12 +2,13 @@
 Database engine factory with connection pooling.
 SQLAlchemy core (not ORM) — keeps existing SQL, adds pooling.
 """
+
 import os
 import sqlite3
 from contextlib import contextmanager
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.pool import QueuePool
-
 
 DEFAULT_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
 DEFAULT_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
@@ -27,9 +28,7 @@ def create_pooled_engine(db_path: str = "data/debate_system.db", db_url: str = "
             echo=False,
         )
     else:
-        resolved_url = (
-            db_url if db_url.startswith("sqlite:///") else f"sqlite:///{db_path}"
-        )
+        resolved_url = db_url if db_url.startswith("sqlite:///") else f"sqlite:///{db_path}"
         engine = create_engine(
             resolved_url,
             poolclass=QueuePool,

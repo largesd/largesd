@@ -29,43 +29,38 @@ import logging
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from . import models as legacy_models
 from .config import FactCheckConfig, get_config
 from .decomposition import (
-    Decomposer,
     CanonicalPremise,
+    Decomposer,
     _is_normative,
-    decompose_and_synthesize,
     decompose_synthesize_and_audit,
 )
 from .entity_linker import EntityLinker
-from .llm_backend import LLMBackend
-from .normalizer import archive_web_evidence, EvidenceNormalizer
+from .normalizer import EvidenceNormalizer, archive_web_evidence
 from .policies import get_default_policy
-from .rate_limiter import RateLimiterManager, CircuitBreakerConfig, RateLimitConfig
+from .rate_limiter import CircuitBreakerConfig, RateLimitConfig, RateLimiterManager
 from .source_registry import SourceReputationRegistry
 from .synthesis import SynthesisEngine
+from .v15_connectors import (
+    BaseEvidenceConnector,
+    ConnectorRegistry,
+    WikidataEntityConnector,
+)
 from .v15_models import (
     AtomicSubclaim,
     ClaimExpression,
     ClaimType,
     EvidenceItem,
     EvidencePolicy,
-    FactMode,
     NodeType,
     PremiseDecomposition,
-    ProvenanceSpan,
     Side,
     SourceType,
     VerdictScope,
-)
-from .v15_connectors import (
-    BaseEvidenceConnector,
-    ConnectorRegistry,
-    WikidataEntityConnector,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,9 +98,22 @@ def _is_predictive(text: str) -> bool:
     """Heuristic: detect predictive claims that should trigger Rule J."""
     lowered = text.lower()
     predictive_indicators = [
-        "will ", "going to ", "predict", "forecast", "expect to ",
-        "likely to ", "probably ", "may ", "might ", "could ", "would ",
-        "future", "next year", "by 20", "upcoming", "soon ",
+        "will ",
+        "going to ",
+        "predict",
+        "forecast",
+        "expect to ",
+        "likely to ",
+        "probably ",
+        "may ",
+        "might ",
+        "could ",
+        "would ",
+        "future",
+        "next year",
+        "by 20",
+        "upcoming",
+        "soon ",
     ]
     return any(ind in lowered for ind in predictive_indicators)
 
@@ -137,9 +145,9 @@ def _build_offline_decomposition(claim_text: str) -> PremiseDecomposition:
     )
 
 
-def _tier_counts_from_v15(result) -> Dict[str, int]:
+def _tier_counts_from_v15(result) -> dict[str, int]:
     """Map v1.5 tier fields to legacy tier count dict."""
-    counts: Dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
+    counts: dict[str, int] = {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
     # For SUPPORTED/REFUTED, best_evidence_tier is set.
     # For INSUFFICIENT, fall back to limiting_evidence_tier.
     tier = getattr(result, "best_evidence_tier", None)
@@ -182,13 +190,11 @@ def _v15_result_to_legacy(
     contains_pii: bool = False,
 ) -> legacy_models.FactCheckResult:
     """Convert a v1.5 FactCheckResult into a backward-compatible legacy result."""
-    diagnostics: Dict[str, Any] = {
+    diagnostics: dict[str, Any] = {
         "v15_status": v15_result.status,
         "v15_p": v15_result.p,
         "v15_insufficiency_reason": v15_result.insufficiency_reason,
-        "v15_human_review_flags": [
-            f.value for f in (v15_result.human_review_flags or [])
-        ],
+        "v15_human_review_flags": [f.value for f in (v15_result.human_review_flags or [])],
         "v15_best_evidence_tier": v15_result.best_evidence_tier,
         "v15_limiting_evidence_tier": v15_result.limiting_evidence_tier,
         "v15_decisive_evidence_tier": v15_result.decisive_evidence_tier,
@@ -271,15 +277,15 @@ class V15FactCheckingSkill:
         self,
         mode: str = "OFFLINE",
         allowlist_version: str = "v1",
-        config: Optional[FactCheckConfig] = None,
-        connectors: Optional[List[BaseEvidenceConnector]] = None,
+        config: FactCheckConfig | None = None,
+        connectors: list[BaseEvidenceConnector] | None = None,
         enable_async: bool = False,
         max_connector_workers: int = 4,
         connector_timeout: float = 30.0,
-        llm_backend: Optional[Any] = None,
+        llm_backend: Any | None = None,
         enable_llm_decomposition: bool = False,
         enable_audit: bool = False,
-        source_registry: Optional[SourceReputationRegistry] = None,
+        source_registry: SourceReputationRegistry | None = None,
     ):
         mode_aliases = {
             "simulated": "OFFLINE",
@@ -299,7 +305,7 @@ class V15FactCheckingSkill:
 
         # v1.5 components
         self._synthesis_engine = SynthesisEngine()
-        self._decomposer: Optional[Decomposer] = None
+        self._decomposer: Decomposer | None = None
         self._entity_linker = EntityLinker()
         self._normalizer = EvidenceNormalizer()
         self._source_registry = source_registry or SourceReputationRegistry()
@@ -309,13 +315,15 @@ class V15FactCheckingSkill:
 
         # Parallel router config
         self._max_workers = getattr(self.config, "max_connector_workers", max_connector_workers)
-        self._connector_timeout = getattr(self.config, "connector_timeout_seconds", connector_timeout)
+        self._connector_timeout = getattr(
+            self.config, "connector_timeout_seconds", connector_timeout
+        )
 
         # Rate limiting / circuit breakers
         self._rate_limiter = RateLimiterManager()
 
         # Setup connectors based on mode
-        self._connectors: List[BaseEvidenceConnector] = connectors or []
+        self._connectors: list[BaseEvidenceConnector] = connectors or []
         if not self._connectors:
             self._setup_default_connectors()
 
@@ -343,9 +351,7 @@ class V15FactCheckingSkill:
         """Register default circuit breakers for all wired connectors."""
         cb_config = CircuitBreakerConfig(
             failure_threshold=getattr(self.config, "circuit_breaker_threshold", 5),
-            timeout_minutes=int(
-                getattr(self.config, "circuit_breaker_recovery_seconds", 60) / 60
-            ),
+            timeout_minutes=int(getattr(self.config, "circuit_breaker_recovery_seconds", 60) / 60),
         )
         rate_config = RateLimitConfig()
         for connector in self._connectors:
@@ -358,8 +364,8 @@ class V15FactCheckingSkill:
     def check_fact(
         self,
         claim_text: str,
-        temporal_context: Optional[legacy_models.TemporalContext] = None,
-        request_context: Optional[legacy_models.RequestContext] = None,
+        temporal_context: legacy_models.TemporalContext | None = None,
+        request_context: legacy_models.RequestContext | None = None,
         wait_for_async: bool = False,
     ) -> legacy_models.FactCheckResult:
         start_time = time.time()
@@ -373,17 +379,13 @@ class V15FactCheckingSkill:
 
         # OFFLINE: deterministic INSUFFICIENT per LSD §13
         if self.mode == "OFFLINE":
-            return self._check_offline(
-                claim_text, claim_hash, contains_pii, temporal_context
-            )
+            return self._check_offline(claim_text, claim_hash, contains_pii, temporal_context)
 
         claim_type = _claim_type_from_text(claim_text)
 
         # Normative claim routing (Gold test #29)
         if claim_type == ClaimType.EMPIRICAL_ATOMIC and _is_normative(claim_text):
-            return self._check_normative(
-                claim_text, claim_hash, contains_pii, temporal_context
-            )
+            return self._check_normative(claim_text, claim_hash, contains_pii, temporal_context)
 
         # Build decomposition (fallback to simple ATOMIC if no decomposer)
         decomposition = self._get_decomposition(claim_text)
@@ -451,8 +453,8 @@ class V15FactCheckingSkill:
     def check_fact_async(
         self,
         claim_text: str,
-        temporal_context: Optional[legacy_models.TemporalContext] = None,
-        request_context: Optional[legacy_models.RequestContext] = None,
+        temporal_context: legacy_models.TemporalContext | None = None,
+        request_context: legacy_models.RequestContext | None = None,
     ) -> legacy_models.FactCheckJob:
         """Async entry point. Currently delegates to sync check."""
         if not self._async_enabled:
@@ -483,13 +485,13 @@ class V15FactCheckingSkill:
             result=result,
         )
 
-    def get_job_result(self, job_id: str) -> Optional[legacy_models.FactCheckResult]:
+    def get_job_result(self, job_id: str) -> legacy_models.FactCheckResult | None:
         """Get result for an async job."""
         # v1.5 bridge does not maintain a persistent job queue;
         # callers should store results themselves.
         return None
 
-    def get_job_status(self, job_id: str) -> Optional[str]:
+    def get_job_status(self, job_id: str) -> str | None:
         """Get status for an async job."""
         return None
 
@@ -497,15 +499,15 @@ class V15FactCheckingSkill:
     # Backward-compatible stats stubs
     # ------------------------------------------------------------------
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Return cache statistics (v1.5 bridge has no persistent cache)."""
         return {"hits": 0, "misses": 0, "size": 0}
 
-    def get_audit_stats(self) -> Dict[str, Any]:
+    def get_audit_stats(self) -> dict[str, Any]:
         """Return audit statistics (v1.5 bridge has no persistent audit log)."""
         return {"total_checks": 0, "last_check": None}
 
-    def get_queue_stats(self) -> Dict[str, Any]:
+    def get_queue_stats(self) -> dict[str, Any]:
         """Return queue statistics (v1.5 bridge has no persistent queue)."""
         return {"pending": 0, "completed": 0, "failed": 0}
 
@@ -522,7 +524,7 @@ class V15FactCheckingSkill:
         claim_text: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[legacy_models.TemporalContext],
+        temporal_context: legacy_models.TemporalContext | None,
     ) -> legacy_models.FactCheckResult:
         """Deterministic OFFLINE result per LSD §13."""
         return legacy_models.FactCheckResult(
@@ -555,7 +557,7 @@ class V15FactCheckingSkill:
         claim_text: str,
         claim_hash: str,
         contains_pii: bool,
-        temporal_context: Optional[legacy_models.TemporalContext],
+        temporal_context: legacy_models.TemporalContext | None,
     ) -> legacy_models.FactCheckResult:
         """Deterministic normative claim result (routed out)."""
         return legacy_models.FactCheckResult(
@@ -595,32 +597,30 @@ class V15FactCheckingSkill:
         )
 
         if self._enable_llm_decomposition and self._llm_backend is not None:
+
             def _llm_adapter(p: CanonicalPremise) -> PremiseDecomposition:
                 result = self._llm_backend.decompose_claim(p.original_text, p.claim_type)
                 if result is None:
                     raise RuntimeError("LLM decomposition failed")
                 return result
+
             decomposer = Decomposer(llm_backend=_llm_adapter)
         else:
             decomposer = self._decomposer or Decomposer()
 
         return decomposer.decompose(premise)
 
-    def _get_predictive_subclaim_ids(
-        self, decomposition: PremiseDecomposition
-    ) -> Set[str]:
+    def _get_predictive_subclaim_ids(self, decomposition: PremiseDecomposition) -> set[str]:
         """Identify subclaims that contain predictive language (Rule J)."""
-        predictive_ids: Set[str] = set()
+        predictive_ids: set[str] = set()
         for subclaim in decomposition.atomic_subclaims:
             if _is_predictive(subclaim.text):
                 predictive_ids.add(subclaim.subclaim_id)
         return predictive_ids
 
-    def _get_entity_failure_ids(
-        self, decomposition: PremiseDecomposition
-    ) -> Set[str]:
+    def _get_entity_failure_ids(self, decomposition: PremiseDecomposition) -> set[str]:
         """Run entity linking and collect unresolvable entity failures."""
-        failure_ids: Set[str] = set()
+        failure_ids: set[str] = set()
         for subclaim in decomposition.atomic_subclaims:
             links = self._entity_linker.link(subclaim.text)
             # If no links found for a claim that clearly has entities,
@@ -628,6 +628,7 @@ class V15FactCheckingSkill:
             # words but no links were resolved, flag as failure.
             if not links:
                 import re
+
                 if re.search(r"\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)+\b", subclaim.text):
                     failure_ids.add(subclaim.subclaim_id)
         return failure_ids
@@ -635,8 +636,8 @@ class V15FactCheckingSkill:
     def _select_connectors_for_claim(
         self,
         claim_type: ClaimType,
-        policy: Optional[EvidencePolicy],
-    ) -> List[BaseEvidenceConnector]:
+        policy: EvidencePolicy | None,
+    ) -> list[BaseEvidenceConnector]:
         """Filter connectors based on policy source_type preferences."""
         if policy is None or not policy.required_source_types:
             return self._connectors
@@ -669,14 +670,14 @@ class V15FactCheckingSkill:
     def _retrieve_evidence(
         self,
         decomposition: PremiseDecomposition,
-        active_connectors: Optional[List[BaseEvidenceConnector]] = None,
-    ) -> List[EvidenceItem]:
+        active_connectors: list[BaseEvidenceConnector] | None = None,
+    ) -> list[EvidenceItem]:
         """Collect evidence from all wired connectors in parallel."""
         connectors = active_connectors or self._connectors
         if not connectors:
             return []
 
-        items: List[EvidenceItem] = []
+        items: list[EvidenceItem] = []
 
         # Build list of (subclaim, connector) tasks
         tasks = []
@@ -691,7 +692,9 @@ class V15FactCheckingSkill:
         if self._max_workers <= 1 or len(tasks) == 1:
             for subclaim, connector in tasks:
                 try:
-                    retrieved = self._retrieve_with_fallback(subclaim, connector, subclaim.claim_type)
+                    retrieved = self._retrieve_with_fallback(
+                        subclaim, connector, subclaim.claim_type
+                    )
                     items.extend(retrieved)
                 except Exception as e:
                     logger.warning(
@@ -728,13 +731,11 @@ class V15FactCheckingSkill:
 
     def _retrieve_single(
         self, subclaim: AtomicSubclaim, connector: BaseEvidenceConnector
-    ) -> List[EvidenceItem]:
+    ) -> list[EvidenceItem]:
         """Single connector retrieval with circuit breaker and rate-limit check."""
         can_execute, reason = self._rate_limiter.can_query(connector.connector_id)
         if not can_execute:
-            logger.warning(
-                "Source %s blocked: %s", connector.connector_id, reason or "unknown"
-            )
+            logger.warning("Source %s blocked: %s", connector.connector_id, reason or "unknown")
             return []
 
         try:
@@ -750,7 +751,7 @@ class V15FactCheckingSkill:
         subclaim: AtomicSubclaim,
         primary_connector: BaseEvidenceConnector,
         claim_type: ClaimType,
-    ) -> List[EvidenceItem]:
+    ) -> list[EvidenceItem]:
         """Try primary connector. If it fails or returns empty, walk the fallback chain."""
         chain = self._get_fallback_chain(primary_connector.connector_id, claim_type)
         connectors_to_try = [primary_connector]
@@ -769,7 +770,7 @@ class V15FactCheckingSkill:
 
         return []
 
-    def _get_fallback_chain(self, connector_id: str, claim_type: ClaimType) -> List[str]:
+    def _get_fallback_chain(self, connector_id: str, claim_type: ClaimType) -> list[str]:
         """Look up fallback chain from config."""
         # First try claim-type-specific chains
         type_chains = self.config.claim_type_fallbacks.get(claim_type.value, {})
@@ -778,15 +779,15 @@ class V15FactCheckingSkill:
         # Then try global chains
         return self.config.fallback_chains.get(connector_id, [])
 
-    def _get_connector_by_id(self, connector_id: str) -> Optional[BaseEvidenceConnector]:
+    def _get_connector_by_id(self, connector_id: str) -> BaseEvidenceConnector | None:
         for c in self._connectors:
             if c.connector_id == connector_id:
                 return c
         return None
 
     def _filter_evidence_by_policy(
-        self, evidence: List[EvidenceItem], policy: EvidencePolicy
-    ) -> List[EvidenceItem]:
+        self, evidence: list[EvidenceItem], policy: EvidencePolicy
+    ) -> list[EvidenceItem]:
         """Apply policy constraints to retrieved evidence."""
         filtered = []
         for ev in evidence:
@@ -794,6 +795,7 @@ class V15FactCheckingSkill:
             if policy.temporal_constraint and ev.source_date:
                 try:
                     from datetime import datetime
+
                     start = policy.temporal_constraint.get("start")
                     end = policy.temporal_constraint.get("end")
                     ev_date = datetime.fromisoformat(ev.source_date.replace("Z", "+00:00"))
@@ -808,8 +810,8 @@ class V15FactCheckingSkill:
         return filtered
 
     def _enforce_cross_verification(
-        self, evidence: List[EvidenceItem], policy: EvidencePolicy
-    ) -> List[EvidenceItem]:
+        self, evidence: list[EvidenceItem], policy: EvidencePolicy
+    ) -> list[EvidenceItem]:
         """If policy.requires_cross_verification, ensure at least 2 independent source groups."""
         if not policy.cross_verification_required:
             return evidence
@@ -826,7 +828,7 @@ class V15FactCheckingSkill:
             )
         return evidence
 
-    def _apply_source_registry(self, evidence: List[EvidenceItem]) -> List[EvidenceItem]:
+    def _apply_source_registry(self, evidence: list[EvidenceItem]) -> list[EvidenceItem]:
         """Promote Tier 3 evidence from allowlisted domains to Tier 2."""
         from dataclasses import replace
         from urllib.parse import urlparse
@@ -845,7 +847,7 @@ class V15FactCheckingSkill:
                 updated.append(ev)
         return updated
 
-    def _archive_web_evidence(self, evidence: List[EvidenceItem]) -> None:
+    def _archive_web_evidence(self, evidence: list[EvidenceItem]) -> None:
         """Archive web-sourced evidence for artifact replay verification."""
         for ev in evidence:
             if ev.source_type in (SourceType.WEB, SourceType.NEWS, SourceType.WIKIPEDIA):
@@ -860,10 +862,10 @@ class V15FactCheckingSkill:
         self,
         claim_text: str,
         decomposition: PremiseDecomposition,
-        evidence_items: List[EvidenceItem],
-        entity_failure_ids: Set[str],
-        predictive_ids: Set[str],
-        policy: Optional[Any] = None,
+        evidence_items: list[EvidenceItem],
+        entity_failure_ids: set[str],
+        predictive_ids: set[str],
+        policy: Any | None = None,
     ) -> Any:
         """Run the full audited pipeline wrapper."""
         premise = CanonicalPremise(
@@ -876,6 +878,7 @@ class V15FactCheckingSkill:
         )
         try:
             from .v15_audit import AuditStore
+
             audit_store = AuditStore()
         except Exception:
             # If audit store is unavailable, fall back to non-audited synthesis
@@ -920,7 +923,7 @@ class _MockTier2Connector(BaseEvidenceConnector):
     def connector_version(self) -> str:
         return "1.0.0-mock"
 
-    def retrieve(self, subclaim: AtomicSubclaim) -> List[EvidenceItem]:
+    def retrieve(self, subclaim: AtomicSubclaim) -> list[EvidenceItem]:
         # Mock connectors return no evidence by default;
         # tests can patch this for controlled fixtures.
         return []

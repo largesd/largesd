@@ -1,5 +1,5 @@
 """Integration tests for request_id tracing across API → Engine → DB → Job Queue."""
-import json
+
 import uuid
 
 import pytest
@@ -59,8 +59,11 @@ class TestRequestIdTracing:
         job_data = job_resp.get_json()
         assert job_data["request_id"] == incoming_rid
 
-    def test_logs_share_request_id_for_snapshot_request(self, client, auth_headers, created_debate, caplog):
+    def test_logs_share_request_id_for_snapshot_request(
+        self, client, auth_headers, created_debate, caplog
+    ):
         import logging
+
         from backend.app_v3 import app_logger
 
         # Ensure our logger captures INFO by attaching caplog's handler

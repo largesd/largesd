@@ -4,18 +4,19 @@ GitHub Publisher — publish consolidated debate results to a GitHub repository.
 Uses the GitHub Contents API (PUT /repos/{owner}/{repo}/contents/{path})
 to create or update a JSON file. Handles SHA detection for updates.
 """
+
 import base64
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
 
 class GitHubPublishError(RuntimeError):
     """Raised when publishing to GitHub fails."""
+
     pass
 
 
@@ -25,9 +26,9 @@ class GitHubPublishResult:
     branch: str
     path: str
     commit_sha: str
-    html_url: Optional[str]
-    api_url: Optional[str]
-    download_url: Optional[str]
+    html_url: str | None
+    api_url: str | None
+    download_url: str | None
 
 
 class GitHubPublisher:
@@ -42,13 +43,11 @@ class GitHubPublisher:
         path: str = "data/consolidated_results.json",
         branch: str = "main",
         api_base_url: str = "https://api.github.com",
-        author_name: Optional[str] = None,
-        author_email: Optional[str] = None,
+        author_name: str | None = None,
+        author_email: str | None = None,
     ):
         if "/" not in repository_full_name:
-            raise ValueError(
-                "repository_full_name must be in 'owner/repo' format"
-            )
+            raise ValueError("repository_full_name must be in 'owner/repo' format")
         self.repository_full_name = repository_full_name
         self.token = token
         self.path = path
@@ -59,19 +58,16 @@ class GitHubPublisher:
 
     @property
     def contents_url(self) -> str:
-        return (
-            f"{self.api_base_url}/repos/"
-            f"{self.repository_full_name}/contents/{self.path}"
-        )
+        return f"{self.api_base_url}/repos/" f"{self.repository_full_name}/contents/{self.path}"
 
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"token {self.token}",
             "Accept": "application/vnd.github.v3+json",
             "Content-Type": "application/json",
         }
 
-    def _get_existing_sha(self) -> Optional[str]:
+    def _get_existing_sha(self) -> str | None:
         """Return the SHA of the existing file, or None if it doesn't exist."""
         try:
             resp = requests.get(
@@ -93,7 +89,7 @@ class GitHubPublisher:
 
     def publish_json(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         commit_message: str,
     ) -> GitHubPublishResult:
         """
@@ -109,7 +105,7 @@ class GitHubPublisher:
         content_bytes = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
         content_b64 = base64.b64encode(content_bytes).decode("ascii")
 
-        body: Dict[str, Any] = {
+        body: dict[str, Any] = {
             "message": commit_message,
             "content": content_b64,
             "branch": self.branch,
@@ -152,7 +148,7 @@ class GitHubPublisher:
         )
 
 
-def get_publisher_from_env() -> Optional[GitHubPublisher]:
+def get_publisher_from_env() -> GitHubPublisher | None:
     """Factory that reads GITHUB_REPO and GITHUB_TOKEN from environment."""
     repo = os.getenv("GITHUB_REPO")
     token = os.getenv("GITHUB_TOKEN")

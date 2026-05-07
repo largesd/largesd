@@ -16,11 +16,10 @@ Per 01_DATA_MODELS.md and 03_PIPELINE.md §normalizer.
 from __future__ import annotations
 
 import hashlib
-import re
 import unicodedata
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
 from .v15_models import (
     DeterministicComparisonResult,
@@ -30,7 +29,6 @@ from .v15_models import (
     ResolvedValue,
     ValidationResult,
     ValueType,
-    VerdictScope,
 )
 
 # ---------------------------------------------------------------------------
@@ -50,10 +48,10 @@ QUOTE_MAX_LENGTH = 1000
 class NormalizationResult:
     """Result of normalizing a single EvidenceItem."""
 
-    item: Optional[EvidenceItem] = None
+    item: EvidenceItem | None = None
     rejected: bool = False
-    rejection_reason: Optional[str] = None
-    warnings: List[str] = field(default_factory=list)
+    rejection_reason: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +190,7 @@ class EvidenceNormalizer:
         Returns NormalizationResult with the normalized item, or rejected=True
         if the item fails gating thresholds.
         """
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         # --- Relevance gate ---
         if item.relevance_score < self.relevance_threshold:
@@ -220,10 +218,16 @@ class EvidenceNormalizer:
                     normalized.claimed_value, normalized.source_value
                 )
                 # Override direction based on deterministic result
-                if normalized.deterministic_comparison_result == DeterministicComparisonResult.MATCH:
+                if (
+                    normalized.deterministic_comparison_result
+                    == DeterministicComparisonResult.MATCH
+                ):
                     normalized.direction = Direction.SUPPORTS
                     normalized.direction_confidence = 1.0
-                elif normalized.deterministic_comparison_result == DeterministicComparisonResult.MISMATCH:
+                elif (
+                    normalized.deterministic_comparison_result
+                    == DeterministicComparisonResult.MISMATCH
+                ):
                     normalized.direction = Direction.REFUTES
                     normalized.direction_confidence = 1.0
                 else:
@@ -246,7 +250,7 @@ class EvidenceNormalizer:
         # --- LLM direction gating ---
         if normalized.direction_method == DirectionMethod.LLM_CLASSIFIER:
             normalized.llm_direction_allowed = True
-            validation_errors: List[str] = []
+            validation_errors: list[str] = []
 
             # Decisive quote required for LLM-classified evidence
             if normalized.decisive_quote_required and not normalized.decisive_quote_span:
@@ -284,9 +288,9 @@ class EvidenceNormalizer:
 
         return NormalizationResult(item=normalized, warnings=warnings)
 
-    def normalize_batch(self, items: List[EvidenceItem]) -> List[EvidenceItem]:
+    def normalize_batch(self, items: list[EvidenceItem]) -> list[EvidenceItem]:
         """Normalize a batch of EvidenceItems, filtering out rejected ones."""
-        results: List[EvidenceItem] = []
+        results: list[EvidenceItem] = []
         for item in items:
             result = self.normalize(item)
             if not result.rejected and result.item is not None:
@@ -329,13 +333,12 @@ class EvidenceNormalizer:
         )
 
 
-def archive_web_evidence(source_url: str, page_text: str) -> Dict[str, Optional[str]]:
+def archive_web_evidence(source_url: str, page_text: str) -> dict[str, str | None]:
     """Archive web evidence for artifact replay verification."""
-    import urllib.request
 
     content_hash = hashlib.sha256(page_text.encode("utf-8")).hexdigest()
-    archive_url: Optional[str] = None
-    snapshot_storage_key: Optional[str] = None
+    archive_url: str | None = None
+    snapshot_storage_key: str | None = None
 
     # Try archive.org
     try:
@@ -354,7 +357,7 @@ def archive_web_evidence(source_url: str, page_text: str) -> Dict[str, Optional[
     }
 
 
-def _request_archive_org(url: str) -> Optional[str]:
+def _request_archive_org(url: str) -> str | None:
     """Submit URL to archive.org and return permalink."""
     api_url = f"https://web.archive.org/save/{url}"
     req = urllib.request.Request(api_url, method="POST")

@@ -10,56 +10,165 @@ python3 -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
 
-# 1. Run unit tests (no server needed)
-python test_debate_system.py
-python test_lsd_v1_2_contracts.py
-python test_fact_check_skill.py
+# 1. Run all checks (lint + unit + integration)
+make test
 
-# 2. Run workflow check (unit + fact + lint)
-python scripts/dev_workflow.py check
+# 2. Run specific suites
+make unit
+make fact
+make smoke
+make acceptance
 
 # 3. Start server and run manual tests
-python start_server.py --host 127.0.0.1 --port 5000
+make server
 # In another terminal:
-source venv/bin/activate
-python manual_scenarios.py server-check --base-url http://127.0.0.1:5000
-python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
-
-# 4. Run browser acceptance checks against a temporary v3 server
-python scripts/dev_workflow.py acceptance
+python tests/manual/manual_scenarios.py server-check --base-url http://127.0.0.1:5000
+python tests/manual/manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 ```
 
-## Test Coverage
+## Test Organization
 
-### 1. Unit Tests (`test_debate_system.py`)
+```
+tests/
+├── integration/
+│   ├── api/
+│   │   ├── test_admin.py
+│   │   ├── test_api_misc.py
+│   │   ├── test_auth.py
+│   │   ├── test_debates.py
+│   │   ├── test_dossier.py
+│   │   ├── test_governance.py
+│   │   ├── test_moderation.py
+│   │   ├── test_openapi.py
+│   │   ├── test_proposals.py
+│   │   ├── test_redis_rate_limit.py
+│   │   ├── test_request_id_tracing.py
+│   │   ├── test_snapshots.py
+│   │   └── test_topics.py
+│   ├── test_cors.py
+│   ├── test_csrf.py
+│   ├── test_debate_system.py
+│   ├── test_pipeline.py
+│   ├── test_security_headers.py
+│   └── test_slice4.py
+├── unit/
+│   ├── pipeline/
+│   │   ├── test_audit.py
+│   │   ├── test_canonicalize.py
+│   │   ├── test_counterfactual.py
+│   │   ├── test_extract.py
+│   │   ├── test_fact_check.py
+│   │   ├── test_persist.py
+│   │   ├── test_replicate.py
+│   │   ├── test_score.py
+│   │   └── test_symmetry.py
+│   ├── test_email_processor.py
+│   ├── test_fact_check_skill.py
+│   ├── test_job_queue.py
+│   ├── test_lsd_v1_2_contracts.py
+│   ├── test_perfect_skill.py
+│   ├── test_request_id.py
+│   └── test_sanitize.py
+└── manual/
+    └── manual_scenarios.py
+```
 
-Tests individual components against MSD requirements:
+| Suite | Location | Run Command |
+|-------|----------|-------------|
+| Integration (API routes) | `tests/integration/api/` | `python -m pytest tests/integration/api/ -v` |
+| Integration (security) | `tests/integration/test_csrf.py`, `test_cors.py`, `test_security_headers.py` | `python -m pytest tests/integration/test_csrf.py -v` |
+| Integration (end-to-end) | `tests/integration/test_debate_system.py`, `test_pipeline.py` | `python -m pytest tests/integration/test_debate_system.py -v` |
+| Unit (pipeline stages) | `tests/unit/pipeline/` | `python -m pytest tests/unit/pipeline/ -v` |
+| Unit (skills + utils) | `tests/unit/test_*.py` | `make unit` |
+| Fact checking | `tests/unit/test_fact_check_skill.py` | `make fact` |
+| Manual scenarios | `tests/manual/manual_scenarios.py` | `python tests/manual/manual_scenarios.py scenario-ai` |
+| UI acceptance | `acceptance/run_ui_acceptance.py` | `make acceptance` |
 
-| Test | MSD Section | Description |
-|------|-------------|-------------|
-| `test_modulation_system` | §3 | Content moderation with visible templates |
-| `test_span_extraction` | §5 | Traceability primitives |
-| `test_fact_canonicalization` | §7.2 | Fact deduplication |
-| `test_scoring_formulas` | §10 | F, Reason, Cov, Q calculations |
-| `test_verdict_computation` | §13 | Statistical separability |
-| `test_full_pipeline` | Full | End-to-end integration |
-| `test_topic_geometry` | §4.5 | Topic drift, coherence, lineage |
-| `test_side_label_symmetry` | §14.A | Label flip audit |
-| `test_relevance_sensitivity` | §14.D | Weight perturbation audit |
-| `test_identity_blindness` | §2.A | No identity fields in models |
-| `test_snapshot_immutability` | §2.C | Snapshot preservation |
-| `test_visible_modulation` | §2.B | Template versioning |
-| `test_admin_template_persistence_and_engine_sync` | Step 2 hardening | Persisted admin draft/apply syncs into runtime moderation |
-| `test_api_auth_session_and_admin_access_consistency` | Step 5 hardening | Verifies 401/403 behavior, active debate session isolation, and restricted admin access |
+## Unit Tests
 
-**Run:**
+### Pipeline Tests (`tests/unit/pipeline/`)
+
+Each pipeline stage has dedicated unit tests:
+
+| Test File | Stage | MSD Section |
+|-----------|-------|-------------|
+| `test_extract.py` | Span extraction | §5 |
+| `test_canonicalize.py` | Fact/argument canonicalization | §7.2 |
+| `test_fact_check.py` | Fact checking | §8 |
+| `test_score.py` | Scoring (F, Reason, Cov, Q) | §10 |
+| `test_replicate.py` | Judge replication | §11 |
+| `test_audit.py` | Robustness audits | §14 |
+| `test_symmetry.py` | Side-label symmetry | §14.A |
+| `test_counterfactual.py` | Counterfactual analysis | — |
+| `test_persist.py` | Snapshot persistence | §2.C |
+
+### Core Unit Tests (`tests/unit/`)
+
+| Test File | Coverage |
+|-----------|----------|
+| `test_sanitize.py` | HTML sanitization (XSS prevention) |
+| `test_request_id.py` | Request ID tracing |
+| `test_job_queue.py` | Async job queue and worker |
+| `test_email_processor.py` | Email ingestion and parsing |
+| `test_lsd_v1_2_contracts.py` | Formula contracts and invariants |
+| `test_perfect_skill.py` | Perfect skill behavior |
+| `test_fact_check_skill.py` | Fact-checking skill (offline, online, cache, PII) |
+
+## Integration Tests
+
+### API Route Tests (`tests/integration/api/`)
+
+Every blueprint has dedicated route tests:
+
+| Test File | Blueprint | Coverage |
+|-----------|-----------|----------|
+| `test_auth.py` | `auth_bp` | Register, login, logout, token validation, admin modes |
+| `test_debates.py` | `debate_bp` | Create debate, submit posts, verdict |
+| `test_topics.py` | `topic_bp` | Topic listing, detail, geometry |
+| `test_snapshots.py` | `snapshot_bp` | Sync/async snapshot, diff, jobs |
+| `test_dossier.py` | `dossier_bp` | Dossier, frame petitions |
+| `test_proposals.py` | `proposal_bp` | Submit, accept, reject proposals |
+| `test_governance.py` | `governance_bp` | Appeals, changelogs, judge pool |
+| `test_admin.py` | `admin_bp` | Moderation templates, access control |
+| `test_moderation.py` | `debate_bp` | Content moderation rules |
+| `test_api_misc.py` | `api_bp` | Health, metrics |
+| `test_openapi.py` | — | Swagger/OpenAPI spec validation |
+| `test_redis_rate_limit.py` | — | Rate limiter with Redis backend |
+| `test_request_id_tracing.py` | — | Request ID propagation |
+
+### API Route Coverage Gate
+
+A minimum 70 % coverage of `backend.routes` is enforced for the integration API test suite:
+
 ```bash
-python test_debate_system.py
+python -m pytest tests/integration/api/ \
+  --cov=backend.routes \
+  --cov-report=term-missing \
+  --cov-fail-under=70
 ```
 
-### 2. Manual/API Tests (`manual_scenarios.py`)
+This command runs automatically in CI after the default checks. If the threshold is not met, the build fails and the `term-missing` report shows which lines are uncovered.
+
+### Security Integration Tests
+
+| Test File | Coverage |
+|-----------|----------|
+| `test_csrf.py` | Double-submit cookie pattern, exemptions |
+| `test_cors.py` | Origin restriction, preflight |
+| `test_security_headers.py` | CSP, HSTS, X-Frame-Options, Referrer-Policy |
+
+### End-to-End Integration Tests
+
+| Test File | Coverage |
+|-----------|----------|
+| `test_debate_system.py` | Full MSD pipeline with MSD § assertions |
+| `test_pipeline.py` | Pipeline orchestrator end-to-end |
+| `test_slice4.py` | Slice-4 acceptance criteria |
+
+## Manual/API Tests (`tests/manual/manual_scenarios.py`)
 
 Tests the system through the REST API with realistic scenarios:
 
@@ -73,13 +182,13 @@ Tests the system through the REST API with realistic scenarios:
 **Run:**
 ```bash
 # Terminal 1: Start server
-python start_server.py
+make server
 
 # Terminal 2: Run tests
-python manual_scenarios.py scenario-ai
+python tests/manual/manual_scenarios.py scenario-ai
 ```
 
-### 3. Fact Checking Tests (`test_fact_check_skill.py`)
+## Fact Checking Tests (`tests/unit/test_fact_check_skill.py`)
 
 Tests the fact-checking skill specifically:
 
@@ -93,10 +202,10 @@ Tests the fact-checking skill specifically:
 
 **Run:**
 ```bash
-python test_fact_check_skill.py
+make fact
 ```
 
-### 4. OpenRouter Smoke Tests
+## OpenRouter Smoke Tests
 
 To validate real LLM integration (requires an OpenRouter API key):
 
@@ -118,9 +227,9 @@ print('Tokens:', r.usage)
 "
 
 # 3. Run end-to-end manual scenario
-python start_server.py
+make server
 # In another terminal:
-python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
+python tests/manual/manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 ```
 
 **Verification checklist:**
@@ -130,7 +239,7 @@ python manual_scenarios.py scenario-ai --base-url http://127.0.0.1:5000
 - [ ] Token usage is tracked in `provider_metadata`
 - [ ] Invalid API key produces explicit error (no silent mock fallback)
 
-### 4. UI Acceptance Tests (`acceptance/run_ui_acceptance.py`)
+## UI Acceptance Tests (`acceptance/run_ui_acceptance.py`)
 
 Tests the system end to end through the browser UI against named acceptance criteria:
 
@@ -148,7 +257,7 @@ The source of truth for the criteria lives in `acceptance/ui_debate_flow.json`.
 **Run:**
 ```bash
 python -m playwright install chromium
-python scripts/dev_workflow.py acceptance
+make acceptance
 ```
 
 **Artifacts:**
@@ -157,6 +266,43 @@ artifacts/acceptance/ui_acceptance_report.json
 artifacts/acceptance/ui_acceptance_report.md
 artifacts/acceptance/screenshots/
 ```
+
+## Accessibility Scan (`acceptance/run_a11y_scan.py`)
+
+Runs an automated axe-core accessibility scan against representative frontend pages using Playwright.
+
+**Prerequisites:**
+```bash
+npm ci
+python -m playwright install chromium
+```
+
+**Run against an already-running server:**
+```bash
+python acceptance/run_a11y_scan.py --base-url http://127.0.0.1:5000
+```
+
+**Run with the dev workflow (starts a temporary server):**
+```bash
+python scripts/dev_workflow.py a11y --port 5080 --timeout 60
+```
+
+**Threshold:** The scan defaults to `critical` impact only. To include `serious`:
+```bash
+python acceptance/run_a11y_scan.py --base-url http://127.0.0.1:5000 --impact critical,serious
+```
+
+**Pages scanned:**
+- `/`
+- `/login.html`
+- `/register.html`
+- `/new_debate.html`
+- `/admin.html`
+- `/appeals.html`
+- `/governance.html`
+- `/topics.html`
+
+The script exits with a nonzero code when violations are found at the chosen threshold.
 
 ## Testing Requirements Compliance
 
@@ -172,14 +318,14 @@ artifacts/acceptance/screenshots/
 ### Pipeline Tests (MSD §2)
 
 ```
-Posts → Modulation → Topic Consolidation → Span Segmentation → 
-Argument Units → FACT/ARG Extraction → Canonicalization → 
+Posts → Modulation → Topic Consolidation → Span Segmentation →
+Argument Units → FACT/ARG Extraction → Canonicalization →
 Fact-Check → Scoring → Verdict → Audits
 ```
 
 **Integration Test:**
 ```bash
-python manual_scenarios.py scenario-ai
+python tests/manual/manual_scenarios.py scenario-ai
 ```
 
 This tests the full pipeline with realistic inputs.
@@ -241,7 +387,7 @@ Expected outcome: Verdict = "NO VERDICT", low confidence
 Expected: Harassment/spam blocked, valid content allowed
 
 ```bash
-python manual_scenarios.py modulation
+python tests/manual/manual_scenarios.py modulation
 ```
 
 ## Audit Verification
@@ -352,14 +498,20 @@ curl http://localhost:5000/api/debate/fact-check-stats
 
 This repo's GitHub Actions workflow now runs:
 
-- Python checks
+- Python lint and format checks (ruff, pre-commit)
+- Type checks (mypy)
+- Unit and integration tests
 - API smoke verification
+- Security scan (bandit)
 - Browser-based UI acceptance checks with Playwright
+- Accessibility scan with axe-core and Playwright
 
-For local development, the equivalent browser command is:
+For local development, the equivalent commands are:
 
 ```bash
-python scripts/dev_workflow.py acceptance
+make test       # lint + unit + integration
+make smoke      # API smoke test
+make acceptance # browser acceptance
 ```
 
 Example CI shape:
@@ -369,15 +521,27 @@ Example CI shape:
 test:
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Install dependencies
-      run: pip install -r requirements.txt
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-test.txt
     - name: Install browser
       run: python -m playwright install --with-deps chromium
+    - name: Run lint
+      run: pre-commit run --all-files
+    - name: Run type checks
+      run: mypy backend/pipeline/ backend/routes/ backend/utils/
     - name: Run unit tests
-      run: python test_debate_system.py
+      run: python -m pytest tests/unit/ -v
+    - name: Run integration tests
+      run: python -m pytest tests/integration/ -v
     - name: Run UI acceptance tests
-      run: python scripts/dev_workflow.py acceptance
+      run: make acceptance
+    - name: Run accessibility scan
+      run: |
+        npm ci
+        python acceptance/run_a11y_scan.py --base-url http://127.0.0.1:5000 --impact critical
 ```
 
 ## Expected Test Outputs
@@ -421,22 +585,26 @@ test:
 |-------|----------|
 | Import errors | Run from `debate_system` directory, check `sys.path` |
 | Database locked | Stop server, delete `data/debate_system.db`, restart |
-| Server not responding | Check port 5000, check `python start_server.py` output |
-| API connection refused | Verify server is running: `python manual_scenarios.py server-check` |
+| Server not responding | Check port 5000, check `make server` output |
+| API connection refused | Verify server is running: `python tests/manual/manual_scenarios.py server-check` |
 | Mock LLM returns weird results | Expected - mock is deterministic but simplified |
+| Redis connection error | Start Redis with `docker-compose up redis` or set `ENABLE_RATE_LIMITER=false` |
 
 ## Test Checklist
 
 Before deploying:
 
-- [ ] All unit tests pass: `python test_debate_system.py`
-- [ ] Server starts without errors: `python start_server.py`
-- [ ] API responds: `python manual_scenarios.py server-check`
-- [ ] Scenario completes: `python manual_scenarios.py scenario-ai`
-- [ ] UI acceptance passes: `python scripts/dev_workflow.py acceptance`
-- [ ] Modulation works: `python manual_scenarios.py modulation`
+- [ ] All unit tests pass: `make unit`
+- [ ] All integration tests pass: `python -m pytest tests/integration/ -v`
+- [ ] Server starts without errors: `make server`
+- [ ] API responds: `python tests/manual/manual_scenarios.py server-check`
+- [ ] Scenario completes: `python tests/manual/manual_scenarios.py scenario-ai`
+- [ ] UI acceptance passes: `make acceptance`
+- [ ] Accessibility scan passes: `python scripts/dev_workflow.py a11y`
+- [ ] Modulation works: `python tests/manual/manual_scenarios.py modulation`
 - [ ] Web interface loads at `http://localhost:5000`
 - [ ] No identity information visible in UI
 - [ ] Template version visible in UI
 - [ ] Audit distributions display correctly
 - [ ] Snapshot diff works (compare two snapshots)
+- [ ] Security scan passes: `bandit -r backend/`

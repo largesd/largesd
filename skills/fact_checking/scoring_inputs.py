@@ -18,14 +18,13 @@ It provides inputs; the scoring layer computes deltas.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from skills.fact_checking.v15_models import FactCheckResult, Side
-
 
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TopicSideScore:
@@ -35,15 +34,15 @@ class TopicSideScore:
     side: Side
 
     # Core factuality metrics (per 03_PIPELINE.md §7–8)
-    F_ts: Optional[float] = None
+    F_ts: float | None = None
     """F_{t,s} = mean(p) over selected empirical premises for this topic-side.
     Null when no selected empirical premises exist in the topic-side."""
 
-    F_supported_only: Optional[float] = None
+    F_supported_only: float | None = None
     """Mean(p) over SUPPORTED/REFUTED premises only.
     Null when no SUPPORTED/REFUTED premises exist (including all-insufficient)."""
 
-    insufficiency_rate: Optional[float] = None
+    insufficiency_rate: float | None = None
     """count(INSUFFICIENT) / count(total selected empirical premises).
     Null when no selected empirical premises exist."""
 
@@ -54,26 +53,26 @@ class TopicSideScore:
     insufficient_count: int = 0
 
     # Tier distribution (from best_evidence_tier of each premise)
-    tier_counts: Dict[int, int] = field(default_factory=dict)
+    tier_counts: dict[int, int] = field(default_factory=dict)
 
     # Raw inputs exposed for downstream D / delta_D calculation
     # The dossier layer uses these; this adapter does NOT compute D or delta_D.
-    premise_ids: List[str] = field(default_factory=list)
-    p_values: List[float] = field(default_factory=list)
-    statuses: List[str] = field(default_factory=list)
-    best_evidence_tiers: List[Optional[int]] = field(default_factory=list)
+    premise_ids: list[str] = field(default_factory=list)
+    p_values: list[float] = field(default_factory=list)
+    statuses: list[str] = field(default_factory=list)
+    best_evidence_tiers: list[int | None] = field(default_factory=list)
 
-    insufficiency_sensitivity: Dict[str, float] = field(default_factory=dict)
+    insufficiency_sensitivity: dict[str, float] = field(default_factory=dict)
     """If INSUFFICIENT assumed true/false, F_ts changes by delta_true/delta_false."""
 
-    drop_component_sensitivity: Dict[str, Optional[float]] = field(default_factory=dict)
+    drop_component_sensitivity: dict[str, float | None] = field(default_factory=dict)
     """Q recomputed with each component removed. Keys: 'empirical', 'normative', 'reasoning', 'coverage'."""
 
 
 def _compute_topic_side_score(
     topic_id: str,
     side: Side,
-    results: List[FactCheckResult],
+    results: list[FactCheckResult],
 ) -> TopicSideScore:
     """Compute aggregation metrics for a single (topic, side) group.
 
@@ -94,7 +93,7 @@ def _compute_topic_side_score(
     insufficient_count = sum(1 for r in results if r.status == "INSUFFICIENT")
 
     # Tier counts from best_evidence_tier (skip None)
-    tier_counts: Dict[int, int] = {}
+    tier_counts: dict[int, int] = {}
     for r in results:
         tier = r.best_evidence_tier
         if tier is not None:
@@ -145,22 +144,22 @@ class ScoringAdapter:
     Those belong to the dossier layer per the scoring boundary.
     """
 
-    def __init__(self, results: List[FactCheckResult]) -> None:
+    def __init__(self, results: list[FactCheckResult]) -> None:
         self.results = results
-        self._grouped: Optional[Dict[Tuple[str, Side], List[FactCheckResult]]] = None
-        self._scores: Optional[Dict[Tuple[str, Side], TopicSideScore]] = None
+        self._grouped: dict[tuple[str, Side], list[FactCheckResult]] | None = None
+        self._scores: dict[tuple[str, Side], TopicSideScore] | None = None
 
     def _group_by_topic_side(
         self,
-    ) -> Dict[Tuple[str, Side], List[FactCheckResult]]:
+    ) -> dict[tuple[str, Side], list[FactCheckResult]]:
         """Group FactCheckResults by (topic_id, side)."""
-        grouped: Dict[Tuple[str, Side], List[FactCheckResult]] = {}
+        grouped: dict[tuple[str, Side], list[FactCheckResult]] = {}
         for result in self.results:
             key = (result.topic_id, result.side)
             grouped.setdefault(key, []).append(result)
         return grouped
 
-    def compute_scores(self) -> Dict[Tuple[str, Side], TopicSideScore]:
+    def compute_scores(self) -> dict[tuple[str, Side], TopicSideScore]:
         """Compute TopicSideScore for every (topic_id, side) present in results.
 
         Returns a dict keyed by (topic_id, Side). Empty input yields empty dict.
@@ -169,7 +168,7 @@ class ScoringAdapter:
             return self._scores
 
         grouped = self._group_by_topic_side()
-        scores: Dict[Tuple[str, Side], TopicSideScore] = {}
+        scores: dict[tuple[str, Side], TopicSideScore] = {}
         for (topic_id, side), results in grouped.items():
             scores[(topic_id, side)] = _compute_topic_side_score(
                 topic_id=topic_id, side=side, results=results
@@ -177,16 +176,16 @@ class ScoringAdapter:
         self._scores = scores
         return scores
 
-    def get_score(self, topic_id: str, side: Side) -> Optional[TopicSideScore]:
+    def get_score(self, topic_id: str, side: Side) -> TopicSideScore | None:
         """Get the computed score for a specific topic-side, or None."""
         scores = self.compute_scores()
         return scores.get((topic_id, side))
 
-    def all_topic_ids(self) -> List[str]:
+    def all_topic_ids(self) -> list[str]:
         """Return sorted list of unique topic_ids in the input results."""
         return sorted({r.topic_id for r in self.results})
 
-    def all_sides(self, topic_id: str) -> List[Side]:
+    def all_sides(self, topic_id: str) -> list[Side]:
         """Return list of sides present for a given topic_id."""
         return sorted(
             {r.side for r in self.results if r.topic_id == topic_id},
@@ -195,8 +194,8 @@ class ScoringAdapter:
 
 
 def compute_insufficiency_sensitivity(
-    results: List[FactCheckResult],
-) -> Dict[str, float]:
+    results: list[FactCheckResult],
+) -> dict[str, float]:
     """
     Compute how F_ts changes if all INSUFFICIENT premises were
     assumed true (p=1.0) or assumed false (p=0.0).
@@ -262,8 +261,8 @@ def compute_insufficiency_sensitivity(
 
 
 def compute_scoring_inputs(
-    results: List[FactCheckResult],
-) -> Dict[Tuple[str, Side], TopicSideScore]:
+    results: list[FactCheckResult],
+) -> dict[tuple[str, Side], TopicSideScore]:
     """Convenience function: compute all topic-side scores in one call.
 
     Example:

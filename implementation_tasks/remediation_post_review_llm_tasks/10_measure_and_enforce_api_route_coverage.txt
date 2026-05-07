@@ -1,0 +1,47 @@
+TASK 10: Measure and Enforce API Route Coverage
+
+Repo root:
+/Users/jonathanleung/Documents/C++/debate_system
+
+Goal:
+Measure integration-test coverage for backend.routes and enforce a minimum
+70 percent threshold in CI.
+
+Current findings:
+- requirements-test.txt already includes pytest-cov.
+- tests/integration/api/ contains route-focused integration tests.
+- .github/workflows/ci.yml does not currently enforce route coverage.
+
+Write scope:
+- tests/integration/api/* if new tests are needed
+- .github/workflows/ci.yml
+- docs/guides/TESTING.md or README.md if documenting the coverage command
+
+Implementation steps:
+1. Run the current coverage command:
+   - python -m pytest tests/integration/api/ --cov=backend.routes --cov-report=term-missing --cov-fail-under=70
+2. If coverage is >= 70:
+   - add the same command to the CI checks job after dependency install and
+     before or after default checks
+   - document the command
+3. If coverage is below 70:
+   - inspect the term-missing report
+   - add focused integration tests for uncovered route handlers or important
+     branches
+   - prioritize routes changed by Tasks 04 and 05, admin-only endpoints, 400
+     validation errors, 404 paths, auth-required paths, and rate-limited paths
+4. Re-run the coverage command until it passes.
+5. Run the broader integration suite:
+   - python -m pytest tests/integration/ -q --tb=short
+
+Acceptance criteria:
+- backend.routes coverage is >= 70 percent under tests/integration/api/.
+- CI enforces the threshold.
+- Added tests follow existing test fixture patterns.
+- No brittle sleeps or network calls are introduced.
+
+Guardrails:
+- Do not lower the threshold below 70.
+- Do not mark route code with no-cover comments to force the threshold.
+- Do not write superficial tests that only import modules. Exercise HTTP
+  behavior through the test client.

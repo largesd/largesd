@@ -1,4 +1,5 @@
 """API integration tests for snapshot endpoints."""
+
 import pytest
 
 
@@ -51,6 +52,7 @@ def test_generate_snapshot_invalid_trigger(client, auth_headers, created_debate)
 
 def test_generate_snapshot_missing_auth(client, created_debate):
     from tests.integration.conftest import _get_csrf_from_cookie
+
     resp = client.post(
         "/api/debate/snapshot",
         headers={"X-CSRF-Token": _get_csrf_from_cookie(client)},

@@ -4,14 +4,14 @@ Provides background processing for debate snapshots with progress tracking.
 """
 
 import json
-import uuid
 import threading
 import time
+import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Dict, Optional, List, Any, Callable
-from contextlib import contextmanager
+from typing import Any
 
 
 class JobStatus(Enum):
@@ -25,30 +25,31 @@ class JobStatus(Enum):
 @dataclass
 class Job:
     """Represents an async job."""
+
     job_id: str
     job_type: str
-    parameters: Dict[str, Any]
-    runtime_profile_id: Optional[str]
+    parameters: dict[str, Any]
+    runtime_profile_id: str | None
     status: JobStatus
     created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
     progress: int = 0  # 0-100
-    result: Optional[Dict] = None
-    error: Optional[str] = None
-    request_id: Optional[str] = None
-    worker_id: Optional[str] = None
+    result: dict | None = None
+    error: str | None = None
+    request_id: str | None = None
+    worker_id: str | None = None
 
 
 class JobQueue:
     """
     SQLite-backed job queue for async snapshot generation.
     """
-    
+
     def __init__(self, db):
         self.db = db
         self._init_tables()
-    
+
     def _init_tables(self):
         """Initialize job queue tables."""
         conn = self.db._get_connection()
@@ -84,13 +85,13 @@ class JobQueue:
         )
         conn.commit()
         conn.close()
-    
+
     def create_job(
         self,
         job_type: str,
-        parameters: Dict[str, Any],
-        runtime_profile_id: Optional[str] = None,
-        request_id: Optional[str] = None,
+        parameters: dict[str, Any],
+        runtime_profile_id: str | None = None,
+        request_id: str | None = None,
     ) -> str:
         """Create a new job and return its ID."""
         job_id = f"job_{uuid.uuid4().hex[:12]}"
@@ -100,49 +101,58 @@ class JobQueue:
             parameters=parameters,
             runtime_profile_id=runtime_profile_id,
             status=JobStatus.QUEUED,
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            created_at=datetime.now(UTC).replace(tzinfo=None).isoformat(),
             request_id=request_id,
         )
-        
+
         conn = self.db._get_connection()
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO jobs (
                    job_id, job_type, parameters, runtime_profile_id, status, created_at, progress, request_id
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (job.job_id, job.job_type, json.dumps(job.parameters),
-             job.runtime_profile_id, job.status.value, job.created_at, job.progress, job.request_id)
+            (
+                job.job_id,
+                job.job_type,
+                json.dumps(job.parameters),
+                job.runtime_profile_id,
+                job.status.value,
+                job.created_at,
+                job.progress,
+                job.request_id,
+            ),
         )
         conn.commit()
         conn.close()
-        
+
         return job_id
-    
-    def get_job(self, job_id: str) -> Optional[Job]:
+
+    def get_job(self, job_id: str) -> Job | None:
         """Get job by ID."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,))
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
             return None
-        
+
         return self._row_to_job(row)
-    
+
     def update_progress(self, job_id: str, progress: int):
         """Update job progress (0-100)."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE jobs SET progress = ? WHERE job_id = ?",
-            (max(0, min(100, progress)), job_id)
+            "UPDATE jobs SET progress = ? WHERE job_id = ?", (max(0, min(100, progress)), job_id)
         )
         conn.commit()
         conn.close()
-    
-    def start_job(self, job_id: str, runtime_profile_id: Optional[str] = None, worker_id: Optional[str] = None) -> bool:
+
+    def start_job(
+        self, job_id: str, runtime_profile_id: str | None = None, worker_id: str | None = None
+    ) -> bool:
         """Atomically claim a queued job for execution."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
@@ -150,9 +160,9 @@ class JobQueue:
             "UPDATE jobs SET status = ?, started_at = ?, worker_id = ? "
             "WHERE job_id = ? AND status = ?"
         )
-        params: List[Any] = [
+        params: list[Any] = [
             JobStatus.RUNNING.value,
-            datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            datetime.now(UTC).replace(tzinfo=None).isoformat(),
             worker_id,
             job_id,
             JobStatus.QUEUED.value,
@@ -165,55 +175,52 @@ class JobQueue:
         conn.commit()
         conn.close()
         return claimed
-    
+
     def claim_next_job(
         self,
-        worker_id: Optional[str] = None,
-        runtime_profile_id: Optional[str] = None,
-    ) -> Optional[Job]:
+        worker_id: str | None = None,
+        runtime_profile_id: str | None = None,
+    ) -> Job | None:
         """Atomically claim the next queued job using row-level locking."""
         db_url = getattr(self.db, "_db_url", "") or ""
         if db_url.startswith("postgresql://"):
             return self._claim_next_job_postgresql(worker_id, runtime_profile_id)
         return self._claim_next_job_sqlite(worker_id, runtime_profile_id)
-    
+
     def _claim_next_job_sqlite(
         self,
-        worker_id: Optional[str] = None,
-        runtime_profile_id: Optional[str] = None,
-    ) -> Optional[Job]:
+        worker_id: str | None = None,
+        runtime_profile_id: str | None = None,
+    ) -> Job | None:
         """SQLite implementation using BEGIN IMMEDIATE for exclusive lock."""
         conn = self.db._get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("BEGIN IMMEDIATE")
-            
-            query = (
-                "SELECT * FROM jobs WHERE status = ? "
-                "ORDER BY created_at ASC LIMIT 1"
-            )
-            params: List[Any] = [JobStatus.QUEUED.value]
+
+            query = "SELECT * FROM jobs WHERE status = ? " "ORDER BY created_at ASC LIMIT 1"
+            params: list[Any] = [JobStatus.QUEUED.value]
             if runtime_profile_id is not None:
                 query = (
                     "SELECT * FROM jobs WHERE status = ? AND runtime_profile_id = ? "
                     "ORDER BY created_at ASC LIMIT 1"
                 )
                 params.append(runtime_profile_id)
-            
+
             cursor.execute(query, tuple(params))
             row = cursor.fetchone()
-            
+
             if not row:
                 cursor.execute("ROLLBACK")
                 return None
-            
+
             job_id = row["job_id"]
-            started_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+            started_at = datetime.now(UTC).replace(tzinfo=None).isoformat()
             cursor.execute(
                 "UPDATE jobs SET status = ?, started_at = ?, worker_id = ? WHERE job_id = ?",
                 (JobStatus.RUNNING.value, started_at, worker_id, job_id),
             )
-            
+
             cursor.execute("COMMIT")
             job = self._row_to_job(row)
             job.status = JobStatus.RUNNING
@@ -228,17 +235,17 @@ class JobQueue:
             raise
         finally:
             conn.close()
-    
+
     def _claim_next_job_postgresql(
         self,
-        worker_id: Optional[str] = None,
-        runtime_profile_id: Optional[str] = None,
-    ) -> Optional[Job]:
+        worker_id: str | None = None,
+        runtime_profile_id: str | None = None,
+    ) -> Job | None:
         """PostgreSQL implementation using SKIP LOCKED."""
         conn = self.db._get_connection()
         try:
             cursor = conn.cursor()
-            
+
             if runtime_profile_id is not None:
                 query = """
                     UPDATE jobs
@@ -276,27 +283,29 @@ class JobQueue:
                     worker_id,
                     JobStatus.QUEUED.value,
                 ]
-            
+
             cursor.execute(query, tuple(params))
             row = cursor.fetchone()
             conn.commit()
-            
+
             if not row:
                 return None
-            
+
             job = self._row_to_job(row)
             job.status = JobStatus.RUNNING
             job.worker_id = worker_id
             return job
         finally:
             conn.close()
-    
+
     def reclaim_stuck_jobs(self, timeout_seconds: int = 300) -> int:
         """Reset jobs stuck in 'running' status back to 'queued'."""
         cutoff = (
-            datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
-        ).replace(tzinfo=None).isoformat()
-        
+            (datetime.now(UTC) - timedelta(seconds=timeout_seconds))
+            .replace(tzinfo=None)
+            .isoformat()
+        )
+
         conn = self.db._get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -309,20 +318,24 @@ class JobQueue:
         conn.commit()
         conn.close()
         return reclaimed
-    
-    def complete_job(self, job_id: str, result: Dict[str, Any]):
+
+    def complete_job(self, job_id: str, result: dict[str, Any]):
         """Mark job as completed with result."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
         cursor.execute(
             """UPDATE jobs SET status = ?, completed_at = ?, result = ?, progress = 100
                WHERE job_id = ?""",
-            (JobStatus.COMPLETED.value, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-             json.dumps(result), job_id)
+            (
+                JobStatus.COMPLETED.value,
+                datetime.now(UTC).replace(tzinfo=None).isoformat(),
+                json.dumps(result),
+                job_id,
+            ),
         )
         conn.commit()
         conn.close()
-    
+
     def fail_job(self, job_id: str, error: str):
         """Mark job as failed with error message."""
         conn = self.db._get_connection()
@@ -330,23 +343,28 @@ class JobQueue:
         cursor.execute(
             """UPDATE jobs SET status = ?, completed_at = ?, error = ?
                WHERE job_id = ?""",
-            (JobStatus.FAILED.value, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), error, job_id)
+            (
+                JobStatus.FAILED.value,
+                datetime.now(UTC).replace(tzinfo=None).isoformat(),
+                error,
+                job_id,
+            ),
         )
         conn.commit()
         conn.close()
-    
+
     def list_jobs(
         self,
         limit: int = 100,
-        status: Optional[JobStatus] = None,
-        runtime_profile_id: Optional[str] = None,
-    ) -> List[Job]:
+        status: JobStatus | None = None,
+        runtime_profile_id: str | None = None,
+    ) -> list[Job]:
         """List recent jobs, optionally filtered by status and runtime profile."""
         conn = self.db._get_connection()
         cursor = conn.cursor()
         query = "SELECT * FROM jobs"
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
             clauses.append("status = ?")
             params.append(status.value if isinstance(status, JobStatus) else status)
@@ -360,9 +378,9 @@ class JobQueue:
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         conn.close()
-        
+
         return [self._row_to_job(row) for row in rows]
-    
+
     def _row_to_job(self, row) -> Job:
         """Convert DB row to Job object."""
         parameters = json.loads(row["parameters"])
@@ -403,8 +421,8 @@ class JobQueue:
             request_id=request_id,
             worker_id=worker_id,
         )
-    
-    def to_public_dict(self, job: Job) -> Dict[str, Any]:
+
+    def to_public_dict(self, job: Job) -> dict[str, Any]:
         """Convert job to public API response."""
         return {
             "job_id": job.job_id,
@@ -425,31 +443,31 @@ class JobWorker:
     """
     Background worker for processing jobs.
     """
-    
-    def __init__(self, job_queue: JobQueue, runtime_profile_id: Optional[str] = None):
+
+    def __init__(self, job_queue: JobQueue, runtime_profile_id: str | None = None):
         self.job_queue = job_queue
         self.runtime_profile_id = runtime_profile_id
-        self.handlers: Dict[str, Callable] = {}
+        self.handlers: dict[str, Callable] = {}
         self._shutdown = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-    
+        self._thread: threading.Thread | None = None
+
     def register_handler(self, job_type: str, handler: Callable):
         """Register a handler function for a job type."""
         self.handlers[job_type] = handler
-    
+
     def start(self):
         """Start the worker thread."""
         if self._thread is None or not self._thread.is_alive():
             self._shutdown.clear()
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
-    
+
     def stop(self):
         """Stop the worker thread."""
         self._shutdown.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
-    
+
     def _run(self):
         """Main worker loop."""
         worker_id = f"worker_{threading.current_thread().ident}_{uuid.uuid4().hex[:8]}"
@@ -459,12 +477,12 @@ class JobWorker:
                 self.job_queue.reclaim_stuck_jobs(timeout_seconds=300)
             except Exception:
                 pass
-            
+
             job = self.job_queue.claim_next_job(
                 worker_id=worker_id,
                 runtime_profile_id=self.runtime_profile_id,
             )
-            
+
             if job:
                 handler = self.handlers.get(job.job_type)
                 if handler:
@@ -472,7 +490,7 @@ class JobWorker:
                 time.sleep(0.1)
             else:
                 time.sleep(1)
-    
+
     def _process_job(self, job: Job, handler: Callable):
         """Process a single job."""
         try:

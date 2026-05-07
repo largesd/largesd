@@ -1,9 +1,9 @@
 # LSD Fact-Checking System v1.5 — OBJECTIVE
 
-**Package:** `skills.fact_checking`  
-**Target version:** v1.5  
-**Created:** 2026-05-03  
-**Phase:** 6–7 Complete — v1.5 Production Integration  
+**Package:** `skills.fact_checking`
+**Target version:** v1.5
+**Created:** 2026-05-03
+**Phase:** 6–7 Complete — v1.5 Production Integration
 
 ---
 

@@ -6,7 +6,7 @@
 const BDA = {
   // API Configuration
   API_BASE: window.location.origin,
-  
+
   /**
    * State management
    */
@@ -17,7 +17,7 @@ const BDA = {
     isLoading: false,
     activeDebateId: null
   },
-  
+
   /**
    * Initialize the application
    */
@@ -220,7 +220,7 @@ ${commonFooter}`;
   getActiveDebateId() {
     return this.state.activeDebateId || localStorage.getItem('bda_active_debate_id');
   },
-  
+
   /**
    * Load pending posts from localStorage
    */
@@ -235,7 +235,7 @@ ${commonFooter}`;
       this.state.pendingPosts = [];
     }
   },
-  
+
   /**
    * Save pending posts to localStorage
    */
@@ -246,7 +246,7 @@ ${commonFooter}`;
       console.warn('Failed to save pending posts:', e);
     }
   },
-  
+
   /**
    * Add a pending post
    */
@@ -257,7 +257,7 @@ ${commonFooter}`;
     });
     this.savePendingPosts();
   },
-  
+
   /**
    * Clear all pending posts
    */
@@ -265,7 +265,22 @@ ${commonFooter}`;
     this.state.pendingPosts = [];
     localStorage.removeItem('bda_pending_posts');
   },
-  
+
+  /**
+   * Sync the double-submit CSRF token from the readable cookie into any form field.
+   */
+  syncCsrfTokenFromCookie() {
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    const csrfInput = document.getElementById('csrf_token');
+    const cookieToken = match ? decodeURIComponent(match[1]) : '';
+
+    if (csrfInput && cookieToken) {
+      csrfInput.value = cookieToken;
+    }
+
+    return cookieToken || (csrfInput ? csrfInput.value : '');
+  },
+
   /**
    * Remove a specific pending post
    */
@@ -273,7 +288,7 @@ ${commonFooter}`;
     this.state.pendingPosts = this.state.pendingPosts.filter(p => p.id !== postId);
     this.savePendingPosts();
   },
-  
+
   /**
    * API Request helper with error handling
    */
@@ -287,7 +302,7 @@ ${commonFooter}`;
       'Content-Type': 'application/json',
       ...fetchOptions.headers
     };
-    
+
     // Add auth token if available
     const token = Auth.getToken();
     if (token) {
@@ -295,8 +310,7 @@ ${commonFooter}`;
     }
 
     // Add CSRF token for double-submit cookie pattern
-    const csrfInput = document.getElementById('csrf_token');
-    const csrfToken = csrfInput ? csrfInput.value : '';
+    const csrfToken = this.syncCsrfTokenFromCookie();
     if (csrfToken && !headers['X-CSRF-Token']) {
       headers['X-CSRF-Token'] = csrfToken;
     }
@@ -305,7 +319,7 @@ ${commonFooter}`;
     if (debateId && !headers['X-Debate-ID']) {
       headers['X-Debate-ID'] = debateId;
     }
-    
+
     try {
       this.state.isLoading = true;
       const response = await fetch(url, {
@@ -352,7 +366,7 @@ ${commonFooter}`;
         error.payload = data;
         throw error;
       }
-      
+
       if (!response.ok && response.status !== 202) {
         const error = new Error(data.error || `HTTP ${response.status}`);
         error.status = response.status;
@@ -360,7 +374,7 @@ ${commonFooter}`;
         error.payload = data;
         throw error;
       }
-      
+
       return data;
     } catch (error) {
       console.error('API Error:', error);
@@ -369,7 +383,7 @@ ${commonFooter}`;
       this.state.isLoading = false;
     }
   },
-  
+
   /**
    * Load current debate info
    */
@@ -387,7 +401,7 @@ ${commonFooter}`;
       return { has_debate: false };
     }
   },
-  
+
   /**
    * Load current snapshot
    */
@@ -492,7 +506,7 @@ ${commonFooter}`;
       return [];
     }
   },
-  
+
   /**
    * Update state strip display
    */
@@ -505,19 +519,19 @@ ${commonFooter}`;
   updateStateStrip(data) {
     const verdict = data?.verdict || 'NO VERDICT';
     const verdictTone = this.getVerdictTone(verdict);
-    const confidence = data?.confidence !== null && data?.confidence !== undefined 
-      ? data.confidence.toFixed(2) 
+    const confidence = data?.confidence !== null && data?.confidence !== undefined
+      ? data.confidence.toFixed(2)
       : '-';
     const snapshotId = data?.snapshot_id || '-';
-    
+
     // Desktop
     const verdictEl = document.getElementById('header-verdict') || document.getElementById('verdict-display');
     const confidenceEl = document.getElementById('header-confidence') || document.getElementById('confidence-display');
     const snapshotEl = document.getElementById('header-snapshot') || document.getElementById('snapshot-display');
-    
+
     if (verdictEl) {
       verdictEl.textContent = verdict;
-      verdictEl.className = 'state-value verdict-neutral' + 
+      verdictEl.className = 'state-value verdict-neutral' +
         (verdict === 'FOR' ? ' good' : verdict === 'AGAINST' ? ' bad' : '');
       const verdictItem = verdictEl.closest('.state-item');
       if (verdictItem) verdictItem.dataset.stateTone = verdictTone;
@@ -527,7 +541,7 @@ ${commonFooter}`;
       snapshotEl.textContent = snapshotId;
       snapshotEl.title = snapshotId;
     }
-    
+
     // Mobile
     const verdictMobile = document.getElementById('verdict-mobile');
     const confidenceMobile = document.getElementById('confidence-mobile');
@@ -538,32 +552,32 @@ ${commonFooter}`;
     }
     if (confidenceMobile) confidenceMobile.textContent = confidence;
   },
-  
+
   /**
    * Show status message
    */
   showStatus(message, isError = false, duration = 5000) {
     const statusEl = document.getElementById('status-message');
     if (!statusEl) return;
-    
+
     statusEl.textContent = message;
     statusEl.className = 'status-message ' + (isError ? 'post-error' : 'post-success');
     statusEl.style.display = 'block';
-    
+
     if (duration > 0) {
       setTimeout(() => {
         statusEl.style.display = 'none';
       }, duration);
     }
   },
-  
+
   /**
    * Setup back to top button
    */
   setupBackToTop() {
     const backToTop = document.querySelector('.back-to-top');
     if (!backToTop) return;
-    
+
     window.addEventListener('scroll', () => {
       if (window.scrollY > 300) {
         backToTop.classList.add('visible');
@@ -572,7 +586,7 @@ ${commonFooter}`;
       }
     });
   },
-  
+
   /**
    * Setup tooltip system
    */
@@ -580,41 +594,41 @@ ${commonFooter}`;
     // Remove existing tooltip popup if any
     const existing = document.querySelector('.tooltip-popup');
     if (existing) existing.remove();
-    
+
     // Create new tooltip popup
     const tooltipPopup = document.createElement('div');
     tooltipPopup.className = 'tooltip-popup';
     document.body.appendChild(tooltipPopup);
-    
+
     // Add event listeners to all tooltips
     document.querySelectorAll('.tooltip').forEach(el => {
       el.addEventListener('mouseenter', (e) => {
         const text = el.getAttribute('data-tooltip');
         if (!text) return;
-        
+
         tooltipPopup.textContent = text;
         tooltipPopup.classList.add('visible');
-        
+
         const rect = el.getBoundingClientRect();
         const popupRect = tooltipPopup.getBoundingClientRect();
-        
+
         let top = rect.top - popupRect.height - 8;
         let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
-        
+
         // Clamp to viewport
         left = Math.max(10, Math.min(left, window.innerWidth - popupRect.width - 10));
         if (top < 10) top = rect.bottom + 8;
-        
+
         tooltipPopup.style.top = top + 'px';
         tooltipPopup.style.left = left + 'px';
       });
-      
+
       el.addEventListener('mouseleave', () => {
         tooltipPopup.classList.remove('visible');
       });
     });
   },
-  
+
   /**
    * Setup help panel
    */
@@ -622,7 +636,7 @@ ${commonFooter}`;
     const helpBtns = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
     const helpOverlay = document.querySelector('.help-overlay');
     const closeHelpBtns = document.querySelectorAll('.close-help');
-    
+
     helpBtns.forEach((helpBtn) => {
       if (helpBtn.dataset.helpBound === 'true') return;
       helpBtn.addEventListener('click', () => this.toggleHelp());
@@ -649,7 +663,7 @@ ${commonFooter}`;
       this._helpEscapeBound = true;
     }
   },
-  
+
   /**
    * Toggle help panel
    */
@@ -658,7 +672,7 @@ ${commonFooter}`;
     const overlay = document.querySelector('.help-overlay');
     const helpButtons = document.querySelectorAll('.help-btn[aria-controls="helpPanel"], [data-help-toggle="true"]');
     if (!panel || !overlay) return;
-    
+
     const shouldOpen = !panel.classList.contains('open');
     panel.classList.toggle('open', shouldOpen);
     overlay.classList.toggle('visible', shouldOpen);
@@ -714,7 +728,7 @@ ${commonFooter}`;
       this._focusTrapHandler = null;
     }
   },
-  
+
   /**
    * Setup mobile state strip
    */
@@ -743,7 +757,7 @@ ${commonFooter}`;
     applyLayout();
     window.addEventListener('resize', this.debounce(applyLayout, 120));
   },
-  
+
   /**
    * Auto-populate data-label attributes on table cells based on header text.
    * Runs on all .table elements and watches for dynamic updates.
@@ -813,13 +827,13 @@ ${commonFooter}`;
   setupTableScroll() {
     document.querySelectorAll('.table-wrap').forEach(wrap => {
       wrap.classList.add('scrollable');
-      
+
       const updateFade = () => {
         const isScrollable = wrap.scrollWidth > wrap.clientWidth;
         const isAtEnd = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 10;
         wrap.classList.toggle('show-fade', isScrollable && !isAtEnd);
       };
-      
+
       wrap.addEventListener('scroll', updateFade);
       updateFade(); // Initial check
     });
@@ -1063,7 +1077,7 @@ ${commonFooter}`;
     }
     this._navResizeBound = true;
   },
-  
+
   /**
    * Format number with fixed decimals
    */
@@ -1081,7 +1095,7 @@ ${commonFooter}`;
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString();
   },
-  
+
   /**
    * Escape HTML to prevent XSS
    */
@@ -1091,7 +1105,7 @@ ${commonFooter}`;
     div.textContent = text;
     return div.innerHTML;
   },
-  
+
   /**
    * Debounce function calls
    */
