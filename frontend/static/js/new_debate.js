@@ -9,12 +9,37 @@ let currentDebateId = null;
 let currentResolution = '';
 let currentDebateSource = null;
 
+const FALLBACK_TOPIC_OPTIONS = [
+  { topic_id: 't1', label: 'Safety & misuse risk' },
+  { topic_id: 't2', label: 'Economic & social impact' },
+  { topic_id: 't3', label: 'Enforceability & geopolitics' },
+  { topic_id: 't4', label: 'Rights, freedom & innovation' },
+];
+
 function showStaticDeploymentMessage() {
   BDA.showStatus(
     'Posting requires a live backend with authentication. '
     + 'Please contact the administrator to enable login and posting.',
     true
   );
+}
+
+function showPostingUnavailableMessage() {
+  BDA.showStatus(
+    'Posting requires the live authenticated posting service. '
+    + 'Please try again later or contact the administrator.',
+    true
+  );
+}
+
+function disablePostingUi() {
+  const submitBtn = document.getElementById('submit-post-button');
+  const postSection = document.getElementById('post-section');
+  if (submitBtn) submitBtn.disabled = true;
+  if (postSection) {
+    postSection.style.opacity = '0.5';
+    postSection.style.pointerEvents = 'none';
+  }
 }
 
 function canUseLiveApiMode() {
@@ -27,11 +52,45 @@ function hasGithubPostingConfig() {
 }
 
 async function init() {
-  // Layer 1: auth gate for all write-intent pages
-  if (!Auth.isLoggedIn()) {
-    Auth.redirectToLogin('posting-auth-required');
+  // Layer 1: checking state while verifying session
+  const submitBtn = document.getElementById('submit-post-button');
+  const postSection = document.getElementById('post-section');
+  const statusMsg = document.getElementById('status-message');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (postSection) {
+    postSection.style.opacity = '0.5';
+    postSection.style.pointerEvents = 'none';
+  }
+  if (statusMsg) {
+    statusMsg.textContent = 'Checking posting session…';
+    statusMsg.classList.remove('hidden');
+  }
+
+  // Layer 2: verify token with backend
+  const session = await Auth.verifySession();
+  if (!session.ok) {
+    if (session.reason === 'network-error') {
+      showPostingUnavailableMessage();
+      disablePostingUi();
+      if (statusMsg) statusMsg.classList.add('hidden');
+      return;
+    }
+
+    Auth.redirectToLogin(
+      session.reason === 'expired' ? 'session-expired' : 'posting-auth-required'
+    );
     return;
   }
+
+  // Success: restore UI and continue loading
+  if (submitBtn) submitBtn.disabled = false;
+  if (postSection) {
+    postSection.style.opacity = '';
+    postSection.style.pointerEvents = '';
+  }
+  if (statusMsg) statusMsg.classList.add('hidden');
+
   DataBridge.loadConfig();
   if (!hasGithubPostingConfig() && !canUseLiveApiMode()) {
     window.location.href = 'setup.html';
@@ -146,6 +205,12 @@ async function loadTopics() {
   const select = document.getElementById('argument-topic');
   if (!select) return;
 
+  // Clear previous topic fallback/info message
+  const topicMessageContainer = document.getElementById('topic-error-container');
+  if (topicMessageContainer) {
+    topicMessageContainer.textContent = '';
+  }
+
   let topics = [];
   try {
     const topicData = await BDA.api('/api/debate/topics', {
@@ -172,18 +237,18 @@ async function loadTopics() {
   }
 
   if (topics.length === 0) {
-    const errorMsg = 'Failed to load topics.';
-    if (typeof BDA !== 'undefined' && typeof BDA.showInlineError === 'function') {
-      const container = document.getElementById('argument-topic')?.parentElement;
-      if (container) {
-        BDA.showInlineError(container, errorMsg, () => {
-          loadTopics();
-        });
-      }
+    const topicMessageContainer = document.getElementById('topic-error-container');
+    if (
+      topicMessageContainer &&
+      typeof BDA !== 'undefined' &&
+      typeof BDA.escapeHtml === 'function'
+    ) {
+      topicMessageContainer.innerHTML =
+        `<small class="text-muted">${BDA.escapeHtml('Using default topic areas until generated topics are available.')}</small>`;
     }
   }
 
-  // No hardcoded fallback: show honest empty state
+  // Fallback topics are always rendered; hide hint if API topics exist
   const topicHint = document.getElementById('topic-hint');
   if (topics.length === 0) {
     if (topicHint) topicHint.style.display = '';
@@ -208,11 +273,39 @@ async function loadTopics() {
     return true;
   });
 
-  // Build options
+  // Build options: always include fallback topics, append API topics when present
+  const fallbackTopics = FALLBACK_TOPIC_OPTIONS;
+
+  // Filter out API topics that would duplicate fallback IDs
+  const apiTopics = topics.filter((t) => {
+    const id = String(t.topic_id || t.id || '').trim();
+    return !fallbackTopics.some((f) => f.topic_id === id);
+  });
+
   const currentValue = select.value;
-  select.innerHTML = '<option value="">Select topic area...</option>' +
-    topics.map(t => `<option value="${BDA.escapeHtml(t.topic_id || t.id || '')}">${BDA.escapeHtml(t.label || t.name || t.topic_id || t.id || '')}</option>`).join('');
-  if (currentValue) select.value = currentValue;
+
+  let optionsHtml = '<option value="">Select topic area...</option>';
+
+  optionsHtml += `<optgroup label="${BDA.escapeHtml('Default topic areas')}">` +
+    fallbackTopics.map((t) =>
+      `<option value="${BDA.escapeHtml(t.topic_id)}">${BDA.escapeHtml(t.label)}</option>`
+    ).join('') +
+    '</optgroup>';
+
+  if (apiTopics.length > 0) {
+    optionsHtml += `<optgroup label="${BDA.escapeHtml('Generated topics')}">` +
+      apiTopics.map((t) =>
+        `<option value="${BDA.escapeHtml(t.topic_id || t.id || '')}">${BDA.escapeHtml(t.label || t.name || t.topic_id || t.id || '')}</option>`
+      ).join('') +
+      '</optgroup>';
+  }
+
+  select.innerHTML = optionsHtml;
+
+  // Restore previously selected value if it still exists
+  if (currentValue && Array.from(select.options).some((opt) => opt.value === currentValue)) {
+    select.value = currentValue;
+  }
 }
 
 function updateSubmissionModeUI() {

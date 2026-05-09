@@ -2,6 +2,7 @@
   "source_document": "docs/requirements/LSD_req.txt",
   "source_version": "LSD v1.2",
   "generated_for_repo": "blind debate adjudicator / debate_system",
+  "last_reviewed": "2026-05-08",
   "purpose": "Structured traceability map from the LSD v1.2 design spec into implementation and testing work.",
   "criteria": [
     {
@@ -9,7 +10,7 @@
       "section": "2.1",
       "title": "User-facing blindness",
       "channel": "ui_e2e",
-      "status": "deferred",
+      "status": "partial",
       "requirement": "Public debate surfaces expose no identity signals, likes, follower counts, contribution totals, leaderboards, or top-contributor affordances.",
       "current_surface": [
         "frontend/index.html",
@@ -17,13 +18,14 @@
         "frontend/topics.html",
         "frontend/verdict.html"
       ],
-      "current_coverage": "Partially covered by the current browser suite and visual design review.",
-      "next_test": "Add explicit negative assertions for forbidden identity/social strings on public pages.",
+      "current_coverage": "Footer blindness signal on all public pages; generic 'Account' nav label instead of display_name/email (AC-10); explicit negative assertions for forbidden identity/social strings still needed.",
+      "next_test": "Add explicit negative assertions for forbidden identity/social strings on public pages; extend to cover likes, follower counts, leaderboards, and top-contributor affordances if any are introduced.",
       "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
-      "deferral": {
-        "rationale": "Out of scope for this implementation run: Phase 3 user-facing blindness hardening remains deferred to v1.3.",
-        "target_version": "v1.3"
-      }
+      "evidence_links": [
+        "frontend/static/js/auth.js",
+        "frontend/new_debate.html",
+        "acceptance/run_ui_acceptance.py"
+      ]
     },
     {
       "id": "LSD-UI-02",
@@ -53,21 +55,28 @@
       "section": "4",
       "title": "Immutable snapshot dossier",
       "channel": "api_plus_ui",
-      "status": "deferred",
+      "status": "pass",
       "requirement": "Each snapshot publishes id, timestamp, trigger, moderation version, frame mode, deterministic recipes, replay manifest, and tamper-evident hashes.",
       "current_surface": [
-        "backend/app_v2.py",
-        "frontend/index.html",
-        "frontend/verdict.html",
-        "frontend/topics.html"
+        "backend/database.py",
+        "backend/pipeline/audit.py",
+        "backend/pipeline/persist.py",
+        "backend/routes/snapshot_bp.py",
+        "frontend/snapshot.html",
+        "frontend/static/js/snapshot.js"
       ],
-      "current_coverage": "Id, timestamp, trigger, and moderation version are present; frame metadata, replay manifest, and hashes are missing.",
-      "next_test": "Add API assertions first, then expose the missing fields in snapshot/detail UI.",
+      "current_coverage": "All required fields are stored in the database, returned by the API, and rendered in snapshot.html: id, timestamp, trigger, moderation version, frame mode, deterministic recipes, replay manifest, and tamper-evident hashes (input_hash_root / output_hash_root).",
+      "next_test": "Keep enforced through test_lsd_v1_2_contracts.py and UI acceptance expansion.",
       "implementation_run": "2026-04-28 Phase 2 and Phases 4-10",
-      "deferral": {
-        "rationale": "Out of scope for this implementation run: Phases 0.5 and 1 snapshot immutability/replay expansion are tracked separately.",
-        "target_version": "v1.3"
-      }
+      "evidence_links": [
+        "backend/database.py",
+        "backend/pipeline/audit.py",
+        "backend/pipeline/persist.py",
+        "backend/routes/snapshot_bp.py",
+        "frontend/snapshot.html",
+        "frontend/static/js/snapshot.js",
+        "acceptance/run_ui_acceptance.py"
+      ]
     },
     {
       "id": "LSD-UI-04",

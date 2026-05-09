@@ -1,6 +1,6 @@
 # Blind Debate Adjudicator (`debate_system`)
 
-`debate_system` is a v3 prototype for identity-blind, auditable debate adjudication.
+`debate_system` is a v3 prototype for identity-blind, auditable debate adjudication. The package version is `0.3.0`.
 
 The application lets users create or propose debates, submit structured FOR/AGAINST argument units, run a moderation and adjudication pipeline, and inspect the resulting snapshots, verdicts, audits, evidence targets, appeals, and governance records without exposing identity or popularity signals in the debate surfaces.
 
@@ -15,16 +15,18 @@ Primary entrypoints:
 - `backend/app_v3.py` - Flask app factory and blueprint registration
 - `backend/debate_engine_v2.py` - current debate engine implementation
 
-Stable compatibility aliases:
+Compatibility notes:
 
-- `backend/app.py` re-exports the v3 Flask app, database, engine, queue, and worker
 - `backend/debate_engine.py` re-exports `DebateEngineV2`
+- New app imports should prefer `backend.app_v3.create_app`
+- `backend/app.py` is a legacy alias and currently needs export reconciliation before it can be relied on for app, database, and job handles
 
-Latest implementation status lives in [`docs/current/IMPLEMENTATION_STATUS.md`](docs/current/IMPLEMENTATION_STATUS.md). The most recent handoff records unit and integration tests passing, 81.14 percent API route coverage, no medium/high Bandit findings, and 0 critical accessibility violations. Remaining known gaps are listed in [Known Gaps](#known-gaps).
+Latest implementation status lives in [`docs/current/IMPLEMENTATION_STATUS.md`](docs/current/IMPLEMENTATION_STATUS.md). The current status docs report unit and integration tests passing, 81.14 percent API route coverage, 11/11 UI acceptance checks passing, no medium/high Bandit findings, and 0 critical accessibility violations. Remaining known gaps are listed in [Known Gaps](#known-gaps).
 
 ## What It Implements
 
 - JWT authentication with CSRF protection for mutating API requests
+- CORS allowlisting, security headers, request IDs, and rate limiting with Redis or in-memory development fallback
 - Per-user, multi-debate session context instead of global debate state
 - Debate proposal queue with admin accept/reject flow
 - Identity-blind debate views with no likes, reputation, or profile signals
@@ -79,7 +81,11 @@ source venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-test.txt
 python -m playwright install chromium
+
+# Needed only for the axe accessibility scan
+npm ci
 
 cp .env.example .env
 ```
@@ -142,8 +148,8 @@ make bootstrap
 make test
 
 # Run focused suites used by the workflow helper
-make unit
-make fact
+make unit    # historical alias for tests/integration/test_debate_system.py
+make fact    # tests/unit/test_fact_check_skill.py
 
 # Start the v3 development server
 make server
@@ -317,14 +323,14 @@ Current handoff notes did not include a completed Docker verification run, so va
 
 Current known gaps:
 
-- UI acceptance suite: 10 of 11 checks fail because the Playwright helper calls CSRF-protected registration without a CSRF token. The app behavior is considered correct; the test helper needs updating.
-- Type checks: `venv/bin/python -m mypy backend/pipeline/ backend/routes/ backend/utils/` currently reports 13 errors across `backend/utils/logging.py`, `backend/utils/rate_limits.py`, `backend/email_submission_parser.py`, `backend/email_submission_auth.py`, and `backend/routes/debate_bp.py`.
-- Ruff: `venv/bin/python -m ruff check tests/unit/test_email_processor.py` currently reports 6 issues: import ordering plus unused local variables in that test file.
-- Dependency audit: `pip-audit` reported package vulnerabilities that should be patched before production.
+- Legacy app alias: `backend/app.py` imports app, database, and job symbols that are no longer exported directly by `backend/app_v3.py`; use `backend.app_v3.create_app` until the alias is repaired.
+- Type checks: `mypy backend/pipeline/ backend/routes/ backend/utils/` currently reports 8 errors across `backend/utils/logging.py`, `backend/email_submission_auth.py`, `backend/utils/rate_limits.py`, and `backend/routes/debate_bp.py`.
+- Ruff: `ruff check .` currently reports 2 fixable issues: import ordering in `fact_check_gold_tests/tests/test_fact_check_gold_corpus.py` and an unused `timedelta` import in `scripts/check_criteria_sync.py`.
+- Dependency audit: `pip-audit` reported 24 vulnerabilities across 7 packages; patch and regenerate dependency locks before production use.
 - Docker verification was skipped in the latest regression handoff.
-- `admin_bp.py` and `dossier_bp.py` are still larger than the target route-module size.
+- Module size drift: current source scan shows `backend/app_v3.py` slightly above the 250-line target and `backend/routes/debate_bp.py`, `backend/routes/admin_bp.py`, and `backend/routes/dossier_bp.py` above the route-module size guideline.
 
-See [`docs/current/REMEDIATION_HANDOFF.md`](docs/current/REMEDIATION_HANDOFF.md) for the latest full regression record; the working tree also has active edits beyond that handoff.
+See [`docs/current/REMEDIATION_HANDOFF.md`](docs/current/REMEDIATION_HANDOFF.md) for the latest full regression record.
 
 ## Documentation Map
 
@@ -338,7 +344,11 @@ See [`docs/current/REMEDIATION_HANDOFF.md`](docs/current/REMEDIATION_HANDOFF.md)
 - [`docs/guides/TESTING.md`](docs/guides/TESTING.md) - test strategy and suites
 - [`docs/guides/DEPLOYMENT.md`](docs/guides/DEPLOYMENT.md) - deployment guide
 - [`docs/guides/OPENROUTER_SETUP.md`](docs/guides/OPENROUTER_SETUP.md) - OpenRouter setup
+- [`docs/guides/DATABASE_MIGRATIONS.md`](docs/guides/DATABASE_MIGRATIONS.md) - Alembic migration guide
+- [`docs/guides/PRIVACY.md`](docs/guides/PRIVACY.md) - privacy and data handling guide
+- [`docs/guides/WCAG_AUDIT.md`](docs/guides/WCAG_AUDIT.md) - accessibility audit guide
 - [`docs/guides/V3_MIGRATION_GUIDE.md`](docs/guides/V3_MIGRATION_GUIDE.md) - v3 migration notes
+- [`docs/compliance/LSD_v1_2_compliance_report.md`](docs/compliance/LSD_v1_2_compliance_report.md) - LSD v1.2 compliance report
 - [`docs/current/IMPLEMENTATION_STATUS.md`](docs/current/IMPLEMENTATION_STATUS.md) - current status summary
 - [`docs/current/REMEDIATION_HANDOFF.md`](docs/current/REMEDIATION_HANDOFF.md) - latest regression handoff
 - [`docs/schema/email_submission_v3.md`](docs/schema/email_submission_v3.md) - authenticated email schema
@@ -349,7 +359,7 @@ Use focused branches and conventional commit messages:
 
 ```text
 feat: add snapshot export filter
-fix: include csrf token in acceptance helper
+fix: restore backend app compatibility exports
 docs: refresh deployment caveats
 test: cover email draft auth failures
 refactor: split dossier blueprint helpers

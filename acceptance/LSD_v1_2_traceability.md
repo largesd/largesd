@@ -8,9 +8,9 @@ Implementation run: `2026-04-28`, covering Phase 2 and Phases 4-10 from `docs/im
 
 | Criterion | Status | Evidence |
 | --- | --- | --- |
-| `LSD-UI-01` User-facing blindness | Deferred | Phase 3 is outside this run; tracked in `acceptance/lsd_v1_2_criteria.json`. |
+| `LSD-UI-01` User-facing blindness | Partial | Footer blindness signal on all public pages; generic "Account" nav label (AC-10). Negative assertions for social/identity affordances still needed. |
 | `LSD-UI-02` Moderation metadata | Pass | `backend/debate_engine_v2.py`, `backend/database.py`, `frontend/snapshot.html`, `frontend/admin.html` |
-| `LSD-UI-03` Immutable snapshot dossier | Deferred | Phases 0.5 and 1 are outside this run; existing hash/replay fields remain visible in `frontend/snapshot.html`. |
+| `LSD-UI-03` Immutable snapshot dossier | Pass | Database, API, and UI surfaces verified: replay manifest, input_hash_root, output_hash_root, recipe_versions rendered in `frontend/snapshot.html`. |
 | `LSD-UI-04` Frame transparency | Pass | `backend/app_v3.py`, `backend/database.py`, `frontend/governance.html`, `frontend/frame-dossier.html` |
 | `LSD-UI-05` Topic diagnostics | Pass | `backend/scoring_engine.py`, `backend/lsd_v1_2.py`, `frontend/topics.html`, `frontend/audits.html` |
 | `LSD-UI-06` AU completeness proxy | Pass | `backend/extraction.py`, `backend/selection_engine.py`, `frontend/audits.html`, `test_lsd_v1_2_contracts.py` |
@@ -42,4 +42,4 @@ Implementation run: `2026-04-28`, covering Phase 2 and Phases 4-10 from `docs/im
 
 ## Deferred Scope
 
-Phases 0, 0.5, 1, and 3 are explicitly outside this implementation run. Their criteria are marked `deferred` with rationale and target version in `acceptance/lsd_v1_2_criteria.json`.
+No criteria are currently deferred.

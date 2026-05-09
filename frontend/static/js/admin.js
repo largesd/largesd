@@ -1351,8 +1351,16 @@
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
-    if (!Auth.isLoggedIn()) {
-      Auth.redirectToLogin('admin-login-required');
+    const session = await Auth.verifySession();
+    if (!session.ok) {
+      if (session.reason === 'network-error') {
+        setActionFeedback('Admin service is unavailable. Please try again later.', 'error');
+        releaseRouteAuthGate();
+        return;
+      }
+      Auth.redirectToLogin(
+        session.reason === 'expired' ? 'session-expired' : 'admin-login-required'
+      );
       return;
     }
 

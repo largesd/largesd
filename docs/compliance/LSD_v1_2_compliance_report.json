@@ -1,16 +1,15 @@
 {
   "criteria": [
     {
-      "deferral": {
-        "rationale": "Out of scope for this implementation run: Phase 3 user-facing blindness hardening remains deferred to v1.3.",
-        "target_version": "v1.3"
-      },
+      "deferral": null,
       "evidence_links": [
-        "acceptance/lsd_v1_2_criteria.json"
+        "frontend/static/js/auth.js",
+        "frontend/new_debate.html",
+        "acceptance/run_ui_acceptance.py"
       ],
       "id": "LSD-UI-01",
       "section": "2.1",
-      "status": "deferred",
+      "status": "partial",
       "title": "User-facing blindness"
     },
     {
@@ -28,17 +27,19 @@
       "title": "Visible moderation metadata"
     },
     {
-      "deferral": {
-        "rationale": "Out of scope for this implementation run: Phases 0.5 and 1 snapshot immutability/replay expansion are tracked separately.",
-        "target_version": "v1.3"
-      },
+      "deferral": null,
       "evidence_links": [
-        "backend/debate_engine_v2.py",
-        "frontend/snapshot.html"
+        "backend/database.py",
+        "backend/pipeline/audit.py",
+        "backend/pipeline/persist.py",
+        "backend/routes/snapshot_bp.py",
+        "frontend/snapshot.html",
+        "frontend/static/js/snapshot.js",
+        "acceptance/run_ui_acceptance.py"
       ],
       "id": "LSD-UI-03",
       "section": "4",
-      "status": "deferred",
+      "status": "pass",
       "title": "Immutable snapshot dossier"
     },
     {
@@ -134,10 +135,13 @@
       "title": "Governance and incident hooks"
     }
   ],
+  "last_reviewed": "2026-05-08",
   "source_version": "LSD v1.2",
   "summary": {
-    "deferred": 2,
-    "pass": 8
+    "deferred": 0,
+    "missing": 0,
+    "partial": 1,
+    "pass": 9
   },
   "undocumented_partial_or_missing": []
 }

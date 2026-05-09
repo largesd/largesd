@@ -251,6 +251,9 @@ Tests the system end to end through the browser UI against named acceptance crit
 - `AC-6`: Verify evidence, dossier, and governance pages render from live APIs
 - `AC-7`: Verify register/login/logout UI flows and session persistence behavior
 - `AC-8`: Verify snapshot history + latest diff rendering after multiple snapshots
+- `AC-9`: Debate proposal lifecycle: submit, queue, accept
+- `AC-10`: Identity-blind public surface hardening
+- `AC-11`: Snapshot integrity and reproducibility fields
 
 The source of truth for the criteria lives in `acceptance/ui_debate_flow.json`.
 
@@ -265,6 +268,13 @@ make acceptance
 artifacts/acceptance/ui_acceptance_report.json
 artifacts/acceptance/ui_acceptance_report.md
 artifacts/acceptance/screenshots/
+```
+
+A criteria sync check is also available to detect when acceptance results and
+criteria statuses diverge:
+
+```bash
+python scripts/check_criteria_sync.py
 ```
 
 ## Accessibility Scan (`acceptance/run_a11y_scan.py`)

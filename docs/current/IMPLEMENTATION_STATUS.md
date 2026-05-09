@@ -42,4 +42,5 @@ See `docs/current/REMEDIATION_HANDOFF.md` for the full regression report.
 - **Accessibility scan**: 0 critical violations
 - **Pre-commit**: 2 pre-existing ruff warnings in test files
 - **Type checks**: 4 minor annotation gaps in `backend/utils/`
-- **UI acceptance tests**: 1/11 passing (AC-7 UI registration); 10 fail on API registration due to CSRF token requirement in `authenticate_browser_user` helper — test infrastructure issue, not a regression
+- **UI acceptance tests**: 11/11 passing (verified 2026-05-08 21:09:55 PDT)
+- **Criteria traceability**: `acceptance/lsd_v1_2_criteria.json` reviewed and updated to match implemented surfaces (LSD-UI-01 partial, LSD-UI-03 pass).

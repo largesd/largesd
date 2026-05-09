@@ -1142,6 +1142,8 @@ ${commonFooter}`;
 
   /**
    * Show an inline error message with an optional retry button.
+   * WARNING: This replaces container.innerHTML. Do not pass containers
+   * that contain form inputs you need to preserve.
    * @param {HTMLElement} container - Element to display error inside
    * @param {string} message - Error message
    * @param {Function|null} retryCallback - Called when retry button is clicked

@@ -423,8 +423,20 @@ APPEAL_FIELD_IDS.forEach((fieldId) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!Auth.isLoggedIn()) {
-    Auth.redirectToLogin('appeals-login-required', window.__BDA_APPEALS_NEXT__ || '/appeals.html');
+  const session = await Auth.verifySession();
+  if (!session.ok) {
+    if (session.reason === 'network-error') {
+      setAppealsMessage('Appeals service is unavailable. Please try again later.', 'error');
+      renderAppealsErrorRow('Appeals service is unavailable.');
+      renderAppealsMobilePlaceholder('Appeals service is unavailable.', 'error');
+      updateAppealsMeta({ queueCount: '-', pendingCount: '-', updatedLabel: 'Unavailable' });
+      releaseRouteAuthGate();
+      return;
+    }
+    Auth.redirectToLogin(
+      session.reason === 'expired' ? 'session-expired' : 'appeals-login-required',
+      window.__BDA_APPEALS_NEXT__ || '/appeals.html'
+    );
     return;
   }
 

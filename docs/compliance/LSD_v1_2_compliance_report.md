@@ -2,16 +2,20 @@
 
 Source version: `LSD v1.2`
 
+Last reviewed: `2026-05-08`
+
 ## Summary
 
-- `deferred`: 2
-- `pass`: 8
+- `deferred`: 0
+- `missing`: 0
+- `partial`: 1
+- `pass`: 9
 
 ## Criteria
 
-- `LSD-UI-01` User-facing blindness (2.1): **deferred**. Evidence: `acceptance/lsd_v1_2_criteria.json`. Deferral: Out of scope for this implementation run: Phase 3 user-facing blindness hardening remains deferred to v1.3.
+- `LSD-UI-01` User-facing blindness (2.1): **partial**. Evidence: `frontend/static/js/auth.js`, `frontend/new_debate.html`, `acceptance/run_ui_acceptance.py`.
 - `LSD-UI-02` Visible moderation metadata (3): **pass**. Evidence: `backend/debate_engine_v2.py`, `backend/database.py`, `frontend/snapshot.html`, `frontend/admin.html`, `test_lsd_v1_2_contracts.py`.
-- `LSD-UI-03` Immutable snapshot dossier (4): **deferred**. Evidence: `backend/debate_engine_v2.py`, `frontend/snapshot.html`. Deferral: Out of scope for this implementation run: Phases 0.5 and 1 snapshot immutability/replay expansion are tracked separately.
+- `LSD-UI-03` Immutable snapshot dossier (4): **pass**. Evidence: `backend/database.py`, `backend/pipeline/audit.py`, `backend/pipeline/persist.py`, `backend/routes/snapshot_bp.py`, `frontend/snapshot.html`, `frontend/static/js/snapshot.js`, `acceptance/run_ui_acceptance.py`.
 - `LSD-UI-04` Frame transparency (5): **pass**. Evidence: `backend/app_v3.py`, `backend/database.py`, `frontend/governance.html`, `frontend/frame-dossier.html`.
 - `LSD-UI-05` Topic diagnostics (6): **pass**. Evidence: `backend/scoring_engine.py`, `backend/lsd_v1_2.py`, `frontend/topics.html`, `frontend/audits.html`.
 - `LSD-UI-06` AU completeness proxy (8.1): **pass**. Evidence: `backend/extraction.py`, `backend/selection_engine.py`, `frontend/audits.html`, `test_lsd_v1_2_contracts.py`.

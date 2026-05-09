@@ -57,6 +57,25 @@ class DebateSystemTester:
     def _requires_auth(self):
         return self._is_v3() or self.auth_enabled is True
 
+    def _get_csrf_token(self):
+        """Fetch a CSRF token by loading an HTML page that sets the cookie.
+
+        The backend sets csrf_token on text/html responses (e.g., login.html).
+        requests.Session automatically persists cookies across requests.
+        """
+        try:
+            # Prime the session cookie jar with a CSRF token
+            self.session.get(f"{self.base_url}/login.html", timeout=10)
+        except requests.RequestException:
+            # If the server doesn't serve login.html, return empty and let
+            # the caller decide whether to proceed (legacy servers won't care).
+            return ""
+
+        for cookie in self.session.cookies:
+            if cookie.name == "csrf_token":
+                return cookie.value
+        return ""
+
     def ensure_authenticated(self):
         """Create an isolated test user when the server requires auth."""
         if self.access_token or not self._requires_auth():
@@ -71,9 +90,16 @@ class DebateSystemTester:
             "display_name": f"Codex Smoke {unique_suffix[:6]}",
         }
 
+        # Obtain CSRF token before making a state-changing unauthenticated request
+        csrf_token = self._get_csrf_token()
+        headers = {}
+        if csrf_token:
+            headers["X-CSRF-Token"] = csrf_token
+
         response = self.session.post(
             f"{self.base_url}/api/auth/register",
             json=payload,
+            headers=headers,
             timeout=10,
         )
 

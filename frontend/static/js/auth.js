@@ -226,6 +226,38 @@ const Auth = {
     }
 
     return response;
+  },
+
+  /**
+   * Verify the current session with the backend.
+   * @returns {Promise<{ok: boolean, reason?: string, user?: object}>}
+   */
+  async verifySession() {
+    const token = this.getToken();
+    if (!token) {
+      return { ok: false, reason: 'missing-token' };
+    }
+
+    try {
+      const response = await this.fetch('/api/auth/me', {
+        suppressAuthRedirect: true
+      });
+
+      if (response === null) {
+        // 401 happened; Auth.fetch already cleared session
+        return { ok: false, reason: 'expired' };
+      }
+
+      if (!response.ok) {
+        return { ok: false, reason: 'network-error' };
+      }
+
+      const user = await response.json();
+      localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+      return { ok: true, user };
+    } catch (err) {
+      return { ok: false, reason: 'network-error' };
+    }
   }
 };
 

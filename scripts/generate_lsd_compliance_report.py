@@ -35,7 +35,9 @@ EVIDENCE_LINKS = {
 def main() -> int:
     criteria_doc = json.loads(CRITERIA_PATH.read_text(encoding="utf-8"))
     criteria = criteria_doc.get("criteria", [])
-    counts = Counter(item.get("status", "unknown") for item in criteria)
+    known_statuses = ["pass", "partial", "deferred", "missing"]
+    counts = Counter({s: 0 for s in known_statuses})
+    counts.update(item.get("status", "unknown") for item in criteria)
 
     rows = []
     undocumented = []
@@ -44,7 +46,13 @@ def main() -> int:
         cid = item.get("id", "")
         evidence = item.get("evidence_links") or EVIDENCE_LINKS.get(cid, [])
         if status in {"partial", "missing"} and not item.get("deferral"):
-            undocumented.append(cid)
+            # A partial criterion is documented if it has both current_coverage
+            # and next_test. A missing criterion still needs either a deferral
+            # or an explicit action.
+            if status == "partial" and item.get("current_coverage") and item.get("next_test"):
+                pass  # documented partial
+            else:
+                undocumented.append(cid)
         rows.append(
             {
                 "id": cid,
@@ -62,6 +70,8 @@ def main() -> int:
         "undocumented_partial_or_missing": undocumented,
         "criteria": rows,
     }
+    if "last_reviewed" in criteria_doc:
+        report["last_reviewed"] = criteria_doc["last_reviewed"]
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_JSON.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
@@ -71,9 +81,16 @@ def main() -> int:
         "",
         f"Source version: `{report['source_version']}`",
         "",
-        "## Summary",
-        "",
     ]
+    if "last_reviewed" in report:
+        lines.append(f"Last reviewed: `{report['last_reviewed']}`")
+        lines.append("")
+    lines.extend(
+        [
+            "## Summary",
+            "",
+        ]
+    )
     for status, count in sorted(counts.items()):
         lines.append(f"- `{status}`: {count}")
     lines.extend(["", "## Criteria", ""])

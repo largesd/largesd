@@ -1,6 +1,13 @@
 async function init() {
-  if (!Auth.isLoggedIn()) {
-    Auth.redirectToLogin('auth-required');
+  const session = await Auth.verifySession();
+  if (!session.ok) {
+    if (session.reason === 'network-error') {
+      BDA.showStatus('Proposal service is unavailable. Please try again later.', true);
+      return;
+    }
+    Auth.redirectToLogin(
+      session.reason === 'expired' ? 'session-expired' : 'auth-required'
+    );
     return;
   }
   await loadMyProposals();

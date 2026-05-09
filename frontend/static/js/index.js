@@ -454,25 +454,43 @@ function bindHomePageControls() {
   }
 }
 
-function initializeHomePage() {
+async function initializeHomePage() {
   bindHomePageControls();
 
-  const startLoad = () => {
-    void loadData();
-  };
-
-  if (typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(startLoad);
-  } else {
-    setTimeout(startLoad, 0);
+  // Proactive session verification for users who appear to have a token.
+  // Anonymous users skip this and load immediately.
+  let authStateMayHaveChanged = false;
+  if (Auth.isLoggedIn()) {
+    const session = await Auth.verifySession();
+    authStateMayHaveChanged = true;
+    if (!session.ok) {
+      if (session.reason === 'network-error') {
+        // Best-effort: keep current local state and let API calls fail
+        // gracefully if the user interacts.
+        console.warn('Session verification failed (network). Continuing in best-effort mode.');
+      }
+      // For 'expired' or 'missing-token': Auth.fetch / verifySession already
+      // cleared localStorage. Fall through to anonymous mode.
+    }
   }
 
+  // Auth.updateNavigation() runs on DOMContentLoaded before this async
+  // verification finishes. Refresh it so stale tokens do not leave the nav
+  // showing "Account", and valid sessions without cached user data do not
+  // leave the nav showing "Login".
+  if (authStateMayHaveChanged && typeof Auth.updateNavigation === 'function') {
+    Auth.updateNavigation();
+  }
+
+  // If we reach here without a valid token, show the login notice
   if (!Auth.isLoggedIn()) {
     const notice = document.getElementById('login-notice');
     if (notice) {
       notice.hidden = false;
     }
   }
+
+  await loadData();
 }
 
 if (window.BDA) {

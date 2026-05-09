@@ -384,8 +384,9 @@ const DataBridge = {
   // ===================================================================
 
   /**
-   * Build the canonical email body for a BDA Submission v1.
-   * Mirrors backend/email_submission_parser.py::build_email_body().
+   * LEGACY — v1 client-only unsigned email generator.
+   * Kept for offline test scenarios only.
+   * Real posting uses signed v3 drafts from /api/debate/email-submission-draft.
    */
   buildEmailBody(debateId, resolution, side, topicId, facts, inference, counterArguments) {
     const submissionId = self.crypto?.randomUUID
@@ -414,9 +415,12 @@ const DataBridge = {
   },
 
   /**
-   * Build a mailto: link for submitting a post via email.
+   * LEGACY — v1 client-only unsigned mailto link builder.
+   * Kept for offline test scenarios only.
+   * Real posting uses signed v3 drafts from /api/debate/email-submission-draft.
    */
   buildMailtoLink(debateId, resolution, side, topicId, facts, inference, counterArguments) {
+    console.warn('Legacy buildMailtoLink called; real posting should use the signed v3 draft endpoint.');
     const destEmail = this.getDestEmail();
     if (!destEmail) {
       return null;
@@ -612,7 +616,7 @@ const DataBridge = {
 (function autoRedirect() {
   const path = window.location.pathname;
   const publicPages = ['setup.html', 'login.html', 'register.html', 'about.html', 'index.html', 'snapshot.html', 'verdict.html', 'audits.html', 'dossier.html', 'topics.html', 'evidence.html', 'governance.html', 'appeals.html'];
-  const authRequiredPages = ['new_debate.html', 'propose.html'];
+  const authRequiredPages = [];
 
   if (publicPages.some(p => path.endsWith(p))) return;
 
@@ -624,13 +628,52 @@ const DataBridge = {
     return;
   }
 
-  // Fallback: unconfigured non-auth pages go to setup
+  // Fallback: unconfigured non-auth pages go to setup.
+  // NOTE: This is a synchronous check. A stale token will pass through,
+  // because this bootstrap path cannot await backend verification. Pages
+  // with their own async login gates should keep those gates in the page
+  // script. Pages that are neither public nor auth-gated (e.g.,
+  // topic.html, frame-dossier.html) rely on BDA.api/Auth.fetch 401 handling
+  // depending on the page, or can call DataBridge.preflightAuth().
   DataBridge.loadConfig();
-  const hasAuthToken = !!localStorage.getItem('access_token');
+  const hasAuthToken = Auth.isLoggedIn();
   if (!DataBridge.isConfigured() && !hasAuthToken) {
     window.location.href = 'setup.html';
   }
 })();
+
+/**
+ * Optional proactive auth verification for pages that are not public
+ * and do not have their own login gate.
+ *
+ * @param {object} options
+ * @param {boolean} options.allowSetupRedirect - if true and the token is stale
+ *   while DataBridge is unconfigured, redirect to setup.html instead of login.
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+DataBridge.preflightAuth = async function (options = {}) {
+  const { allowSetupRedirect = false } = options;
+  DataBridge.loadConfig();
+  if (!Auth.isLoggedIn()) {
+    if (typeof Auth.updateNavigation === 'function') {
+      Auth.updateNavigation();
+    }
+    return { ok: false, reason: 'missing-token' };
+  }
+  const session = await Auth.verifySession();
+  if (typeof Auth.updateNavigation === 'function') {
+    Auth.updateNavigation();
+  }
+  if (!session.ok && session.reason === 'expired') {
+    if (allowSetupRedirect && !DataBridge.isConfigured()) {
+      window.location.href = 'setup.html';
+    }
+    // If DataBridge IS configured (or allowSetupRedirect is false), this
+    // helper returns the session object without redirecting. The caller decides
+    // how to handle the stale session (e.g., show an error or redirect).
+  }
+  return session;
+};
 
 // Make available globally
 window.DataBridge = DataBridge;
