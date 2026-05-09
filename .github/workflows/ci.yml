@@ -22,6 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-test.txt
 
       - name: Run lint checks (same rules as pre-commit)
@@ -60,6 +61,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-test.txt
 
       - name: Install Playwright browser
@@ -103,6 +105,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-test.txt
 
       - name: Install axe-core
@@ -160,6 +163,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-test.txt
 
       - name: Upgrade environment packages for security scan
