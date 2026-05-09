@@ -7,6 +7,7 @@ The email processor imports it directly.
 import base64
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -62,7 +63,7 @@ def verify_email_submission_claims(
     token: str,
     submission: Any,  # EmailSubmission dataclass from parser
     sender_email: str,
-    user_lookup: callable,
+    user_lookup: Callable[[Any], Any],
     now: datetime | None = None,
 ) -> dict:
     """Decode and verify a token against the parsed submission.
@@ -105,4 +106,4 @@ def verify_email_submission_claims(
     if config.require_verified_email and not user.get("is_verified", False):
         raise ValueError("unverified_email")
 
-    return user
+    return user  # type: ignore[no-any-return]

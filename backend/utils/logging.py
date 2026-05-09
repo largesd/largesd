@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 
 class JSONFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_obj = {
             "timestamp": datetime.now(UTC).replace(tzinfo=None).isoformat(),
             "level": record.levelname,
@@ -24,7 +24,7 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_obj)
 
 
-def _setup_app_logger():
+def _setup_app_logger() -> logging.Logger:
     logger = logging.getLogger("debate_system")
     logger.setLevel(logging.INFO)
     logger.propagate = False

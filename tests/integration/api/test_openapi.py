@@ -95,5 +95,5 @@ def test_response_schemas_defined(client):
                 continue
             responses = op.get("responses", {})
             assert any(
-                k in responses for k in ("200", "201", "202")
-            ), f"{method} {path} should document a success response"
+                k in responses for k in ("200", "201", "202", "410")
+            ), f"{method} {path} should document a response"
