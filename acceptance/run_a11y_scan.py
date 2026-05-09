@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 try:
     from playwright.sync_api import sync_playwright
@@ -18,6 +19,9 @@ except ImportError as exc:  # pragma: no cover - helpful runtime message
         "Playwright is not installed. Run `pip install -r requirements-test.txt` and "
         "`python -m playwright install chromium` first."
     ) from exc
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -41,20 +45,23 @@ def load_axe_source() -> str:
     return AXE_PATH.read_text(encoding="utf-8")
 
 
-def run_axe_on_page(page, axe_source: str, impact_levels: list[str]) -> list[dict]:
+def run_axe_on_page(page: Page, axe_source: str, impact_levels: list[str]) -> list[dict]:
     """Inject axe and run it, returning filtered violations."""
     page.evaluate(axe_source)
     # axe.run returns a Promise; evaluate_handle lets us await it properly.
-    result = page.evaluate(
-        """
-        async (impactLevels) => {
-            const results = await axe.run(document, {
-                resultTypes: ['violations']
-            });
-            return results.violations.filter(v => impactLevels.includes(v.impact));
-        }
-        """,
-        impact_levels,
+    result = cast(
+        list[dict],
+        page.evaluate(
+            """
+            async (impactLevels) => {
+                const results = await axe.run(document, {
+                    resultTypes: ['violations']
+                });
+                return results.violations.filter(v => impactLevels.includes(v.impact));
+            }
+            """,
+            impact_levels,
+        ),
     )
     return result
 
@@ -75,8 +82,8 @@ def format_violation(violation: dict) -> str:
 
 
 def scan_page(
-    page, base_url: str, path: str, axe_source: str, impact_levels: list[str]
-) -> tuple[list[dict], float]:
+    page: Page, base_url: str, path: str, axe_source: str, impact_levels: list[str]
+) -> tuple[list[dict], str]:
     url = f"{base_url.rstrip('/')}{path}"
     page.goto(url, wait_until="networkidle")
     # Give a short grace period for any lazy-rendered content.

@@ -390,6 +390,7 @@ def run_acceptance(args: argparse.Namespace) -> None:
 def run_a11y(args: argparse.Namespace) -> None:
     """Start a temporary v3 server and run the accessibility scan."""
     base_url = f"http://{DEFAULT_HOST}:{args.port}"
+    assert_port_available(DEFAULT_HOST, args.port)
     env = project_env({"PYTHONUNBUFFERED": "1", "ENABLE_RATE_LIMITER": "false"})
     temp_db_path = Path(tempfile.gettempdir()) / f"debate_system_a11y_{args.port}.db"
 

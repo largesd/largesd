@@ -3,7 +3,7 @@
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 from flask import Blueprint, current_app, g, jsonify, request
@@ -458,8 +458,10 @@ def create_email_submission_draft() -> Any:
 
     side = validate_side(data.get("side"))
     topic_id = validate_topic_id(data.get("topic_id"))
-    facts = validate_string(data.get("facts"), "Facts", min_length=5, max_length=5000)
-    inference = validate_string(data.get("inference"), "Inference", min_length=5, max_length=2000)
+    facts = cast(str, validate_string(data.get("facts"), "Facts", min_length=5, max_length=5000))
+    inference = cast(
+        str, validate_string(data.get("inference"), "Inference", min_length=5, max_length=2000)
+    )
     counter_arguments = (
         validate_string(
             data.get("counter_arguments", ""), "Counter-arguments", required=False, max_length=2000

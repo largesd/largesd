@@ -158,6 +158,19 @@
   color: var(--ink-default);
 }
 .mt-0-text-88 { margin-top: 0; font-size: 0.88rem; }
+
+/* Governance page heading overrides — preserve visuals while fixing a11y order */
+.governance-section { font-size: 1.15rem; margin-bottom: 10px; }
+.governance-sub {
+  color: var(--ink-strong);
+  font-family: var(--serif);
+  line-height: 1.2;
+  margin: 0;
+  max-width: 30ch;
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
 .mt-0-text-82-ink-soft {
   margin-top: 0;
   font-size: 0.82rem;

@@ -1,9 +1,11 @@
 """Rate-limit helpers for the Flask app factory."""
 
+from typing import Any
+
 from flask import request
 
 
-def _should_exempt_default_rate_limits():
+def _should_exempt_default_rate_limits() -> bool:
     """Apply the broad default limit only to mutating API requests."""
     return request.method in ("GET", "HEAD", "OPTIONS") or not request.path.startswith("/api/")
 
@@ -14,7 +16,7 @@ _RATE_LIMITS = {
 }
 
 
-def apply_route_rate_limits(app, limiter):
+def apply_route_rate_limits(app: Any, limiter: Any) -> None:
     """Attach route-specific rate limits to view functions."""
     for endpoint, spec in _RATE_LIMITS.items():
         func = app.view_functions.get(endpoint)

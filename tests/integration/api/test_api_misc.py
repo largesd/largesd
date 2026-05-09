@@ -12,10 +12,10 @@ def test_health(client):
 
 def test_email_submission_template(client):
     resp = client.get("/api/email-submission-template")
-    assert resp.status_code == 200
+    assert resp.status_code == 410
     data = resp.get_json()
-    assert "required_headers" in data
-    assert "body_sections" in data
+    assert "error" in data
+    assert data.get("code") == "DEPRECATED"
 
 
 def test_metrics(client):
